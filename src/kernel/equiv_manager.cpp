@@ -19,12 +19,11 @@ auto equiv_manager::mk_node() -> node_ref {
 }
 
 auto equiv_manager::find(node_ref n) -> node_ref {
-    while (true) {
-        node_ref p = m_nodes[n].m_parent;
-        if (p == n)
-            return p;
-        n = p;
-    }
+    node_ref p = m_nodes[n].m_parent;
+    if (p == n) { return p; }
+    std::cout << "f";
+    // path compression.
+    return (m_nodes[n].m_parent = find(p));
 }
 
 void equiv_manager::merge(node_ref n1, node_ref n2) {
