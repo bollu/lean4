@@ -1295,9 +1295,9 @@ partial def emitFnBody (b : FnBody) (tys: HashMap VarId IRType)
    (irr: EmitIrrelevant): M Unit := do
   -- emitLn "{"
   match irr with
-     | EmitIrrelevant.yes => 
-        emitLn $ "%c0_irr = std.constant 0 : i32"
-        emitLn $ "%irrelevant = call @lean_box(%c0_irr) : (i32) -> (!lz.value)"
+     | EmitIrrelevant.yes =>  pure ()
+        -- emitLn $ "%c0_irr = std.constant 0 : i32"
+        -- emitLn $ "%irrelevant = call @lean_box(%c0_irr) : (i32) -> (!lz.value)"
      | EmitIrrelevant.no => pure ()
   let tys <- insertFnBodyArgTypes tys b
   emitBlock b tys
