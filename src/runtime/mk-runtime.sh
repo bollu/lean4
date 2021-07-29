@@ -6,7 +6,7 @@ set -e
 
 FILES=$(ls -1u *.cpp)
 LLFILES=""
-LEANCC="clang -I $HOME/work/lean4/build/stage0/include -I $HOME/work/lean4/src/"
+LEANCC="clang -I $HOME/work/lean4/build/stage0/include -I $HOME/work/lean4/src/ -DLEAN_MULTI_THREAD"
 
 for file in $FILES; do 
     i=$(basename $file .cpp)
@@ -39,10 +39,10 @@ echo $LLFILES
 # thread.cpp
 # utf8.cpp
 
+rm runtime.ll || true
 llvm-link $LLFILES -S -o runtime.ll
 # alwaysinline causes runtime to take infinite amounts of time.
 sed -i s/noinline/alwaysinline/g runtime.ll
-# sed -i s/noinline//g runtime.ll
 sed -i s/optnone//g runtime.ll
 opt -S -O3 runtime.ll -o runtime-optimized.ll
 mv runtime-optimized.ll runtime.ll
