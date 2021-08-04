@@ -90,7 +90,8 @@ private def isBorrowParamAux (x : VarId) (ys : Array Arg) (consumeParamPred : Na
     | Arg.var y      => x == y && !consumeParamPred i
 
 private def isBorrowParam (x : VarId) (ys : Array Arg) (ps : Array Param) : Bool :=
-  isBorrowParamAux x ys fun i => not ps[i].borrow
+  -- isBorrowParamAux x ys fun i => not ps[i].borrow
+  isBorrowParamAux x ys fun i => not false
 
 /-
 Return `n`, the number of times `x` is consumed.
@@ -128,7 +129,8 @@ private def addIncBeforeAux (ctx : Context) (xs : Array Arg) (consumeParamPred :
         addInc ctx x b numIncs
 
 private def addIncBefore (ctx : Context) (xs : Array Arg) (ps : Array Param) (b : FnBody) (liveVarsAfter : LiveVarSet) : FnBody :=
-  addIncBeforeAux ctx xs (fun i => not ps[i].borrow) b liveVarsAfter
+  -- addIncBeforeAux ctx xs (fun i => not ps[i].borrow) b liveVarsAfter
+  addIncBeforeAux ctx xs (fun i => not false) b liveVarsAfter
 
 /- See `addIncBeforeAux`/`addIncBefore` for the procedure that inserts `inc` operations before an application.  -/
 private def addDecAfterFullApp (ctx : Context) (xs : Array Arg) (ps : Array Param) (b : FnBody) (bLiveVars : LiveVarSet) : FnBody :=
@@ -151,7 +153,8 @@ private def addIncBeforeConsumeAll (ctx : Context) (xs : Array Arg) (b : FnBody)
    That is, we must make sure these parameters are consumed. -/
 private def addDecForDeadParams (ctx : Context) (ps : Array Param) (b : FnBody) (bLiveVars : LiveVarSet) : FnBody :=
   ps.foldl (init := b) fun b p =>
-    if !p.borrow && p.ty.isObj && !bLiveVars.contains p.x then addDec ctx p.x b else b
+    -- if !p.borrow && p.ty.isObj && !bLiveVars.contains p.x then addDec ctx p.x b else b
+    if !false && p.ty.isObj && !bLiveVars.contains p.x then addDec ctx p.x b else b
 
 private def isPersistent : Expr → Bool
   | Expr.fap c xs => xs.isEmpty -- all global constants are persistent objects
@@ -212,7 +215,8 @@ private def processVDecl (ctx : Context) (z : VarId) (t : IRType) (v : Expr) (b 
 
 def updateVarInfoWithParams (ctx : Context) (ps : Array Param) : Context :=
   let m := ps.foldl (init := ctx.varMap) fun m p =>
-    m.insert p.x { ref := p.ty.isObj, consume := !p.borrow }
+    -- m.insert p.x { ref := p.ty.isObj, consume := !p.borrow }
+    m.insert p.x { ref := p.ty.isObj, consume := !false }
   { ctx with varMap := m }
 
 partial def visitFnBody : FnBody → Context → (FnBody × LiveVarSet)
