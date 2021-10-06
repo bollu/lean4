@@ -205,6 +205,7 @@ static void display_help(std::ostream & out) {
     std::cout << "  --plugin=file      load and initialize shared library for registering linters etc.\n";
     std::cout << "  --deps             just print dependencies of a Lean input\n";
     std::cout << "  --profile          display elaboration/type checking time for each definition/theorem\n";
+    std::cout << "  --disableCaseSimplification -Z          Bollu's option: disable simpliciation in case statements\n";
     std::cout << "  --stats            display environment statistics\n";
     DEBUG_CODE(
     std::cout << "  --debug=tag        enable assertions with the given tag\n";
@@ -213,32 +214,33 @@ static void display_help(std::ostream & out) {
 }
 
 static struct option g_long_options[] = {
-    {"m",            optional_argument, 0, 'm'},
-    {"version",      no_argument,       0, 'v'},
-    {"help",         no_argument,       0, 'h'},
-    {"githash",      no_argument,       0, 'g'},
-    {"run",          no_argument,       0, 'r'},
-    {"o",            optional_argument, 0, 'o'},
-    {"stdin",        no_argument,       0, 'i'},
-    {"root",         required_argument, 0, 'R'},
-    {"memory",       required_argument, 0, 'M'},
-    {"trust",        required_argument, 0, 't'},
-    {"profile",      no_argument,       0, 'P'},
-    {"stats",        no_argument,       0, 'a'},
-    {"quiet",        no_argument,       0, 'q'},
-    {"deps",         no_argument,       0, 'd'},
-    {"timeout",      optional_argument, 0, 'T'},
-    {"c",            optional_argument, 0, 'c'},
-    {"exitOnPanic",  no_argument,       0, 'e'},
+    {"m",                              optional_argument, 0, 'm'},
+    {"version",                        no_argument,       0, 'v'},
+    {"help",                           no_argument,       0, 'h'},
+    {"githash",                        no_argument,       0, 'g'},
+    {"run",                            no_argument,       0, 'r'},
+    {"o",                              optional_argument, 0, 'o'},
+    {"stdin",                          no_argument,       0, 'i'},
+    {"root",                           required_argument, 0, 'R'},
+    {"memory",                         required_argument, 0, 'M'},
+    {"trust",                          required_argument, 0, 't'},
+    {"profile",                        no_argument,       0, 'P'},
+    {"disableCaseSimplification",      no_argument,       0, 'Z'},
+    {"stats",                          no_argument,       0, 'a'},
+    {"quiet",                          no_argument,       0, 'q'},
+    {"deps",                           no_argument,       0, 'd'},
+    {"timeout",                        optional_argument, 0, 'T'},
+    {"c",                              optional_argument, 0, 'c'},
+    {"exitOnPanic",                    no_argument,       0, 'e'},
 #if defined(LEAN_MULTI_THREAD)
-    {"threads",      required_argument, 0, 'j'},
-    {"tstack",       required_argument, 0, 's'},
-    {"server",       no_argument,       0, 'S'},
-    {"worker",       no_argument,       0, 'W'},
+    {"threads",                        required_argument, 0, 'j'},
+    {"tstack",                         required_argument, 0, 's'},
+    {"server",                         no_argument,       0, 'S'},
+    {"worker",                         no_argument,       0, 'W'},
 #endif
-    {"plugin",       required_argument, 0, 'p'},
+    {"plugin",                         required_argument, 0, 'p'},
 #ifdef LEAN_DEBUG
-    {"debug",        required_argument, 0, 'B'},
+    {"debug",                          required_argument, 0, 'B'},
 #endif
     {0, 0, 0, 0}
 };
@@ -525,6 +527,17 @@ int main(int argc, char ** argv) {
             case 'P':
                 opts = opts.update("profiler", true);
                 break;
+            // case 'Z':
+            //     try {
+            //         check_optarg("Z");
+            //         opts = set_config_option(opts, optarg);
+            //     } catch (lean::exception & ex) {
+            //         std::cerr << ex.what() << std::endl;
+            //         return 1;
+            //     }
+            //     break;
+
+
 #if defined(LEAN_DEBUG)
             case 'B':
                 check_optarg("B");

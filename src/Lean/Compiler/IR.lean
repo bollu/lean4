@@ -25,7 +25,14 @@ import Lean.Compiler.IR.Sorry
 
 namespace Lean.IR
 
-private def compileAux (decls : Array Decl) : CompilerM Unit := do
+builtin_initialize
+  registerOption `compiler.caseSimpl { defValue := true, group := "compiler", descr := "simplify case statements" }
+
+def getCaseSimpl (opts : Options) : Bool :=
+  opts.getBool `compiler.caseSimpl true
+
+
+private def compileAux (opts: Options) (decls : Array Decl) : CompilerM Unit := do
   -- log (LogEntry.message "// compileAux")
   -- logDecls `init decls
   -- logPreamble (LogEntry.message mlirPreamble)
@@ -39,8 +46,7 @@ private def compileAux (decls : Array Decl) : CompilerM Unit := do
   logDecls `reset_reuse decls
   let decls := decls.map Decl.elimDead
   logDecls `elim_dead decls
-  -- let decls := decls.map Decl.simpCase
-  let decls := decls.map Decl.simpCaseOnlyCanonicalize
+  let decls :=  if getCaseSimpl opts then decls.map Decl.simpCase else decls.map Decl.simpCaseOnlyCanonicalize
   logDecls `simp_case decls
   let decls := decls.map Decl.normalizeIds
   -- logDeclsUnconditional decls
@@ -64,7 +70,7 @@ private def compileAux (decls : Array Decl) : CompilerM Unit := do
 
 @[export lean_ir_compile]
 def compile (env : Environment) (opts : Options) (decls : Array Decl) : Log × (Except String Environment) :=
-  match (compileAux decls opts).run { env := env } with
+  match (compileAux opts decls opts).run { env := env } with
   | EStateM.Result.ok     _  s => (s.log, Except.ok s.env)
   | EStateM.Result.error msg s => (s.log, Except.error msg)
 

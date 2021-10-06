@@ -1,1 +1,8 @@
 *.olean
+*.ll
+*.mlir
+*.o
+bench/exe
+bench/exe-ref.c
+bench/exe.c
+lzbench/
