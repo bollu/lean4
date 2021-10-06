@@ -1,0 +1,3 @@
+[submodule "src/Lean/Compiler/IR/lean-mlir"]
+	path = src/Lean/Compiler/IR/lean-mlir
+	url = git@github.com:opencompl/lean-mlir.git

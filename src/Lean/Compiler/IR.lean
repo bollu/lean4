@@ -46,7 +46,9 @@ private def compileAux (opts: Options) (decls : Array Decl) : CompilerM Unit := 
   logDecls `reset_reuse decls
   let decls := decls.map Decl.elimDead
   logDecls `elim_dead decls
-  let decls :=  if getCaseSimpl opts then decls.map Decl.simpCase else decls.map Decl.simpCaseOnlyCanonicalize
+  let decls :=  if getCaseSimpl opts
+                then decls.map Decl.simpCase
+                else decls.map Decl.simpCaseOnlyCanonicalize
   logDecls `simp_case decls
   let decls := decls.map Decl.normalizeIds
   -- logDeclsUnconditional decls

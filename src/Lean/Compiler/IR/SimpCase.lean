@@ -44,6 +44,18 @@ private def addDefault (alts : Array Alt) : Array Alt :=
       alts.push (Alt.default max.body)
 
 private def mkSimpCase (tid : Name) (x : VarId) (xType : IRType) (alts : Array Alt) : FnBody :=
+  -- let alts := alts.filter (fun alt => alt.body != FnBody.unreachable);
+  let alts := addDefault alts;
+  -- if alts.size == 0 then
+  --  FnBody.unreachable
+  -- else if alts.size == 1 then
+  --  (alts.get! 0).body
+  -- else
+  --  FnBody.case tid x xType alts
+  FnBody.case tid x xType alts
+
+private def mkSimpCaseOnlyCanonicalize
+   (tid : Name) (x : VarId) (xType : IRType) (alts : Array Alt) : FnBody :=
   let alts := alts.filter (fun alt => alt.body != FnBody.unreachable);
   let alts := addDefault alts;
   if alts.size == 0 then
@@ -53,33 +65,24 @@ private def mkSimpCase (tid : Name) (x : VarId) (xType : IRType) (alts : Array A
   else
     FnBody.case tid x xType alts
 
+
 partial def FnBody.simpCase (b : FnBody) : FnBody :=
   let (bs, term) := b.flatten;
   let bs         := modifyJPs bs simpCase;
   match term with
   | FnBody.case tid x xType alts =>
-    let alts := alts.map $ fun alt => alt.modifyBody simpCase;
+    let alts := alts.map $ fun alt => alt.modifyBody (fun fnbody => fnbody.simpCase);
     reshape bs (mkSimpCase tid x xType alts)
   | other => reshape bs term
 
-private def simpCaseOnlyCanonicalize (tid : Name) (x : VarId) (xType : IRType) (alts : Array Alt) : FnBody :=
-  -- let alts := alts.filter (fun alt => alt.body != FnBody.unreachable);
-  let alts := addDefault alts;
-  -- if alts.size == 0 then
-  --  FnBody.unreachable
-  -- else if alts.size == 1 then
-  -- (alts.get! 0).body
-  --else
-  FnBody.case tid x xType alts
-
-
+-- | This does nothing different, I screwed up when trying to overload x(
 partial def FnBody.simpCaseOnlyCanonicalize (b : FnBody) : FnBody :=
   let (bs, term) := b.flatten;
   let bs         := modifyJPs bs simpCase;
   match term with
   | FnBody.case tid x xType alts =>
     let alts := alts.map $ fun alt => alt.modifyBody simpCaseOnlyCanonicalize;
-    reshape bs (mkSimpCase tid x xType alts)
+    reshape bs (mkSimpCaseOnlyCanonicalize tid x xType alts)
   | other => reshape bs term
 
 
@@ -89,12 +92,12 @@ partial def FnBody.simpCaseOnlyCanonicalize (b : FnBody) : FnBody :=
   - Merge most common branches using `Alt.default`. -/
 def Decl.simpCase (d : Decl) : Decl :=
   match d with
-  | Decl.fdecl (body := b) .. => d.updateBody! b.simpCase
+  | Decl.fdecl (body := b) .. => d.updateBody! (FnBody.simpCase b)
   | other => other
 
 def Decl.simpCaseOnlyCanonicalize (d : Decl) : Decl :=
   match d with
-  | Decl.fdecl (body := b) .. => d.updateBody! b.simpCaseOnlyCanonicalize
+  | Decl.fdecl (body := b) .. => d.updateBody! (FnBody.simpCaseOnlyCanonicalize b)
   | other => other
 
 end Lean.IR
