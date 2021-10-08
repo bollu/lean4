@@ -44,26 +44,37 @@ private def addDefault (alts : Array Alt) : Array Alt :=
       alts.push (Alt.default max.body)
 
 private def mkSimpCase (tid : Name) (x : VarId) (xType : IRType) (alts : Array Alt) : FnBody :=
-  -- let alts := alts.filter (fun alt => alt.body != FnBody.unreachable);
-  let alts := addDefault alts;
-  -- if alts.size == 0 then
-  --  FnBody.unreachable
-  -- else if alts.size == 1 then
-  --  (alts.get! 0).body
-  -- else
-  --  FnBody.case tid x xType alts
-  FnBody.case tid x xType alts
-
-private def mkSimpCaseOnlyCanonicalize
-   (tid : Name) (x : VarId) (xType : IRType) (alts : Array Alt) : FnBody :=
   let alts := alts.filter (fun alt => alt.body != FnBody.unreachable);
   let alts := addDefault alts;
   if alts.size == 0 then
     FnBody.unreachable
-  else if alts.size == 1 then
+   else if alts.size == 1 then
     (alts.get! 0).body
-  else
+   else
     FnBody.case tid x xType alts
+  -- FnBody.case tid x xType alts
+
+-- private def addDefaultOnlyCanonicalize (alts : Array Alt) : Array Alt :=
+--   if alts.size <= 1 || alts.any Alt.isDefault then alts
+--   else
+--     let (max, noccs) := maxOccs alts;
+--     if noccs == 1 then alts
+--     else
+--       let alts := alts.filter $ (fun alt => alt.body != max.body);
+--       alts.push (Alt.default max.body)
+
+private def mkSimpCaseOnlyCanonicalize
+   (tid : Name) (x : VarId) (xType : IRType) (alts : Array Alt) : FnBody :=
+  -- let alts := alts.filter (fun alt => alt.body != FnBody.unreachable);
+  -- let alts := addDefault alts;
+  -- if alts.size == 0 then
+  --   FnBody.unreachable
+  -- else if alts.size == 1 then
+  --  (alts.get! 0).body
+  -- else
+  --  FnBody.case tid x xType alts
+  -- FnBody.case tid x xType alts
+  sorry
 
 
 partial def FnBody.simpCase (b : FnBody) : FnBody :=
@@ -75,7 +86,6 @@ partial def FnBody.simpCase (b : FnBody) : FnBody :=
     reshape bs (mkSimpCase tid x xType alts)
   | other => reshape bs term
 
--- | This does nothing different, I screwed up when trying to overload x(
 partial def FnBody.simpCaseOnlyCanonicalize (b : FnBody) : FnBody :=
   let (bs, term) := b.flatten;
   let bs         := modifyJPs bs simpCaseOnlyCanonicalize;
@@ -95,9 +105,9 @@ def Decl.simpCase (d : Decl) : Decl :=
   | Decl.fdecl (body := b) .. => d.updateBody! (FnBody.simpCase b)
   | other => other
 
-def Decl.simpCaseOnlyCanonicalize (d : Decl) : Decl :=
-  match d with
-  | Decl.fdecl (body := b) .. => d.updateBody! b -- (FnBody.simpCaseOnlyCanonicalize b)
-  | other => other
+def Decl.simpCaseOnlyCanonicalize (d : Decl) : Decl := d
+  -- match d with
+  -- | Decl.fdecl (body := b) .. => d.updateBody! b -- (FnBody.simpCaseOnlyCanonicalize b)
+  -- | other => other
 
 end Lean.IR
