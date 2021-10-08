@@ -97,7 +97,7 @@ def Decl.simpCase (d : Decl) : Decl :=
 
 def Decl.simpCaseOnlyCanonicalize (d : Decl) : Decl :=
   match d with
-  | Decl.fdecl (body := b) .. => d.updateBody! (FnBody.simpCaseOnlyCanonicalize b)
+  | Decl.fdecl (body := b) .. => d.updateBody! b -- (FnBody.simpCaseOnlyCanonicalize b)
   | other => other
 
 end Lean.IR
