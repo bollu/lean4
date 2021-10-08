@@ -78,7 +78,7 @@ partial def FnBody.simpCase (b : FnBody) : FnBody :=
 -- | This does nothing different, I screwed up when trying to overload x(
 partial def FnBody.simpCaseOnlyCanonicalize (b : FnBody) : FnBody :=
   let (bs, term) := b.flatten;
-  let bs         := modifyJPs bs simpCase;
+  let bs         := modifyJPs bs simpCaseOnlyCanonicalize;
   match term with
   | FnBody.case tid x xType alts =>
     let alts := alts.map $ fun alt => alt.modifyBody simpCaseOnlyCanonicalize;
