@@ -14,7 +14,7 @@ import Lean.Compiler.IR.SimpCase
 import Lean.Compiler.IR.Boxing
 import Lean.Data.KVMap
 import Init.Data.List
--- import Lean.Compiler.IR.MLIR
+import Lean.Compiler.IR.MLIR
 
 open Std (HashMap)
 
@@ -193,8 +193,8 @@ def emitFnFwdDeclAux (decl : Decl) (cppBaseName : String) (addExternForConsts : 
     if ps.size > closureMaxArgs && isBoxedName decl.name then
       emit "UNKNOWN_CASE_CLOSURE_MAX_ARGS"
       -- emit "lean_object**"
-    else
-      ps.size.forM fun i => do
+    else do
+      ps.size.forM $ fun i => do
         if i > 0 then emit ", "
         emit (toCType ps[i].ty)
     emit ")"
