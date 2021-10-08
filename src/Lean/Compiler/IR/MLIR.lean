@@ -9,7 +9,7 @@ import Init.Data.String.Basic
 import Init.Data.Repr
 import Init.Data.ToString.Basic
 
-namespace Lean.IR.MLIR
+namespace Lean.Compiler.IR.MLIR
 
 
 

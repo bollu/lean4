@@ -17,6 +17,7 @@ import Init.Data.List
 import Lean.Compiler.IR.MLIR
 
 open Std (HashMap)
+open Lean.Compiler.IR.MLIR
 
 namespace Lean.IR.EmitMLIR
 
@@ -157,7 +158,8 @@ def toCName (n : Name) : M String := do
   match getExportNameFor env n with
   | some (Name.str Name.anonymous s _) => pure s
   | some _                             => throwInvalidExportName n
-  | none                               => if n == `main then pure leanMainFn else pure n.mangle
+  | none                               => 
+     if n == `main then pure leanMainFn else pure n.mangle
 
 def emitCName (n : Name) : M Unit :=
   toCName n >>= emit
