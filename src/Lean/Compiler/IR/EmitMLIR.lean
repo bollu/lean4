@@ -1086,7 +1086,7 @@ partial def emitCaseObj (x : VarId) (xType : IRType) (alts : Array Alt)
     emit (if ix > 0 then ", " else "");
     match alt with 
      |  Alt.ctor info b => emitLn "{"; emitFnBody b tys EmitIrrelevant.no; emitLn "}"
-     |  Alt.default b => emitLn "{"; emitFnBody b tys EmitIrrelevant.no); emitLn "}"
+     |  Alt.default b => emitLn "{"; emitFnBody b tys EmitIrrelevant.no; emitLn "}")
  emit ")";
  emit "{";
   forMIx_ (as:= alts) (fun ix alt => do
@@ -1264,7 +1264,7 @@ partial def emitBlock (b : FnBody) (tys: HashMap VarId IRType) : M Unit := do
 -- TODO: this should have access to declarations
 partial def emitJPs : FnBody → M Unit
   | FnBody.jdecl j xs v b => do emit j; emitLn ":"; 
-                                emitLn "{"; emitFnBody v {} EmitIrrelevant.yes; emitLn "}"
+                                emitLn "{"; emitFnBody v {} EmitIrrelevant.yes; emitLn "} // jp"
                                 emitJPs b
   | e                     => do unless e.isTerminal do emitJPs e.body
 
@@ -1345,7 +1345,7 @@ def emitDeclAux (d : Decl) : M Unit := do
         -- In particular, I don't understand this __init__ invariant.
         emitLn ("@_init_" ++ baseName ++ "()" ++ " -> " ++ (toCType t))
       
-      emitLn "{"; -- open fn body
+      emitLn "{ // open fn body"; -- open fn body
       -- | Do not have args like this.
       if xs.size > closureMaxArgs && isBoxedName d.name then
          xs.size.forM fun i => do
@@ -1359,7 +1359,7 @@ def emitDeclAux (d : Decl) : M Unit := do
                  (emitFnBody b 
                              ((xs.foldl (fun m x => (m.insert x.x x.ty)) {}))
                              EmitIrrelevant.yes);
-      emitLn "}";
+      emitLn "} // close fn body";
 
     | _ => emitLn "// ERR: unknwown decl"; pure ()
 
