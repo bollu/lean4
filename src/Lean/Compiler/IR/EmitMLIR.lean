@@ -14,10 +14,12 @@ import Lean.Compiler.IR.SimpCase
 import Lean.Compiler.IR.Boxing
 import Lean.Data.KVMap
 import Init.Data.List
+-- import Lean.Compiler.IR.MLIR
 
 open Std (HashMap)
 
 namespace Lean.IR.EmitMLIR
+
 
 open ExplicitBoxing (requiresBoxedVersion mkBoxedName isBoxedName)
 
