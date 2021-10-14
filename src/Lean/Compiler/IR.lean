@@ -38,17 +38,16 @@ private def compileAux (opts: Options) (decls : Array Decl) : CompilerM Unit := 
   -- logPreamble (LogEntry.message mlirPreamble)
   -- logDeclsUnconditional decls
   checkDecls decls
-  if getCaseSimpl opts then log (LogEntry.message "caseSimpl:true")
+  -- if getCaseSimpl opts then log (LogEntry.message "caseSimpl:true")
   -- let decls ← elimDeadBranches decls
   let decls ← if getCaseSimpl opts then elimDeadBranches decls else decls
   logDecls `elim_dead_branches decls
-  let decls := decls.map Decl.pushProj
+  let decls := if getCaseSimpl opts then decls.map Decl.pushProj else decls
   logDecls `push_proj decls
   let decls := decls.map Decl.insertResetReuse
   logDecls `reset_reuse decls
   let decls := decls.map Decl.elimDead
   logDecls `elim_dead decls
-  -- let decls <- decls.mapM (fun d => return (Decl.simpCase d))                    
   let decls <-  if getCaseSimpl opts
                 then decls.mapM (fun d => Decl.simpCase d)                    
                 else decls.mapM (fun d => Decl.simpCaseOnlyCanonicalize d)
@@ -65,8 +64,7 @@ private def compileAux (opts: Options) (decls : Array Decl) : CompilerM Unit := 
   let decls := decls.map Decl.expandResetReuse
   logDecls `expand_reset_reuse decls
   -- | this pass seems to also insert reset/reuse somehow?
-  -- let decls := decls.map Decl.pushProj
-  logDecls `push_proj decls
+  let decls := if getCaseSimpl opts then decls.map Decl.pushProj else decls
   let decls ← updateSorryDep decls
   logDecls `result decls
   checkDecls decls
