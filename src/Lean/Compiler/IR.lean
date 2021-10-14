@@ -38,7 +38,9 @@ private def compileAux (opts: Options) (decls : Array Decl) : CompilerM Unit := 
   -- logPreamble (LogEntry.message mlirPreamble)
   -- logDeclsUnconditional decls
   checkDecls decls
-  let decls ← elimDeadBranches decls
+  if getCaseSimpl opts then log (LogEntry.message "caseSimpl:true")
+  -- let decls ← elimDeadBranches decls
+  let decls ← if getCaseSimpl opts then elimDeadBranches decls else decls
   logDecls `elim_dead_branches decls
   let decls := decls.map Decl.pushProj
   logDecls `push_proj decls
@@ -46,9 +48,10 @@ private def compileAux (opts: Options) (decls : Array Decl) : CompilerM Unit := 
   logDecls `reset_reuse decls
   let decls := decls.map Decl.elimDead
   logDecls `elim_dead decls
-  let decls :=  if getCaseSimpl opts
-                then decls.map Decl.simpCase
-                else decls.map Decl.simpCaseOnlyCanonicalize
+  -- let decls <- decls.mapM (fun d => return (Decl.simpCase d))                    
+  let decls <-  if getCaseSimpl opts
+                then decls.mapM (fun d => Decl.simpCase d)                    
+                else decls.mapM (fun d => Decl.simpCaseOnlyCanonicalize d)
   logDecls `simp_case decls
   let decls := decls.map Decl.normalizeIds
   -- logDeclsUnconditional decls
