@@ -5,6 +5,7 @@ Authors: Leonardo de Moura
 -/
 import Lean.Compiler.IR.Basic
 import Lean.Compiler.IR.Format
+import Lean.Compiler.IR.CompilerM
 
 namespace Lean.IR
 
@@ -77,14 +78,15 @@ private def mkSimpCaseOnlyCanonicalize
   sorry
 
 
-partial def FnBody.simpCase (b : FnBody) : FnBody :=
+partial def FnBody.simpCase (b : FnBody) : CompilerM FnBody := do
   let (bs, term) := b.flatten;
-  let bs         := modifyJPs bs simpCase;
+  let bs         <- mmodifyJPs bs (fun body => body.simpCase);
   match term with
-  | FnBody.case tid x xType alts =>
-    let alts := alts.map $ fun alt => alt.modifyBody (fun fnbody => fnbody.simpCase);
-    reshape bs (mkSimpCase tid x xType alts)
-  | other => reshape bs term
+  | FnBody.case tid x xType alts => do
+    let alts <- alts.mapM $ fun alt => alt.mmodifyBody (fun fnbody => fnbody.simpCase);
+    let caseNew := (mkSimpCase tid x xType alts)
+    return (reshape bs caseNew)
+  | other => return (reshape bs term)
 
 partial def FnBody.simpCaseOnlyCanonicalize (b : FnBody) : FnBody :=
   let (bs, term) := b.flatten;
@@ -100,12 +102,14 @@ partial def FnBody.simpCaseOnlyCanonicalize (b : FnBody) : FnBody :=
   - Remove unreachable branches.
   - Remove `case` if there is only one branch.
   - Merge most common branches using `Alt.default`. -/
-def Decl.simpCase (d : Decl) : Decl :=
+def Decl.simpCase (d : Decl) : CompilerM Decl := do
   match d with
-  | Decl.fdecl (body := b) .. => d.updateBody! (FnBody.simpCase b)
+  | Decl.fdecl (body := b) .. => 
+    let newBody <- (FnBody.simpCase b)
+    return d.updateBody! newBody
   | other => other
 
-def Decl.simpCaseOnlyCanonicalize (d : Decl) : Decl := d
+def Decl.simpCaseOnlyCanonicalize (d : Decl) : CompilerM Decl := return d
   -- match d with
   -- | Decl.fdecl (body := b) .. => d.updateBody! b -- (FnBody.simpCaseOnlyCanonicalize b)
   -- | other => other
