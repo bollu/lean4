@@ -62,6 +62,27 @@ partial def FnBody.simpCase (b : FnBody) : FnBody :=
     reshape bs (mkSimpCase tid x xType alts)
   | other => reshape bs term
 
+private def simpCaseOnlyCanonicalize (tid : Name) (x : VarId) (xType : IRType) (alts : Array Alt) : FnBody :=
+  -- let alts := alts.filter (fun alt => alt.body != FnBody.unreachable);
+  let alts := addDefault alts;
+  -- if alts.size == 0 then
+  --  FnBody.unreachable
+  -- else if alts.size == 1 then
+  -- (alts.get! 0).body
+  --else
+  FnBody.case tid x xType alts
+
+
+partial def FnBody.simpCaseOnlyCanonicalize (b : FnBody) : FnBody :=
+  let (bs, term) := b.flatten;
+  let bs         := modifyJPs bs simpCase;
+  match term with
+  | FnBody.case tid x xType alts =>
+    let alts := alts.map $ fun alt => alt.modifyBody simpCaseOnlyCanonicalize;
+    reshape bs (mkSimpCase tid x xType alts)
+  | other => reshape bs term
+
+
 /-- Simplify `case`
   - Remove unreachable branches.
   - Remove `case` if there is only one branch.
@@ -69,6 +90,11 @@ partial def FnBody.simpCase (b : FnBody) : FnBody :=
 def Decl.simpCase (d : Decl) : Decl :=
   match d with
   | Decl.fdecl (body := b) .. => d.updateBody! b.simpCase
+  | other => other
+
+def Decl.simpCaseOnlyCanonicalize (d : Decl) : Decl :=
+  match d with
+  | Decl.fdecl (body := b) .. => d.updateBody! b.simpCaseOnlyCanonicalize
   | other => other
 
 end Lean.IR
