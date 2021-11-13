@@ -1,1 +1,4 @@
+*.mlir
+*.ll
 *.olean
+*.o
