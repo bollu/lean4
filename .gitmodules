@@ -1,0 +1,3 @@
+[submodule "lz"]
+	path = lz
+	url = git@github.com:bollu/lz.git
