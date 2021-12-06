@@ -390,7 +390,8 @@ include_directories(${CMAKE_BINARY_DIR}/include)  # config.h etc., "public" head
 if(LEANCPP)
   add_library(leancpp STATIC IMPORTED)
   set_target_properties(leancpp PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_BINARY_DIR}/lib/lean/libleancpp.a")
+    IMPORTED_LOCATION "${CMAKE_BINARY_DIR}/lib/lean/libleancpp.a"
+    POSITION_INDEPENDENT_CODE TRUE)
   add_custom_target(copy-leancpp
     COMMAND cmake -E copy_if_different "${LEANCPP}" "${CMAKE_BINARY_DIR}/lib/lean/libleancpp.a")
   add_dependencies(leancpp copy-leancpp)
