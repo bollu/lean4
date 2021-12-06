@@ -1444,14 +1444,22 @@ def emitInitFn : M Unit := do
   emitLn $ "  return %out: !lz.value"
   emitLn $ "}"
 
+  -- | global variable holding initialization status
+  emit $ "\"ptr.global\"(){value=@_G_initialized, type=i1} : () -> ()"
   -- | emit internal module entrypoint.
   emit $ "func private @" ++ "init_lean_custom_entrypoint_hack";
-     emitLn "(%w :!lz.value) -> !lz.value {"
-     let usesLeanAPI := usesModuleFrom env `Lean
-     if usesLeanAPI then
-       emitLn "call @lean_initialize() : () -> ()"
-     let worldname <- gensym "world"
-     emitLn $ "%" ++ worldname ++ " = call @lean_io_mk_world() : () -> (!lz.value)"
+  emitLn $ "(%w :!lz.value) -> !lz.value {";
+
+  -- | if (! _G_initialized) {
+  emitLn $ "%inited = \"ptr.loadglobal\"(){value=@\"_G_initialized\"} : () -> i1";
+  emitLn $ "%falseval = std.constant 0 : i1"
+  emitLn $ "%notinited = std.cmpi eq, %inited, %falseval : i1"
+  emitLn $ " scf.if %notinited {"
+  let usesLeanAPI := usesModuleFrom env `Lean
+  if usesLeanAPI then
+    emitLn "call @lean_initialize() : () -> ()"
+  let worldname <- gensym "world"
+  emitLn $ "%" ++ worldname ++ " = call @lean_io_mk_world() : () -> (!lz.value)"
    
   env.imports.forM fun imp => do
      -- emitLn $ " //ERR: initialization: (" ++ mkModuleInitializationFunctionName modName ++ ")"
@@ -1473,6 +1481,7 @@ def emitInitFn : M Unit := do
   let decls := getDecls env
   decls.reverse.forM emitDeclInit
     -- emitLns ["return lean_io_result_mk_ok(lean_box(0));", "}"]
+  emitLn "}" -- close scf.if of testing whether we are re-running initialization.
   emitLn "%c0 = constant 0 : i32"
   emitLn "%box0 = call @lean_box(%c0) : (i32) -> !lz.value"
   emitLn "%out = call @lean_io_result_mk_ok(%box0) : (!lz.value) -> !lz.value"
