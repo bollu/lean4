@@ -7,6 +7,10 @@ if(NOT (DEFINED STAGE))
   message(FATAL_ERROR "STAGE must be set; use the CMakeLists.txt in the root folder")
 endif()
 project(LEAN CXX C)
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ON) # position independent code.
+
+
 set(LEAN_VERSION_MAJOR 4)
 set(LEAN_VERSION_MINOR 0)
 set(LEAN_VERSION_PATCH 0)
