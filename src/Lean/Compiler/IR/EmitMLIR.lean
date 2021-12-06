@@ -37,8 +37,6 @@ inductive IsTail where
   | yes | no
 
 -- def mkModuleInitializationFunctionName (moduleName : Name) : String :=
-def mkModuleInitializationFunctionNameHACK (moduleName : Name) : String :=
-  "initialize_" ++  "main"
 
 
 
@@ -1440,6 +1438,13 @@ def emitInitFn : M Unit := do
     emitLn $ "func private @" ++ mkModuleInitializationFunctionName imp.module ++ 
        "(!lz.value) -> (!lz.value)"
 
+  -- | emit call from module entrypoint to our shim entrypoint.
+  emitLn $ "func private @" ++ mkModuleInitializationFunctionName modName  ++ "(%in: !lz.value) -> (!lz.value) {"
+  emitLn $ "  %out = call @init_lean_custom_entrypoint_hack(%in) : (!lz.value) -> (!lz.value)" 
+  emitLn $ "  return %out: !lz.value"
+  emitLn $ "}"
+
+  -- | emit internal module entrypoint.
   emit $ "func private @" ++ "init_lean_custom_entrypoint_hack";
      emitLn "(%w :!lz.value) -> !lz.value {"
      let usesLeanAPI := usesModuleFrom env `Lean
