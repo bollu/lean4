@@ -13,6 +13,11 @@ endforeach()
 include(ExternalProject)
 project(LEAN CXX C)
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fPIC" )
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC" )
+
+
 ExternalProject_add(stage0
   SOURCE_DIR "${LEAN_SOURCE_DIR}/stage0"
   SOURCE_SUBDIR src
