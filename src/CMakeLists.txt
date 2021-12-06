@@ -309,7 +309,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(LEANC_STATIC_LINKER_FLAGS "-lleancpp -lInit -lStd -lLean")
 else()
   # `-pie` defaulting is not consistent on Linux distributions, so let's default to off
-  set(LEANC_STATIC_LINKER_FLAGS "-no-pie -Wl,--start-group -lleancpp -lInit -lStd -lLean -Wl,--end-group")
+  set(LEANC_STATIC_LINKER_FLAGS "-fPIC -no-pie -Wl,--start-group -lleancpp -lInit -lStd -lLean -Wl,--end-group")
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
@@ -443,17 +443,20 @@ if(PREV_STAGE)
 
   add_library(Init STATIC IMPORTED)
   set_target_properties(Init PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/lean/libInit.a)
+    IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/lean/libInit.a
+    POSITION_INDEPENDENT_CODE TRUE)
   add_dependencies(Init make_stdlib)
 
   add_library(Std STATIC IMPORTED)
   set_target_properties(Std PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/lean/libStd.a)
+    IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/lean/libStd.a
+    POSITION_INDEPENDENT_CODE TRUE)
   add_dependencies(Std make_stdlib)
 
   add_library(Lean STATIC IMPORTED)
   set_target_properties(Lean PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/lean/libLean.a)
+    IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/lean/libLean.a
+    POSITION_INDEPENDENT_CODE TRUE)
   add_dependencies(Lean make_stdlib)
 
   # leancpp and the Lean libs are cyclically dependent
