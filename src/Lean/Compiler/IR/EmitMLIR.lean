@@ -1438,26 +1438,24 @@ def emitInitFn : M Unit := do
     emitLn $ "func private @" ++ mkModuleInitializationFunctionName imp.module ++ 
        "(!lz.value) -> (!lz.value)"
 
-  -- | emit call from module entrypoint to our shim entrypoint.
-  emitLn $ "func private @" ++ mkModuleInitializationFunctionName modName  ++ "(%in: !lz.value) -> (!lz.value) {"
-  emitLn $ "  %out = call @init_lean_custom_entrypoint_hack(%in) : (!lz.value) -> (!lz.value)" 
+  -- | emit our shim entrypoint that also initializes LEAN
+  emitLn$ "func private @" ++ "init_lean_custom_entrypoint_hack(%in :!lz.value) -> !lz.value {";
+  let usesLeanAPI := usesModuleFrom env `Lean
+  if usesLeanAPI then
+    emitLn "call @lean_initialize() : () -> ()"
+  emitLn $ "  %out = call @" ++ mkModuleInitializationFunctionName modName ++ "(%in) : (!lz.value) -> (!lz.value)" 
   emitLn $ "  return %out: !lz.value"
   emitLn $ "}"
 
   -- | global variable holding initialization status
   emit $ "\"ptr.global\"(){value=@_G_initialized, type=i1} : () -> ()"
-  -- | emit internal module entrypoint.
-  emit $ "func private @" ++ "init_lean_custom_entrypoint_hack";
-  emitLn $ "(%w :!lz.value) -> !lz.value {";
-
+  -- | emit internal module entrypoint which is to load plugins
+  emitLn $ "func private @" ++ mkModuleInitializationFunctionName modName  ++ "(%in: !lz.value) -> (!lz.value) {"
   -- | if (! _G_initialized) {
   emitLn $ "%inited = \"ptr.loadglobal\"(){value=@\"_G_initialized\"} : () -> i1";
   emitLn $ "%falseval = std.constant 0 : i1"
   emitLn $ "%notinited = std.cmpi eq, %inited, %falseval : i1"
   emitLn $ " scf.if %notinited {"
-  let usesLeanAPI := usesModuleFrom env `Lean
-  if usesLeanAPI then
-    emitLn "call @lean_initialize() : () -> ()"
   let worldname <- gensym "world"
   emitLn $ "%" ++ worldname ++ " = call @lean_io_mk_world() : () -> (!lz.value)"
    
