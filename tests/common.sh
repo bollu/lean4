@@ -22,10 +22,9 @@ shift
 [ $# -eq 0 ] || fail "Usage: test_single.sh [-i] test-file.lean"
 
 
+[ -z "$LEAN4_PATH" ] && fail "Please export the variable LEAN4_PATH"
 
-LEAN4_PATH=/home/bollu/work/lean4
-
-function compile_lean {                  
+function compile_lean {
     # lean --c="$f.c" "$f" || fail "Failed to compile $f into C file"
     # leanc -O3 -DNDEBUG -o "$f.out" "$@" "$f.c" || fail "Failed to compile C file $f.c"
     lean -m "$f.mlir" "$f"
