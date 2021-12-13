@@ -27,7 +27,7 @@ shift
 function compile_lean {
     # lean --c="$f.c" "$f" || fail "Failed to compile $f into C file"
     # leanc -O3 -DNDEBUG -o "$f.out" "$@" "$f.c" || fail "Failed to compile C file $f.c"
-    lean -m "$f.mlir" "$f"
+    $LEAN4_PATH/build/release/stage1/bin/lean -m "$f.mlir" "$f"
     hask-opt "$f.mlir" --convert-scf-to-std --lean-lower --ptr-lower | \
       mlir-translate --mlir-to-llvmir -o "$f.ll"
     llvm-link "$f.ll" $LEAN4_PATH/lz/lean-linking-incantations/lib-includes/library.ll -S | opt -O3 -S  | \
