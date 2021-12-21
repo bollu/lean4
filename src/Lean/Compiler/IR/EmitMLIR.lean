@@ -1,7 +1,7 @@
 /-
 Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Leonardo de Moura
+Authors: Siddharth Bhat
 -/
 import Lean.Runtime
 import Lean.Compiler.NameMangling
@@ -14,35 +14,29 @@ import Lean.Compiler.IR.SimpCase
 import Lean.Compiler.IR.Boxing
 import Lean.Data.KVMap
 import Init.Data.List
-
-open Std (HashMap)
+import Lean.Compiler.IR.MLIR
 
 namespace Lean.IR.EmitMLIR
 
+open Std (HashMap)
+open MLIR.Doc
+open Pretty
 open ExplicitBoxing (requiresBoxedVersion mkBoxedName isBoxedName)
-
--- hack
--- def closureMaxArgs : Nat := 4200
-
 
 -- | type of owner, is the parent a funcop or a caseop
 inductive OwningBlockType where
   | funcop | caseop
 
-
 inductive EmitIrrelevant where
   | yes | no
 
-inductive IsTail where 
+inductive IsTail where
   | yes | no
-
--- def mkModuleInitializationFunctionName (moduleName : Name) : String :=
-
 
 
 partial def lookupArgTy (tys: HashMap VarId IRType) (a: Arg) : IRType := 
-  match a with 
-  | Arg.var id => 
+  match a with
+  | Arg.var id =>
     match tys.find? id with
     | some ty => ty
     -- TODO: get stack trace? X(
@@ -53,8 +47,6 @@ partial def lookupArgTy (tys: HashMap VarId IRType) (a: Arg) : IRType :=
 
 def escape  {a : Type} [ToFormat a] : a -> Format
   | a => "\"" ++ format a ++ "\""
-
-
 
 def leanMainFn := "main_lean_custom_entrypoint_hack"
 
@@ -83,7 +75,6 @@ def assertM (s: String) (b: Bool) : M Unit :=
 def panicM (s: String) : M Unit := do
   panic ("panic!: " ++ s); pure ()
 
-
 def gensym (s: String) : M String := do
   -- let ix <- modifyGet (fun st => (ix, { st with guid := st.guid + 1}))
   let st <- get
@@ -107,7 +98,7 @@ def getDecl (n : Name) : M Decl := do
 
 def emitI32 (name : String) (v: Nat) : M String := do
   let lhs <- gensym name;
-  emitLn  $ "%" ++ lhs ++ " = " ++ "std.constant " ++ (toString v) ++ " : i32";
+  emitLn  $ doc $ "%" ++ lhs ++ " = " ++ "std.constant " ++ (toString v) ++ " : i32";
   return lhs;
 
 def emitString (name : String) (v: String) : M String := do

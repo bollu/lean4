@@ -3,6 +3,8 @@ import Lean.Compiler.IR.MLIR
 open Lean PrettyPrinter
 open MLIR.AST
 open MLIR.EDSL
+open MLIR.Doc
+open Pretty
 
 -- EDSL OPERANDS
 -- ==============
