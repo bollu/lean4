@@ -184,15 +184,73 @@ def elabDeclaration : CommandElab := fun stx => do
 /- Return true if all elements of the mutual-block are inductive declarations. -/
 private def isMutualInductive (stx : Syntax) : Bool :=
   stx[1].getArgs.all fun elem =>
-    let decl     := elem[1]
+    let decl : Syntax     := elem[1]
     let declKind := decl.getKind
-    declKind == `Lean.Parser.Command.inductive
+    declKind == `Lean.Parser.Command.inductive || declKind == `Lean.Parser.Command.structure
 
-private def elabMutualInductive (elems : Array Syntax) : CommandElabM Unit := do
-  let views ← elems.mapM fun stx => do
-     let modifiers ← elabModifiers stx[0]
-     inductiveSyntaxToView modifiers stx[1]
-  elabInductiveViews views
+--private def elabMutualInductive (elems : Array Syntax) : CommandElabM Unit := do
+--  let views ← elems.mapM fun stx => do
+--     let modifiers ← elabModifiers stx[0]
+--     inductiveSyntaxToView modifiers stx[1]
+--  elabInductiveViews views
+
+
+-- private def elabMutualInductive (elems : Array Syntax) : CommandElabM Unit := do
+private def elabMutualInductive (stx: Syntax) : CommandElabM Unit := do
+  let elems := stx[1].getArgs
+  let mut inductive_views : Array InductiveView := #[]
+  let mut struct_views : Array StructView := #[]
+  for elem in elems do {
+     let decl : Syntax := elem[1]
+     let declKind := decl.getKind
+     let modifiers <- elabModifiers elem[0]
+     if declKind == `Lean.Parser.Command.inductive
+     then do
+        dbg_trace "elaborating inductive... {elem}"
+        let view_inductive <- inductiveSyntaxToView modifiers decl
+        inductive_views := inductive_views.push view_inductive
+      else do
+        dbg_trace "elaborating struct..."
+        let view_struct <- (elabStructureToView modifiers decl)
+        struct_views := struct_views.push view_struct
+  }
+
+  dbg_trace f!"num inductive views: {inductive_views.size}"
+  elabInductiveViews (inductive_views.reverse)
+  for v in struct_views do {
+    -- let derivingClassViews ← getOptDerivingClasses stx[6]
+    liftTermElabM none (elabStructureView v)
+    let name : Name := v.declName
+    if not v.isClass
+    then do 
+      liftTermElabM (Option.none) (mkSizeOfInstances name)
+      liftTermElabM (Option.none) (mkInjectiveTheorems name)
+    else return ()
+    -- unless view.isClass do {
+    --   mkSizeOfInstances view.declName
+    --   mkInjectiveTheorems view.declName
+    -- }
+    -- return ()
+    -- return declName
+    -- | TODO: need to do this!
+    -- derivingClassViews.forM fun view => view.applyHandlers #[declName]
+  }
+  -- elabStructureViews (struct_views.reverse)
+  -- let views ← elems.mapM fun elem => do
+  --    let decl : Syntax := elem[1]
+  --    let declKind := decl.getKind
+  --    let modifiers ← elabModifiers stx[0]
+  --    if declKind == `Lean.Parser.Command.inductive
+  --    then do inductiveSyntaxToView modifiers stx[1]
+  --    else 
+
+  -- let views ← elems.mapM fun elem => do
+  --    let decl : Syntax := elem[1]
+  --    let declKind := decl.getKind
+  --    let modifiers ← elabModifiers stx[0]
+  --    if declKind == `Lean.Parser.Command.inductive
+  --    then do inductiveSyntaxToView modifiers stx[1]
+  --    else elabInductiveViews views
 
 /- Return true if all elements of the mutual-block are definitions/theorems/abbrevs. -/
 private def isMutualDef (stx : Syntax) : Bool :=
@@ -269,11 +327,12 @@ def expandMutualPreamble : Macro := fun stx =>
 def elabMutual : CommandElab := fun stx => do
   let hints := { terminationBy? := stx[3].getOptional?, decreasingBy? := stx[4].getOptional? }
   if isMutualInductive stx then
+    dbg_trace "elaborating a mix of inductives and records"
     if let some bad := hints.terminationBy? then
       throwErrorAt bad "invalid 'termination_by' in mutually inductive datatype declaration"
     if let some bad := hints.decreasingBy? then
       throwErrorAt bad "invalid 'decreasing_by' in mutually inductive datatype declaration"
-    elabMutualInductive stx[1].getArgs
+    elabMutualInductive stx -- stx[1].getArgs
   else if isMutualDef stx then
     for arg in stx[1].getArgs do
       let argHints := getTerminationHints arg

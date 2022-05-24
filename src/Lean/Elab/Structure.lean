@@ -777,7 +777,7 @@ private partial def mkCoercionToCopiedParent (levelParams : List Name) (params :
     else
       setReducibleAttribute declName
 
-private def elabStructureView (view : StructView) : TermElabM Unit := do
+def elabStructureView (view : StructView) : TermElabM Unit := do
   view.fields.forM fun field => do
     if field.declName == view.ctor.declName then
       throwErrorAt field.ref "invalid field name '{field.name}', it is equal to structure constructor name"
@@ -904,6 +904,54 @@ def elabStructure (modifiers : Modifiers) (stx : Syntax) : CommandElabM Unit := 
                 mkInjectiveTheorems declName
               return declName
   derivingClassViews.forM fun view => view.applyHandlers #[declName]
+
+def elabStructureToView (modifiers : Modifiers) (stx : Syntax) : CommandElabM StructView := do
+  checkValidInductiveModifier modifiers
+  let isClass   := stx[0].getKind == ``Parser.Command.classTk
+  let modifiers := if isClass then modifiers.addAttribute { name := `class } else modifiers
+  let declId    := stx[1]
+  let params    := stx[2].getArgs
+  let exts      := stx[3]
+  let parents   := if exts.isNone then #[] else exts[0][1].getSepArgs
+  let optType   := stx[4]
+  let derivingClassViews ← getOptDerivingClasses stx[6]
+  let type ← if optType.isNone then `(Sort _) else pure optType[0][1]
+  let declName ←
+    runTermElabM none fun scopeVars => do
+      let scopeLevelNames ← Term.getLevelNames
+      let ⟨name, declName, allUserLevelNames⟩ ← Elab.expandDeclId (← getCurrNamespace) scopeLevelNames declId modifiers
+      Term.withAutoBoundImplicitForbiddenPred (fun n => name == n) do
+        addDeclarationRanges declName stx
+        Term.withDeclName declName do
+          let ctor ← expandCtor stx modifiers declName
+          let fields ← expandFields stx modifiers declName
+          Term.withLevelNames allUserLevelNames <| Term.withAutoBoundImplicit <|
+            Term.elabBinders params fun params => do
+              Term.synthesizeSyntheticMVarsNoPostponing
+              let params ← Term.addAutoBoundImplicits params
+              let allUserLevelNames ← Term.getLevelNames
+              let x : StructView := {
+                ref := stx
+                modifiers
+                scopeLevelNames
+                allUserLevelNames
+                declName
+                isClass
+                scopeVars
+                params
+                parents
+                type
+                ctor
+                fields
+              }
+              return x
+              -- unless isClass do
+              --   mkSizeOfInstances declName
+              --   mkInjectiveTheorems declName
+              -- return declName
+  return declName
+  -- derivingClassViews.forM fun view => view.applyHandlers #[declName]
+
 
 builtin_initialize registerTraceClass `Elab.structure
 
