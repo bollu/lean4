@@ -31,6 +31,7 @@ structure StructCtorView where
   modifiers : Modifiers
   name      : Name
   declName  : Name
+  deriving Inhabited
 
 structure StructFieldView where
   ref        : Syntax
@@ -42,6 +43,7 @@ structure StructFieldView where
   binders    : Syntax
   type?      : Option Syntax
   value?     : Option Syntax
+  deriving Inhabited
 
 structure StructView where
   ref               : Syntax
@@ -57,6 +59,7 @@ structure StructView where
   ctor              : StructCtorView
   fields            : Array StructFieldView
   derivingClasses   : Array DerivingClassView
+  deriving Inhabited
 
 inductive StructFieldKind where
   | newField | copiedField | fromParent | subobject
@@ -910,14 +913,16 @@ def structCtor           := leading_parser try (declModifiers >> ident >> " :: "
 def elabStructureViews (views : Array StructView) : CommandElabM Unit := 
   views.forM (fun sv => do
       let name : Name := sv.declName
-      liftTermElabM none $  do
+      -- liftTermElabM none $  do
+      runTermElabM name fun scopeVars => withRef sv.ref do
         elabStructureView sv
         unless sv.isClass do {
-          mkSizeOfInstances name; -- TODO: why do I need the ; ?
+          mkSizeOfInstances name
+        }
+        unless sv.isClass do {
           mkInjectiveTheorems name
         }
       sv.derivingClasses.forM fun view => view.applyHandlers #[name]
-      return ()
     )
   
 def structureSyntaxToView (modifiers : Modifiers) (stx : Syntax) : CommandElabM StructView := do
