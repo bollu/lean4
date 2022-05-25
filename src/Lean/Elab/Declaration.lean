@@ -139,6 +139,10 @@ private def inductiveSyntaxToView (modifiers : Modifiers) (decl : Syntax) : Comm
 private def classInductiveSyntaxToView (modifiers : Modifiers) (decl : Syntax) : CommandElabM InductiveView :=
   inductiveSyntaxToView modifiers decl
 
+def elabStructure (modifiers : Modifiers) (stx : Syntax) : CommandElabM Unit := do
+  let v ← structureSyntaxToView modifiers stx
+  elabStructureViews #[v]
+
 def elabInductive (modifiers : Modifiers) (stx : Syntax) : CommandElabM Unit := do
   let v ← inductiveSyntaxToView modifiers stx
   elabInductiveViews #[v]
@@ -184,15 +188,30 @@ def elabDeclaration : CommandElab := fun stx => do
 /- Return true if all elements of the mutual-block are inductive declarations. -/
 private def isMutualInductive (stx : Syntax) : Bool :=
   stx[1].getArgs.all fun elem =>
-    let decl     := elem[1]
+    let decl : Syntax     := elem[1]
     let declKind := decl.getKind
-    declKind == `Lean.Parser.Command.inductive
+    declKind == `Lean.Parser.Command.inductive || declKind == `Lean.Parser.Command.structure
 
-private def elabMutualInductive (elems : Array Syntax) : CommandElabM Unit := do
-  let views ← elems.mapM fun stx => do
-     let modifiers ← elabModifiers stx[0]
-     inductiveSyntaxToView modifiers stx[1]
-  elabInductiveViews views
+/- Elaborate a block of mutual inductives and records -/
+private def elabMutualInductive (stx: Syntax) : CommandElabM Unit := do
+  let elems := stx[1].getArgs
+  let mut inductive_views : Array InductiveView := #[]
+  let mut struct_views : Array StructView := #[]
+  for elem in elems do {
+     let decl : Syntax := elem[1]
+     let declKind := decl.getKind
+     let modifiers <- elabModifiers elem[0]
+     if declKind == `Lean.Parser.Command.inductive
+     then do
+        let view_inductive <- inductiveSyntaxToView modifiers decl
+        inductive_views := inductive_views.push view_inductive
+      else do
+        let view_struct <- (structureSyntaxToView modifiers decl)
+        struct_views := struct_views.push view_struct
+  }
+
+  elabInductiveViews (inductive_views.reverse)
+  elabStructureViews (struct_views.reverse)
 
 /- Return true if all elements of the mutual-block are definitions/theorems/abbrevs. -/
 private def isMutualDef (stx : Syntax) : Bool :=
@@ -273,7 +292,7 @@ def elabMutual : CommandElab := fun stx => do
       throwErrorAt bad "invalid 'termination_by' in mutually inductive datatype declaration"
     if let some bad := hints.decreasingBy? then
       throwErrorAt bad "invalid 'decreasing_by' in mutually inductive datatype declaration"
-    elabMutualInductive stx[1].getArgs
+    elabMutualInductive stx -- stx[1].getArgs
   else if isMutualDef stx then
     for arg in stx[1].getArgs do
       let argHints := getTerminationHints arg
