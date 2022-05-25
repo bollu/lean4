@@ -56,6 +56,7 @@ structure StructView where
   type              : Syntax
   ctor              : StructCtorView
   fields            : Array StructFieldView
+  derivingClasses   : Array DerivingClassView
 
 inductive StructFieldKind where
   | newField | copiedField | fromParent | subobject
@@ -860,52 +861,66 @@ def structFields         := leading_parser many (structExplicitBinder <|> struct
 def structCtor           := leading_parser try (declModifiers >> ident >> " :: ")
 
 -/
-def elabStructure (modifiers : Modifiers) (stx : Syntax) : CommandElabM Unit := do
-  checkValidInductiveModifier modifiers
-  let isClass   := stx[0].getKind == ``Parser.Command.classTk
-  let modifiers := if isClass then modifiers.addAttribute { name := `class } else modifiers
-  let declId    := stx[1]
-  let params    := stx[2].getArgs
-  let exts      := stx[3]
-  let parents   := if exts.isNone then #[] else exts[0][1].getSepArgs
-  let optType   := stx[4]
-  let derivingClassViews ← getOptDerivingClasses stx[6]
-  let type ← if optType.isNone then `(Sort _) else pure optType[0][1]
-  let declName ←
-    runTermElabM none fun scopeVars => do
-      let scopeLevelNames ← Term.getLevelNames
-      let ⟨name, declName, allUserLevelNames⟩ ← Elab.expandDeclId (← getCurrNamespace) scopeLevelNames declId modifiers
-      Term.withAutoBoundImplicitForbiddenPred (fun n => name == n) do
-        addDeclarationRanges declName stx
-        Term.withDeclName declName do
-          let ctor ← expandCtor stx modifiers declName
-          let fields ← expandFields stx modifiers declName
-          Term.withLevelNames allUserLevelNames <| Term.withAutoBoundImplicit <|
-            Term.elabBinders params fun params => do
-              Term.synthesizeSyntheticMVarsNoPostponing
-              let params ← Term.addAutoBoundImplicits params
-              let allUserLevelNames ← Term.getLevelNames
-              elabStructureView {
-                ref := stx
-                modifiers
-                scopeLevelNames
-                allUserLevelNames
-                declName
-                isClass
-                scopeVars
-                params
-                parents
-                type
-                ctor
-                fields
-              }
-              unless isClass do
-                mkSizeOfInstances declName
-                mkInjectiveTheorems declName
-              return declName
-  derivingClassViews.forM fun view => view.applyHandlers #[declName]
+-- def elabStructure (modifiers : Modifiers) (stx : Syntax) : CommandElabM Unit := do
+--   checkValidInductiveModifier modifiers
+--   let isClass   := stx[0].getKind == ``Parser.Command.classTk
+--   let modifiers := if isClass then modifiers.addAttribute { name := `class } else modifiers
+--   let declId    := stx[1]
+--   let params    := stx[2].getArgs
+--   let exts      := stx[3]
+--   let parents   := if exts.isNone then #[] else exts[0][1].getSepArgs
+--   let optType   := stx[4]
+--   let derivingClassViews ← getOptDerivingClasses stx[6]
+--   let type ← if optType.isNone then `(Sort _) else pure optType[0][1]
+--   let declName ←
+--     runTermElabM none fun scopeVars => do
+--       let scopeLevelNames ← Term.getLevelNames
+--       let ⟨name, declName, allUserLevelNames⟩ ← Elab.expandDeclId (← getCurrNamespace) scopeLevelNames declId modifiers
+--       Term.withAutoBoundImplicitForbiddenPred (fun n => name == n) do
+--         addDeclarationRanges declName stx
+--         Term.withDeclName declName do
+--           let ctor ← expandCtor stx modifiers declName
+--           let fields ← expandFields stx modifiers declName
+--           Term.withLevelNames allUserLevelNames <| Term.withAutoBoundImplicit <|
+--             Term.elabBinders params fun params => do
+--               Term.synthesizeSyntheticMVarsNoPostponing
+--               let params ← Term.addAutoBoundImplicits params
+--               let allUserLevelNames ← Term.getLevelNames
+--               elabStructureView {
+--                 ref := stx
+--                 modifiers
+--                 scopeLevelNames
+--                 allUserLevelNames
+--                 declName
+--                 isClass
+--                 scopeVars
+--                 params
+--                 parents
+--                 type
+--                 ctor
+--                 fields
+--               }
+--               unless isClass do
+--                 mkSizeOfInstances declName
+--                 mkInjectiveTheorems declName
+--               return declName
+--   derivingClassViews.forM fun view => view.applyHandlers #[declName]
 
-def elabStructureToView (modifiers : Modifiers) (stx : Syntax) : CommandElabM StructView := do
+
+def elabStructureViews (views : Array StructView) : CommandElabM Unit := 
+  views.forM (fun sv => do
+      let name : Name := sv.declName
+      liftTermElabM none $  do
+        elabStructureView sv
+        unless sv.isClass do {
+          mkSizeOfInstances name; -- TODO: why do I need the ; ?
+          mkInjectiveTheorems name
+        }
+      sv.derivingClasses.forM fun view => view.applyHandlers #[name]
+      return ()
+    )
+  
+def structureSyntaxToView (modifiers : Modifiers) (stx : Syntax) : CommandElabM StructView := do
   checkValidInductiveModifier modifiers
   let isClass   := stx[0].getKind == ``Parser.Command.classTk
   let modifiers := if isClass then modifiers.addAttribute { name := `class } else modifiers
@@ -914,9 +929,9 @@ def elabStructureToView (modifiers : Modifiers) (stx : Syntax) : CommandElabM St
   let exts      := stx[3]
   let parents   := if exts.isNone then #[] else exts[0][1].getSepArgs
   let optType   := stx[4]
-  let derivingClassViews ← getOptDerivingClasses stx[6]
+  let derivingClasses ← getOptDerivingClasses stx[6]
   let type ← if optType.isNone then `(Sort _) else pure optType[0][1]
-  let declName ←
+  let view ←
     runTermElabM none fun scopeVars => do
       let scopeLevelNames ← Term.getLevelNames
       let ⟨name, declName, allUserLevelNames⟩ ← Elab.expandDeclId (← getCurrNamespace) scopeLevelNames declId modifiers
@@ -930,7 +945,7 @@ def elabStructureToView (modifiers : Modifiers) (stx : Syntax) : CommandElabM St
               Term.synthesizeSyntheticMVarsNoPostponing
               let params ← Term.addAutoBoundImplicits params
               let allUserLevelNames ← Term.getLevelNames
-              let x : StructView := {
+              let view : StructView := {
                 ref := stx
                 modifiers
                 scopeLevelNames
@@ -943,14 +958,15 @@ def elabStructureToView (modifiers : Modifiers) (stx : Syntax) : CommandElabM St
                 type
                 ctor
                 fields
+                derivingClasses
               }
-              return x
+              return view
               -- unless isClass do
               --   mkSizeOfInstances declName
               --   mkInjectiveTheorems declName
               -- return declName
-  return declName
-  -- derivingClassViews.forM fun view => view.applyHandlers #[declName]
+  -- derivingClassViews.forM fun view => view.applyHandlers #[view.declName]
+  return view
 
 
 builtin_initialize registerTraceClass `Elab.structure
