@@ -2,16 +2,16 @@ mutual
 
 -- | allow structures in mutual inductive blocks.
 structure Foo where
-  fooint: Int
+  int: Int
   bar: Bar
 
 inductive Bar where
-| bar1: Bar
-| bar2: Bar
+| mk: Bar
+| foo: Foo -> Bar
 end
 
 
 #print Foo
 #print Bar
-def fooBar : Foo := { fooint := 0, bar := (Bar.bar1) }
+def fooBar : Foo := { int := 0, bar := (Bar.mk) }
 #check fooBar
