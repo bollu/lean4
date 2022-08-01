@@ -4,47 +4,29 @@
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
         <title>Significant Changes from Lean 3 - Lean Manual</title>
-        
-        
-
-
         <!-- Custom HTML head -->
-        
-
-
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
 
-        
         <link rel="icon" href="favicon.svg">
-        
-        
         <link rel="shortcut icon" href="favicon.png">
-        
         <link rel="stylesheet" href="css/variables.css">
         <link rel="stylesheet" href="css/general.css">
         <link rel="stylesheet" href="css/chrome.css">
-        
         <link rel="stylesheet" href="css/print.css" media="print">
-        
-
         <!-- Fonts -->
         <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-        
         <link rel="stylesheet" href="fonts/fonts.css">
-        
-
         <!-- Highlight.js Stylesheets -->
         <link rel="stylesheet" href="highlight.css">
         <link rel="stylesheet" href="tomorrow-night.css">
         <link rel="stylesheet" href="ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
-        
-
-        
+        <link rel="stylesheet" href="alectryon.css">
+        <link rel="stylesheet" href="pygments.css">
     </head>
     <body>
         <!-- Provide site root to javascript -->
@@ -59,11 +41,11 @@
                 var theme = localStorage.getItem('mdbook-theme');
                 var sidebar = localStorage.getItem('mdbook-sidebar');
 
-                if (theme.startsWith('"') && theme.endsWith('"')) {
+                if (theme && theme.startsWith('"') && theme.endsWith('"')) {
                     localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
                 }
 
-                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                if (sidebar && sidebar.startsWith('"') && sidebar.endsWith('"')) {
                     localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
                 }
             } catch (e) { }
@@ -95,7 +77,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="whatIsLean.html"><strong aria-hidden="true">1.</strong> What is Lean</a></li><li class="chapter-item expanded "><a href="tour.html"><strong aria-hidden="true">2.</strong> Tour of Lean</a></li><li class="chapter-item expanded "><a href="setup.html"><strong aria-hidden="true">3.</strong> Setting Up Lean</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="quickstart.html"><strong aria-hidden="true">3.1.</strong> Quickstart</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Language Manual</li><li class="chapter-item expanded "><a href="using_lean.html"><strong aria-hidden="true">4.</strong> Using Lean</a></li><li class="chapter-item expanded "><a href="lexical_structure.html"><strong aria-hidden="true">5.</strong> Lexical Structure</a></li><li class="chapter-item expanded "><a href="expressions.html"><strong aria-hidden="true">6.</strong> Expressions</a></li><li class="chapter-item expanded "><a href="declarations.html"><strong aria-hidden="true">7.</strong> Declarations</a></li><li class="chapter-item expanded "><a href="organization.html"><strong aria-hidden="true">8.</strong> Organizational features</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="sections.html"><strong aria-hidden="true">8.1.</strong> Sections</a></li><li class="chapter-item expanded "><a href="namespaces.html"><strong aria-hidden="true">8.2.</strong> Namespaces</a></li><li class="chapter-item expanded "><a href="implicit.html"><strong aria-hidden="true">8.3.</strong> Implicit Arguments</a></li><li class="chapter-item expanded "><a href="autobound.html"><strong aria-hidden="true">8.4.</strong> Auto Bound Implicit Arguments</a></li></ol></li><li class="chapter-item expanded "><a href="deptypes.html"><strong aria-hidden="true">9.</strong> Dependent Types</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="simptypes.html"><strong aria-hidden="true">9.1.</strong> Simple Type Theory</a></li><li class="chapter-item expanded "><a href="typeobjs.html"><strong aria-hidden="true">9.2.</strong> Types as objects</a></li><li class="chapter-item expanded "><a href="funabst.html"><strong aria-hidden="true">9.3.</strong> Function Abstraction and Evaluation</a></li><li class="chapter-item expanded "><a href="introdef.html"><strong aria-hidden="true">9.4.</strong> Introducing Definitions</a></li><li class="chapter-item expanded "><a href="dep.html"><strong aria-hidden="true">9.5.</strong> What makes dependent type theory dependent?</a></li></ol></li><li class="chapter-item expanded "><a href="tactics.html"><strong aria-hidden="true">10.</strong> Tactics</a></li><li class="chapter-item expanded "><a href="syntax.html"><strong aria-hidden="true">11.</strong> Syntax Extensions</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="do.html"><strong aria-hidden="true">11.1.</strong> The do Notation</a></li><li class="chapter-item expanded "><a href="stringinterp.html"><strong aria-hidden="true">11.2.</strong> String Interpolation</a></li></ol></li><li class="chapter-item expanded "><a href="metaprogramming.html"><strong aria-hidden="true">12.</strong> Metaprogramming</a></li><li class="chapter-item expanded "><a href="decltypes.html"><strong aria-hidden="true">13.</strong> Declaring New Types</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="enum.html"><strong aria-hidden="true">13.1.</strong> Enumerated Types</a></li><li class="chapter-item expanded "><a href="inductive.html"><strong aria-hidden="true">13.2.</strong> Inductive Types</a></li><li class="chapter-item expanded "><a href="struct.html"><strong aria-hidden="true">13.3.</strong> Structures</a></li><li class="chapter-item expanded "><a href="typeclass.html"><strong aria-hidden="true">13.4.</strong> Type classes</a></li><li class="chapter-item expanded "><a href="unifhint.html"><strong aria-hidden="true">13.5.</strong> Unification Hints</a></li></ol></li><li class="chapter-item expanded "><a href="builtintypes.html"><strong aria-hidden="true">14.</strong> Builtin Types</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="nat.html"><strong aria-hidden="true">14.1.</strong> Natural number</a></li><li class="chapter-item expanded "><a href="int.html"><strong aria-hidden="true">14.2.</strong> Integer</a></li><li class="chapter-item expanded "><a href="uint.html"><strong aria-hidden="true">14.3.</strong> Fixed precision unsigned integer</a></li><li class="chapter-item expanded "><a href="float.html"><strong aria-hidden="true">14.4.</strong> Float</a></li><li class="chapter-item expanded "><a href="array.html"><strong aria-hidden="true">14.5.</strong> Array</a></li><li class="chapter-item expanded "><a href="list.html"><strong aria-hidden="true">14.6.</strong> List</a></li><li class="chapter-item expanded "><a href="char.html"><strong aria-hidden="true">14.7.</strong> Character</a></li><li class="chapter-item expanded "><a href="string.html"><strong aria-hidden="true">14.8.</strong> String</a></li><li class="chapter-item expanded "><a href="option.html"><strong aria-hidden="true">14.9.</strong> Option</a></li><li class="chapter-item expanded "><a href="thunk.html"><strong aria-hidden="true">14.10.</strong> Thunk</a></li><li class="chapter-item expanded "><a href="task.html"><strong aria-hidden="true">14.11.</strong> Task and Thread</a></li></ol></li><li class="chapter-item expanded "><a href="functions.html"><strong aria-hidden="true">15.</strong> Functions</a></li><li class="chapter-item expanded "><a href="tactics.html"><strong aria-hidden="true">16.</strong> Tactics</a></li><li class="chapter-item expanded affix "><li class="part-title">Other</li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">17.</strong> Frequently Asked Questions</a></li><li class="chapter-item expanded "><a href="lean3changes.html" class="active"><strong aria-hidden="true">18.</strong> Significant Changes from Lean 3</a></li><li class="chapter-item expanded "><a href="syntax_highlight_in_latex.html"><strong aria-hidden="true">19.</strong> Syntax Highlighting Lean in LaTeX</a></li><li class="chapter-item expanded affix "><li class="part-title">Development</li><li class="chapter-item expanded "><a href="dev/index.html"><strong aria-hidden="true">20.</strong> Development Guide</a></li><li class="chapter-item expanded "><a href="dev/commit_convention.html"><strong aria-hidden="true">21.</strong> Commit Convention</a></li><li class="chapter-item expanded "><a href="make/index.html"><strong aria-hidden="true">22.</strong> Building Lean</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="make/ubuntu-16.04.html"><strong aria-hidden="true">22.1.</strong> Ubuntu Setup</a></li><li class="chapter-item expanded "><a href="make/osx-10.9.html"><strong aria-hidden="true">22.2.</strong> macOS Setup</a></li><li class="chapter-item expanded "><a href="make/msys2.html"><strong aria-hidden="true">22.3.</strong> Windows MSYS2 Setup</a></li><li class="chapter-item expanded "><a href="make/wsl.html"><strong aria-hidden="true">22.4.</strong> Windows with WSL</a></li><li class="chapter-item expanded "><a href="make/nix.html"><strong aria-hidden="true">22.5.</strong> Nix Setup (Experimental)</a></li></ol></li><li class="chapter-item expanded "><a href="dev/testing.html"><strong aria-hidden="true">23.</strong> Unit Testing</a></li><li class="chapter-item expanded "><a href="dev/mdbook.html"><strong aria-hidden="true">24.</strong> Building This Manual</a></li><li class="chapter-item expanded "><a href="dev/fixing_tests.html"><strong aria-hidden="true">25.</strong> Fixing Tests</a></li><li class="chapter-item expanded "><a href="dev/debugging.html"><strong aria-hidden="true">26.</strong> Debugging</a></li><li class="chapter-item expanded "><a href="dev/cpp_coding_style.html"><strong aria-hidden="true">27.</strong> C++ Coding Style</a></li></ol>
+                <ol class="chapter"><li class="chapter-item "><a href="whatIsLean.html"><strong aria-hidden="true">1.</strong> What is Lean</a></li><li class="chapter-item "><a href="tour.html"><strong aria-hidden="true">2.</strong> Tour of Lean</a></li><li class="chapter-item "><a href="quickstart.html"><strong aria-hidden="true">3.</strong> Setting Up Lean</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="setup.html"><strong aria-hidden="true">3.1.</strong> Extended Setup Notes</a></li></ol></li><li class="chapter-item "><a href="tpil.html"><strong aria-hidden="true">4.</strong> Theorem Proving in Lean</a></li><li class="chapter-item "><a href="fplean.html"><strong aria-hidden="true">5.</strong> Functional Programming in Lean</a></li><li class="chapter-item "><a href="examples.html"><strong aria-hidden="true">6.</strong> Examples</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="examples/palindromes.lean.html"><strong aria-hidden="true">6.1.</strong> Palindromes</a></li><li class="chapter-item "><a href="examples/bintree.lean.html"><strong aria-hidden="true">6.2.</strong> Binary Search Trees</a></li><li class="chapter-item "><a href="examples/tc.lean.html"><strong aria-hidden="true">6.3.</strong> A Certified Type Checker</a></li><li class="chapter-item "><a href="examples/interp.lean.html"><strong aria-hidden="true">6.4.</strong> The Well-Typed Interpreter</a></li><li class="chapter-item "><a href="examples/deBruijn.lean.html"><strong aria-hidden="true">6.5.</strong> Dependent de Bruijn Indices</a></li><li class="chapter-item "><a href="examples/phoas.lean.html"><strong aria-hidden="true">6.6.</strong> Parametric Higher-Order Abstract Syntax</a></li></ol></li><li class="chapter-item "><li class="part-title">Language Manual</li><li class="chapter-item "><a href="organization.html"><strong aria-hidden="true">7.</strong> Organizational features</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="sections.html"><strong aria-hidden="true">7.1.</strong> Sections</a></li><li class="chapter-item "><a href="namespaces.html"><strong aria-hidden="true">7.2.</strong> Namespaces</a></li><li class="chapter-item "><a href="implicit.html"><strong aria-hidden="true">7.3.</strong> Implicit Arguments</a></li><li class="chapter-item "><a href="autobound.html"><strong aria-hidden="true">7.4.</strong> Auto Bound Implicit Arguments</a></li></ol></li><li class="chapter-item "><a href="syntax.html"><strong aria-hidden="true">8.</strong> Syntax Extensions</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="do.html"><strong aria-hidden="true">8.1.</strong> The do Notation</a></li><li class="chapter-item "><a href="stringinterp.html"><strong aria-hidden="true">8.2.</strong> String Interpolation</a></li><li class="chapter-item "><a href="notation.html"><strong aria-hidden="true">8.3.</strong> User-Defined Notation</a></li><li class="chapter-item "><a href="macro_overview.html"><strong aria-hidden="true">8.4.</strong> Macro Overview</a></li><li class="chapter-item "><a href="elaborators.html"><strong aria-hidden="true">8.5.</strong> Elaborators</a></li><li class="chapter-item "><a href="syntax_examples.html"><strong aria-hidden="true">8.6.</strong> Examples</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="syntax_example.html"><strong aria-hidden="true">8.6.1.</strong> Balanced Parentheses</a></li><li class="chapter-item "><a href="metaprogramming-arith.html"><strong aria-hidden="true">8.6.2.</strong> Arithmetic DSL</a></li></ol></li></ol></li><li class="chapter-item "><a href="decltypes.html"><strong aria-hidden="true">9.</strong> Declaring New Types</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="enum.html"><strong aria-hidden="true">9.1.</strong> Enumerated Types</a></li><li class="chapter-item "><a href="inductive.html"><strong aria-hidden="true">9.2.</strong> Inductive Types</a></li><li class="chapter-item "><a href="struct.html"><strong aria-hidden="true">9.3.</strong> Structures</a></li><li class="chapter-item "><a href="typeclass.html"><strong aria-hidden="true">9.4.</strong> Type classes</a></li><li class="chapter-item "><a href="unifhint.html"><strong aria-hidden="true">9.5.</strong> Unification Hints</a></li></ol></li><li class="chapter-item "><a href="builtintypes.html"><strong aria-hidden="true">10.</strong> Builtin Types</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="nat.html"><strong aria-hidden="true">10.1.</strong> Natural number</a></li><li class="chapter-item "><a href="int.html"><strong aria-hidden="true">10.2.</strong> Integer</a></li><li class="chapter-item "><a href="uint.html"><strong aria-hidden="true">10.3.</strong> Fixed precision unsigned integer</a></li><li class="chapter-item "><a href="float.html"><strong aria-hidden="true">10.4.</strong> Float</a></li><li class="chapter-item "><a href="array.html"><strong aria-hidden="true">10.5.</strong> Array</a></li><li class="chapter-item "><a href="list.html"><strong aria-hidden="true">10.6.</strong> List</a></li><li class="chapter-item "><a href="char.html"><strong aria-hidden="true">10.7.</strong> Character</a></li><li class="chapter-item "><a href="string.html"><strong aria-hidden="true">10.8.</strong> String</a></li><li class="chapter-item "><a href="option.html"><strong aria-hidden="true">10.9.</strong> Option</a></li><li class="chapter-item "><a href="thunk.html"><strong aria-hidden="true">10.10.</strong> Thunk</a></li><li class="chapter-item "><a href="task.html"><strong aria-hidden="true">10.11.</strong> Task and Thread</a></li></ol></li><li class="chapter-item "><a href="functions.html"><strong aria-hidden="true">11.</strong> Functions</a></li><li class="chapter-item affix "><li class="part-title">Other</li><li class="chapter-item "><a href="faq.html"><strong aria-hidden="true">12.</strong> Frequently Asked Questions</a></li><li class="chapter-item expanded "><a href="lean3changes.html" class="active"><strong aria-hidden="true">13.</strong> Significant Changes from Lean 3</a></li><li class="chapter-item "><a href="syntax_highlight_in_latex.html"><strong aria-hidden="true">14.</strong> Syntax Highlighting Lean in LaTeX</a></li><li class="chapter-item "><a href="widgets.html"><strong aria-hidden="true">15.</strong> User Widgets</a></li><li class="chapter-item affix "><li class="part-title">Development</li><li class="chapter-item "><a href="dev/index.html"><strong aria-hidden="true">16.</strong> Development Guide</a></li><li class="chapter-item "><a href="make/index.html"><strong aria-hidden="true">17.</strong> Building Lean</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="make/ubuntu.html"><strong aria-hidden="true">17.1.</strong> Ubuntu Setup</a></li><li class="chapter-item "><a href="make/osx-10.9.html"><strong aria-hidden="true">17.2.</strong> macOS Setup</a></li><li class="chapter-item "><a href="make/msys2.html"><strong aria-hidden="true">17.3.</strong> Windows MSYS2 Setup</a></li><li class="chapter-item "><a href="make/wsl.html"><strong aria-hidden="true">17.4.</strong> Windows with WSL</a></li><li class="chapter-item "><a href="make/nix.html"><strong aria-hidden="true">17.5.</strong> Nix Setup (Experimental)</a></li></ol></li><li class="chapter-item "><a href="dev/bootstrap.html"><strong aria-hidden="true">18.</strong> Bootstrapping</a></li><li class="chapter-item "><a href="dev/testing.html"><strong aria-hidden="true">19.</strong> Testing</a></li><li class="chapter-item "><a href="dev/debugging.html"><strong aria-hidden="true">20.</strong> Debugging</a></li><li class="chapter-item "><a href="dev/commit_convention.html"><strong aria-hidden="true">21.</strong> Commit Convention</a></li><li class="chapter-item "><a href="dev/mdbook.html"><strong aria-hidden="true">22.</strong> Building This Manual</a></li><li class="chapter-item "><a href="dev/ffi.html"><strong aria-hidden="true">23.</strong> Foreign Function Interface</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -103,7 +85,6 @@
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
-                
                 <div id="menu-bar-hover-placeholder"></div>
                 <div id="menu-bar" class="menu-bar sticky bordered">
                     <div class="left-buttons">
@@ -120,33 +101,26 @@
                             <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
                         </ul>
-                        
                         <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
                             <i class="fa fa-search"></i>
                         </button>
-                        
                     </div>
 
                     <h1 class="menu-title">Lean Manual</h1>
 
                     <div class="right-buttons">
-                        
                         <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        
-                        
                         <a href="https://github.com/leanprover/lean4" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        
                     </div>
                 </div>
 
-                
                 <div id="search-wrapper" class="hidden">
                     <form id="searchbar-outer" class="searchbar-outer">
-                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
                     </form>
                     <div id="searchresults-outer" class="searchresults-outer hidden">
                         <div id="searchresults-header" class="searchresults-header"></div>
@@ -154,8 +128,6 @@
                         </ul>
                     </div>
                 </div>
-                
-
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
                 <script type="text/javascript">
                     document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
@@ -167,21 +139,19 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1><a class="header" href="#significant-changes-from-lean-3" id="significant-changes-from-lean-3">Significant changes from Lean 3</a></h1>
+                        <h1 id="significant-changes-from-lean-3"><a class="header" href="#significant-changes-from-lean-3">Significant changes from Lean 3</a></h1>
 <p>Lean 4 is not backward compatible with Lean 3.
 We have rewritten most of the system, and took the opportunity to cleanup the syntax,
 metaprogramming framework, and elaborator. In this section, we go over the most significant
 changes.</p>
-<h2><a class="header" href="#lambda-expressions" id="lambda-expressions">Lambda expressions</a></h2>
+<h2 id="lambda-expressions"><a class="header" href="#lambda-expressions">Lambda expressions</a></h2>
 <p>We do not use <code>,</code> anymore to separate the binders from the lambda expression body.
 The Lean 3 syntax for lambda expressions was unconventional, and <code>,</code> has been overused in Lean 3.
 For example, we believe a list of lambda expressions is quite confusing in Lean 3, since <code>,</code> is used
 to separate the elements of a list, and in the lambda expression itself. We now use <code>=&gt;</code> as the separator,
 as an example, <code>fun x =&gt; x</code> is the identity function. One may still use the symbol <code>λ</code> as a shorthand for <code>fun</code>.
 The lambda expression notation has many new features that are not supported in Lean 3.</p>
-<ul>
-<li>Pattern matching</li>
-</ul>
+<h2 id="pattern-matching"><a class="header" href="#pattern-matching">Pattern matching</a></h2>
 <p>In Lean 4, one can easily create new notation that abbreviates commonly used idioms. One of them is a
 <code>fun</code> followed by a <code>match</code>. In the following examples, we define a few functions using <code>fun</code>+<code>match</code> notation.</p>
 <pre><code class="language-lean"><span class="boring">namespace ex1
@@ -202,9 +172,7 @@ def Sum.str : Option Nat → String :=
     | none   =&gt; &quot;none&quot;
 <span class="boring">end ex1
 </span></code></pre>
-<ul>
-<li>Implicit lambdas</li>
-</ul>
+<h2 id="implicit-lambdas"><a class="header" href="#implicit-lambdas">Implicit lambdas</a></h2>
 <p>In Lean 3 stdlib, we find many <a href="https://github.com/leanprover/lean/blob/master/library/init/category/reader.lean#L39">instances</a> of the dreadful <code>@</code>+<code>_</code> idiom.
 It is often used when we the expected type is a function type with implicit arguments,
 and we have a constant (<code>reader_t.pure</code> in the example) which also takes implicit arguments. In Lean 4, the elaborator automatically introduces lambdas
@@ -241,9 +209,7 @@ def id5 : {α : Type} → α → α :=
   fun {α} x =&gt; id1 x
 <span class="boring">end ex2
 </span></code></pre>
-<ul>
-<li>Sugar for simple functions</li>
-</ul>
+<h2 id="sugar-for-simple-functions"><a class="header" href="#sugar-for-simple-functions">Sugar for simple functions</a></h2>
 <p>In Lean 3, we can create simple functions from infix operators by using parentheses. For example, <code>(+1)</code> is sugar for <code>fun x, x + 1</code>. In Lean 4, we generalize this notation using <code>·</code> As a placeholder. Here are a few examples:</p>
 <pre><code class="language-lean"><span class="boring">namespace ex3
 </span>#check (· + 1)
@@ -268,7 +234,7 @@ The collection is interrupted by nested parentheses. In the following example, t
 <pre><code class="language-lean">#check (Prod.mk · (· + 1))
 -- fun a =&gt; (a, fun b =&gt; b + 1)
 </code></pre>
-<h2><a class="header" href="#function-applications" id="function-applications">Function applications</a></h2>
+<h2 id="function-applications"><a class="header" href="#function-applications">Function applications</a></h2>
 <p>In Lean 4, we have support for named arguments.
 Named arguments enable you to specify an argument for a parameter by matching the argument with
 its name rather than with its position in the parameter list.
@@ -340,7 +306,7 @@ to avoid a sequence of <code>_</code>s.</p>
 <pre><code class="language-lean">example (f : Nat → Nat) (a b c : Nat) : f (a + b + c) = f (a + (b + c)) :=
   congrArg f (Nat.add_assoc ..)
 </code></pre>
-<h2><a class="header" href="#dependent-function-types" id="dependent-function-types">Dependent function types</a></h2>
+<h2 id="dependent-function-types"><a class="header" href="#dependent-function-types">Dependent function types</a></h2>
 <p>Given <code>α : Type</code> and <code>β : α → Type</code>, <code>(x : α) → β x</code> denotes the type of functions <code>f</code> with the property that,
 for each <code>a : α</code>, <code>f a</code> is an element of <code>β a</code>. In other words, the type of the value returned by <code>f</code> depends on its input.
 We say <code>(x : α) → β x</code> is a dependent function type. In Lean 3, we write the dependent function type <code>(x : α) → β x</code> using
@@ -359,7 +325,7 @@ it is awkward to use and often confuses new users. We can still write <code>fora
 #check forall {α : Type} (a : Array α) (i : Nat), i &lt; a.size → α
 #check {α β : Type} → α → β → α × β
 </code></pre>
-<h2><a class="header" href="#the-meta-keyword" id="the-meta-keyword">The <code>meta</code> keyword</a></h2>
+<h2 id="the-meta-keyword"><a class="header" href="#the-meta-keyword">The <code>meta</code> keyword</a></h2>
 <p>In Lean 3, the keyword <code>meta</code> is used to mark definitions that can use primitives implemented in C/C++.
 These metadefinitions can also call themselves recursively, relaxing the termination
 restriction imposed by ordinary type theory. Metadefinitions may also use unsafe primitives such as
@@ -367,10 +333,9 @@ restriction imposed by ordinary type theory. Metadefinitions may also use unsafe
 <code>tactic.unsafe_run_io</code>.</p>
 <p>The keyword <code>meta</code> has been currently removed from Lean 4. However, we may re-introduce it in the future,
 but with a much more limited purpose: marking meta code that should not be included in the executables produced by Lean.</p>
-<p>The keywords <code>axiom</code> and <code>constant</code> are not equivalent in Lean 4. In Lean 4, <code>constant</code> is used to define
-an opaque definition. Here are two simple examples:</p>
+<p>The keyword <code>constant</code> has been deleted in Lean 4, and <code>axiom</code> should be used instead. In Lean 4, the new command <code>opaque</code> is used to define an opaque definition. Here are two simple examples:</p>
 <pre><code class="language-lean"><span class="boring">namespace meta1
-</span>constant x : Nat := 1
+</span>opaque x : Nat := 1
 -- The following example will not type check since `x` is opaque
 -- example : x = 1 := rfl
 
@@ -380,10 +345,10 @@ an opaque definition. Here are two simple examples:</p>
 
 -- When no value is provided, the elaborator tries to build one automatically for us
 -- using the `Inhabited` type class
-constant y : Nat
+opaque y : Nat
 <span class="boring">end meta1
 </span></code></pre>
-<p>We can instruct Lean to use a foreign function as the implementation for any constant or definition
+<p>We can instruct Lean to use a foreign function as the implementation for any definition
 using the attribute <code>@[extern &quot;foreign_function&quot;]</code>. It is the user's responsibility to ensure the
 foreign implementation is correct.
 However, a user mistake here will only impact the code generated by Lean, and
@@ -462,72 +427,72 @@ the auxiliary unsafe definition generated by Lean, and produces a safe one using
 #eval f 98
 <span class="boring">end partial1
 </span></code></pre>
+<h2 id="library-changes"><a class="header" href="#library-changes">Library changes</a></h2>
+<p>These are changes to the library which may trip up Lean 3 users:</p>
+<ul>
+<li><code>Option</code> and <code>List</code> are no longer monads. Instead there is <code>OptionM</code>. This was done to avoid some performance traps. For example <code>o₁ &lt;|&gt; o₂</code> where <code>o₁ o₂ : Option α</code> will evaluate both <code>o₁</code> and <code>o₂</code> even if <code>o₁</code> evaluates to <code>some x</code>. This can be a problem if <code>o₂</code> requires a lot of compute to evaluate. A zulip discussion on this design choice is <a href="https://leanprover.zulipchat.com/#narrow/stream/270676-lean4/topic/Option.20do.20notation.20regression.3F">here</a>.</li>
+</ul>
+<h2 id="style-changes"><a class="header" href="#style-changes">Style changes</a></h2>
+<p>Coding style changes have also been made:</p>
+<ul>
+<li>Term constants and variables are now <code>lowerCamelCase</code> rather than <code>snake_case</code></li>
+<li>Type constants are now <code>UpperCamelCase</code>, eg <code>Nat</code>, <code>List</code>. Type variables are still lower case greek letters. Functors are still lower case latin <code>(m : Type → Type) [Monad m]</code>.</li>
+<li>When defining typeclasses, prefer not to use &quot;has&quot;. Eg <code>ToString</code> or <code>Add</code> instead of <code>HasToString</code> or <code>HasAdd</code>.</li>
+<li>Prefer <code>return</code> to <code>pure</code> in monad expressions.</li>
+<li>Pipes <code>&lt;|</code> are preferred to dollars <code>$</code> for function application.</li>
+<li>Declaration bodies should always be indented:
+<pre><code class="language-lean">inductive Hello where
+  | foo
+  | bar
+
+structure Point where
+  x : Nat
+  y : Nat
+
+def Point.addX : Point → Point → Nat :=
+  fun { x := a, .. } { x := b, .. } =&gt; a + b
+</code></pre>
+</li>
+<li>In structures and typeclass definitions, prefer <code>where</code> to <code>:=</code> and don't surround fields with parentheses. (Shown in <code>Point</code> above)</li>
+</ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                        
                             <a rel="prev" href="faq.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
-                        
-
-                        
                             <a rel="next" href="syntax_highlight_in_latex.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
-                        
-
                         <div style="clear: both"></div>
                     </nav>
                 </div>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                
                     <a rel="prev" href="faq.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
-                
-
-                
                     <a rel="next" href="syntax_highlight_in_latex.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
-                
             </nav>
 
         </div>
 
-        
-
-        
-
-        
-
-        
         <script type="text/javascript">
             window.playground_copyable = true;
         </script>
-        
-
-        
-
-        
         <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
-        
-
         <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
         <script src="book.js" type="text/javascript" charset="utf-8"></script>
 
         <!-- Custom JS scripts -->
-        
-
-        
-
+        <script type="text/javascript" src="alectryon.js"></script>
     </body>
 </html>

@@ -1,5 +1,43 @@
 "use strict";
 
+// set the following properties to modify the default behavior
+// clip_buttons = true       - get copy to clipboard buttons
+// tryit_buttons = true      - get try-it buttons that call docView.postMessage.
+// default_theme = 'coal'    - to override user choice on themes (for hosting inside something like vscode that has it's own themes)
+// side_bar = true           - add the side bar.
+
+var docView = null;
+if (typeof acquireVsCodeApi !== 'undefined')
+    docView = acquireVsCodeApi();
+
+function clip_buttons_enabled() {
+    if (typeof clip_buttons !== 'undefined'){
+        return clip_buttons;
+    }
+    return true;
+}
+
+function tryit_buttons_enabled() {
+    if (typeof tryit_buttons !== 'undefined'){
+        return tryit_buttons;
+    }
+    return false;
+}
+
+function sidebar_enabled() {
+    if (typeof side_bar !== 'undefined'){
+        return side_bar;
+    }
+    return true;
+}
+
+function get_default_theme() {
+    if (typeof default_theme !== 'undefined'){
+        return default_theme;
+    }
+    return 'navy';
+}
+
 // Fix back button cache problem
 window.onunload = function () { };
 
@@ -15,14 +53,7 @@ function playground_text(playground) {
     }
 }
 
-(function codeSnippets() {
-    function fetch_with_timeout(url, options, timeout = 6000) {
-        return Promise.race([
-            fetch(url, options),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout))
-        ]);
-    }
-
+(function setupPlaygrounds() {
     var playgrounds = Array.from(document.querySelectorAll(".playground"));
     if (playgrounds.length > 0) {
         fetch_with_timeout("https://play.rust-lang.org/meta/crates", {
@@ -38,6 +69,13 @@ function playground_text(playground) {
             let playground_crates = response.crates.map(item => item["id"]);
             playgrounds.forEach(block => handle_crate_list_update(block, playground_crates));
         });
+    }
+
+    function fetch_with_timeout(url, options, timeout = 6000) {
+        return Promise.race([
+            fetch(url, options),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout))
+        ]);
     }
 
     function handle_crate_list_update(playground_block, playground_crates) {
@@ -108,9 +146,12 @@ function playground_text(playground) {
 
         let text = playground_text(code_block);
         let classes = code_block.querySelector('code').classList;
-        let has_2018 = classes.contains("edition2018");
-        let edition = has_2018 ? "2018" : "2015";
-
+        let edition = "2015";
+        if(classes.contains("edition2018")) {
+            edition = "2018";
+        } else if(classes.contains("edition2021")) {
+            edition = "2021";
+        }
         var params = {
             version: "stable",
             optimize: "0",
@@ -133,9 +174,22 @@ function playground_text(playground) {
             body: JSON.stringify(params)
         })
         .then(response => response.json())
-        .then(response => result_block.innerText = response.result)
+        .then(response => {
+            if (response.result.trim() === '') {
+                result_block.innerText = "No output";
+                result_block.classList.add("result-no-output");
+            } else {
+                result_block.innerText = response.result;
+                result_block.classList.remove("result-no-output");
+            }
+        })
         .catch(error => result_block.innerText = "Playground Communication: " + error.message);
     }
+})();
+
+(function setupSyntaxHighlighting() {
+
+    if (typeof hljs === 'undefined') return;
 
     // Syntax highlighting Configuration
     hljs.configure({
@@ -151,12 +205,13 @@ function playground_text(playground) {
     if (window.ace) {
         // language-rust class needs to be removed for editable
         // blocks or highlightjs will capture events
-        Array
-            .from(document.querySelectorAll('code.editable'))
+        code_nodes
+            .filter(function (node) {return node.classList.contains("editable"); })
             .forEach(function (block) { block.classList.remove('language-rust'); });
 
         Array
-            .from(document.querySelectorAll('code:not(.editable)'))
+        code_nodes
+            .filter(function (node) {return !node.classList.contains("editable"); })
             .forEach(function (block) { hljs.highlightBlock(block); });
     } else {
         code_nodes.forEach(function (block) { hljs.highlightBlock(block); });
@@ -199,7 +254,9 @@ function playground_text(playground) {
             }
         });
     });
+})();
 
+(function setupCodeSnippets() {
     if (window.playground_copyable) {
         Array.from(document.querySelectorAll('pre code')).forEach(function (block) {
             var pre_block = block.parentNode;
@@ -211,13 +268,22 @@ function playground_text(playground) {
                     pre_block.insertBefore(buttons, pre_block.firstChild);
                 }
 
-                var clipButton = document.createElement('button');
-                clipButton.className = 'fa fa-copy clip-button';
-                clipButton.title = 'Copy to clipboard';
-                clipButton.setAttribute('aria-label', clipButton.title);
-                clipButton.innerHTML = '<i class=\"tooltiptext\"></i>';
-
-                buttons.insertBefore(clipButton, buttons.firstChild);
+                if (clip_buttons_enabled()) {
+                    var clipButton = document.createElement('button');
+                    clipButton.className = 'fa fa-copy clip-button';
+                    clipButton.title = 'Copy to clipboard';
+                    clipButton.setAttribute('aria-label', clipButton.title);
+                    clipButton.innerHTML = '<i class=\"tooltiptext\"></i>';
+                    buttons.insertBefore(clipButton, buttons.firstChild);
+                }
+                if (tryit_buttons_enabled()){
+                    var tryItButton = document.createElement('button');
+                    tryItButton.className = 'fa fa-copy tryit-button';
+                    tryItButton.innerHTML = '<i class="tooltiptext"></i>';
+                    tryItButton.title = 'Try it';
+                    tryItButton.setAttribute('aria-label', tryItButton.title);
+                    buttons.insertBefore(tryItButton, buttons.firstChild);
+                }
             }
         });
     }
@@ -244,13 +310,23 @@ function playground_text(playground) {
         });
 
         if (window.playground_copyable) {
-            var copyCodeClipboardButton = document.createElement('button');
-            copyCodeClipboardButton.className = 'fa fa-copy clip-button';
-            copyCodeClipboardButton.innerHTML = '<i class="tooltiptext"></i>';
-            copyCodeClipboardButton.title = 'Copy to clipboard';
-            copyCodeClipboardButton.setAttribute('aria-label', copyCodeClipboardButton.title);
+            if (clip_buttons_enabled()) {
+                var copyCodeClipboardButton = document.createElement('button');
+                copyCodeClipboardButton.className = 'fa fa-copy clip-button';
+                copyCodeClipboardButton.innerHTML = '<i class="tooltiptext"></i>';
+                copyCodeClipboardButton.title = 'Copy to clipboard';
+                copyCodeClipboardButton.setAttribute('aria-label', copyCodeClipboardButton.title);
+                buttons.insertBefore(copyCodeClipboardButton, buttons.firstChild);
+            }
 
-            buttons.insertBefore(copyCodeClipboardButton, buttons.firstChild);
+            if (tryit_buttons_enabled()){
+                var tryItButton = document.createElement('button');
+                tryItButton.className = 'fa fa-copy tryit-button';
+                tryItButton.innerHTML = '<i class="tooltiptext"></i>';
+                tryItButton.title = 'Try it';
+                tryItButton.setAttribute('aria-label', tryItButton.title);
+                buttons.insertBefore(tryItButton, buttons.firstChild);
+            }
         }
 
         let code_block = pre_block.querySelector("code");
@@ -271,16 +347,66 @@ function playground_text(playground) {
     });
 })();
 
-(function themes() {
-    var html = document.querySelector('html');
-    var themeToggleButton = document.getElementById('theme-toggle');
-    var themePopup = document.getElementById('theme-list');
-    var themeColorMetaTag = document.querySelector('meta[name="theme-color"]');
+function get_theme() {
+    var theme;
+    try { theme = localStorage.getItem('mdbook-theme'); } catch (e) { }
+    if (theme === null || theme === undefined) {
+        return get_default_theme();
+    } else {
+        return theme;
+    }
+}
+
+function set_theme(theme, store = true) {
+    let ace_theme;
+
     var stylesheets = {
         ayuHighlight: document.querySelector("[href$='ayu-highlight.css']"),
         tomorrowNight: document.querySelector("[href$='tomorrow-night.css']"),
         highlight: document.querySelector("[href$='highlight.css']"),
     };
+    if (theme == 'coal' || theme == 'navy') {
+        stylesheets.ayuHighlight.disabled = true;
+        stylesheets.tomorrowNight.disabled = false;
+        stylesheets.highlight.disabled = true;
+        ace_theme = "ace/theme/tomorrow_night";
+    } else if (theme == 'ayu') {
+        stylesheets.ayuHighlight.disabled = false;
+        stylesheets.tomorrowNight.disabled = true;
+        stylesheets.highlight.disabled = true;
+        ace_theme = "ace/theme/tomorrow_night";
+    } else {
+        stylesheets.ayuHighlight.disabled = true;
+        stylesheets.tomorrowNight.disabled = true;
+        stylesheets.highlight.disabled = false;
+        ace_theme = "ace/theme/dawn";
+    }
+
+    setTimeout(function () {
+        var themeColorMetaTag = document.querySelector('meta[name="theme-color"]');
+        themeColorMetaTag.content = getComputedStyle(document.body).backgroundColor;
+    }, 1);
+
+    if (window.ace && window.editors) {
+        window.editors.forEach(function (editor) {
+            editor.setTheme(ace_theme);
+        });
+    }
+
+    var previousTheme = get_theme();
+
+    if (store) {
+        try { localStorage.setItem('mdbook-theme', theme); } catch (e) { }
+    }
+
+    if (previousTheme) html.classList.remove(previousTheme);
+    if (theme) html.classList.add(theme);
+}
+
+(function setupThemes() {
+    var html = document.querySelector('html');
+    var themeToggleButton = document.getElementById('theme-toggle');
+    var themePopup = document.getElementById('theme-list');
 
     function showThemes() {
         themePopup.style.display = 'block';
@@ -294,60 +420,8 @@ function playground_text(playground) {
         themeToggleButton.focus();
     }
 
-    function get_theme() {
-        var theme;
-        try { theme = localStorage.getItem('mdbook-theme'); } catch (e) { }
-        if (theme === null || theme === undefined) {
-            return default_theme;
-        } else {
-            return theme;
-        }
-    }
-
-    function set_theme(theme, store = true) {
-        let ace_theme;
-
-        if (theme == 'coal' || theme == 'navy') {
-            stylesheets.ayuHighlight.disabled = true;
-            stylesheets.tomorrowNight.disabled = false;
-            stylesheets.highlight.disabled = true;
-
-            ace_theme = "ace/theme/tomorrow_night";
-        } else if (theme == 'ayu') {
-            stylesheets.ayuHighlight.disabled = false;
-            stylesheets.tomorrowNight.disabled = true;
-            stylesheets.highlight.disabled = true;
-            ace_theme = "ace/theme/tomorrow_night";
-        } else {
-            stylesheets.ayuHighlight.disabled = true;
-            stylesheets.tomorrowNight.disabled = true;
-            stylesheets.highlight.disabled = false;
-            ace_theme = "ace/theme/dawn";
-        }
-
-        setTimeout(function () {
-            themeColorMetaTag.content = getComputedStyle(document.body).backgroundColor;
-        }, 1);
-
-        if (window.ace && window.editors) {
-            window.editors.forEach(function (editor) {
-                editor.setTheme(ace_theme);
-            });
-        }
-
-        var previousTheme = get_theme();
-
-        if (store) {
-            try { localStorage.setItem('mdbook-theme', theme); } catch (e) { }
-        }
-
-        html.classList.remove(previousTheme);
-        html.classList.add(theme);
-    }
-
     // Set theme
     var theme = get_theme();
-
     set_theme(theme, false);
 
     themeToggleButton.addEventListener('click', function () {
@@ -359,7 +433,14 @@ function playground_text(playground) {
     });
 
     themePopup.addEventListener('click', function (e) {
-        var theme = e.target.id || e.target.parentElement.id;
+        var theme;
+        if (e.target.className === "theme") {
+            theme = e.target.id;
+        } else if (e.target.parentElement.className === "theme") {
+            theme = e.target.parentElement.id;
+        } else {
+            return;
+        }
         set_theme(theme);
     });
 
@@ -412,7 +493,7 @@ function playground_text(playground) {
     });
 })();
 
-(function sidebar() {
+(function setupSidebar() {
     var html = document.querySelector("html");
     var sidebar = document.getElementById("sidebar");
     var sidebarLinks = document.querySelectorAll('#sidebar a');
@@ -530,9 +611,14 @@ function playground_text(playground) {
         // https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollIntoView
         activeSection.scrollIntoView({ block: 'center' });
     }
+
+    if (!sidebar_enabled()){
+        hideSidebar();
+    }
+
 })();
 
-(function chapterNavigation() {
+(function setupChapterNavigation() {
     document.addEventListener('keydown', function (e) {
         if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) { return; }
         if (window.search && window.search.hasFocus()) { return; }
@@ -556,7 +642,7 @@ function playground_text(playground) {
     });
 })();
 
-(function clipboard() {
+(function setupClipboardButtons() {
     var clipButtons = document.querySelectorAll('.clip-button');
 
     function hideTooltip(elem) {
@@ -593,6 +679,32 @@ function playground_text(playground) {
     });
 })();
 
+(function setupTryItButtons() {
+    if (!docView) return;
+
+    var clipButtons = document.querySelectorAll('.tryit-button');
+
+    function hideTooltip(elem) {
+        elem.firstChild.innerText = "";
+        elem.className = 'fa fa-copy tryit-button';
+    }
+
+    Array.from(clipButtons).forEach(function (clipButton) {
+        clipButton.addEventListener('mouseout', function (e) {
+            hideTooltip(e.currentTarget);
+        });
+        clipButton.addEventListener('click', function (e) {
+            console.log('clicked tryit button')
+            e.preventDefault();
+            const name = 'tryit';
+            const playground = clipButton.parentElement.parentElement;
+            const code_block = playground.querySelector('code');
+            const contents = code_block?.textContent;
+            docView.postMessage({name, contents});
+        })
+    });
+})();
+
 (function scrollToTop () {
     var menuTitle = document.querySelector('.menu-title');
 
@@ -601,10 +713,10 @@ function playground_text(playground) {
     });
 })();
 
-(function controllMenu() {
+(function controlMenu() {
     var menu = document.getElementById('menu-bar');
 
-    (function controllPosition() {
+    (function controlPosition() {
         var scrollTop = document.scrollingElement.scrollTop;
         var prevScrollTop = scrollTop;
         var minMenuY = -menu.clientHeight - 50;
@@ -647,7 +759,7 @@ function playground_text(playground) {
             prevScrollTop = scrollTop;
         }, { passive: true });
     })();
-    (function controllBorder() {
+    (function controlBorder() {
         menu.classList.remove('bordered');
         document.addEventListener('scroll', function () {
             if (menu.offsetTop === 0) {

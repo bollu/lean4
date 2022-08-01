@@ -1,0 +1,503 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Macro Overview - Lean Manual</title>
+        <!-- Custom HTML head -->
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="alectryon.css">
+        <link rel="stylesheet" href="pygments.css">
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme && theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar && sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item "><a href="whatIsLean.html"><strong aria-hidden="true">1.</strong> What is Lean</a></li><li class="chapter-item "><a href="tour.html"><strong aria-hidden="true">2.</strong> Tour of Lean</a></li><li class="chapter-item "><a href="quickstart.html"><strong aria-hidden="true">3.</strong> Setting Up Lean</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="setup.html"><strong aria-hidden="true">3.1.</strong> Extended Setup Notes</a></li></ol></li><li class="chapter-item "><a href="tpil.html"><strong aria-hidden="true">4.</strong> Theorem Proving in Lean</a></li><li class="chapter-item "><a href="fplean.html"><strong aria-hidden="true">5.</strong> Functional Programming in Lean</a></li><li class="chapter-item "><a href="examples.html"><strong aria-hidden="true">6.</strong> Examples</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="examples/palindromes.lean.html"><strong aria-hidden="true">6.1.</strong> Palindromes</a></li><li class="chapter-item "><a href="examples/bintree.lean.html"><strong aria-hidden="true">6.2.</strong> Binary Search Trees</a></li><li class="chapter-item "><a href="examples/tc.lean.html"><strong aria-hidden="true">6.3.</strong> A Certified Type Checker</a></li><li class="chapter-item "><a href="examples/interp.lean.html"><strong aria-hidden="true">6.4.</strong> The Well-Typed Interpreter</a></li><li class="chapter-item "><a href="examples/deBruijn.lean.html"><strong aria-hidden="true">6.5.</strong> Dependent de Bruijn Indices</a></li><li class="chapter-item "><a href="examples/phoas.lean.html"><strong aria-hidden="true">6.6.</strong> Parametric Higher-Order Abstract Syntax</a></li></ol></li><li class="chapter-item "><li class="part-title">Language Manual</li><li class="chapter-item "><a href="organization.html"><strong aria-hidden="true">7.</strong> Organizational features</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="sections.html"><strong aria-hidden="true">7.1.</strong> Sections</a></li><li class="chapter-item "><a href="namespaces.html"><strong aria-hidden="true">7.2.</strong> Namespaces</a></li><li class="chapter-item "><a href="implicit.html"><strong aria-hidden="true">7.3.</strong> Implicit Arguments</a></li><li class="chapter-item "><a href="autobound.html"><strong aria-hidden="true">7.4.</strong> Auto Bound Implicit Arguments</a></li></ol></li><li class="chapter-item expanded "><a href="syntax.html"><strong aria-hidden="true">8.</strong> Syntax Extensions</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="do.html"><strong aria-hidden="true">8.1.</strong> The do Notation</a></li><li class="chapter-item "><a href="stringinterp.html"><strong aria-hidden="true">8.2.</strong> String Interpolation</a></li><li class="chapter-item "><a href="notation.html"><strong aria-hidden="true">8.3.</strong> User-Defined Notation</a></li><li class="chapter-item expanded "><a href="macro_overview.html" class="active"><strong aria-hidden="true">8.4.</strong> Macro Overview</a></li><li class="chapter-item "><a href="elaborators.html"><strong aria-hidden="true">8.5.</strong> Elaborators</a></li><li class="chapter-item "><a href="syntax_examples.html"><strong aria-hidden="true">8.6.</strong> Examples</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="syntax_example.html"><strong aria-hidden="true">8.6.1.</strong> Balanced Parentheses</a></li><li class="chapter-item "><a href="metaprogramming-arith.html"><strong aria-hidden="true">8.6.2.</strong> Arithmetic DSL</a></li></ol></li></ol></li><li class="chapter-item "><a href="decltypes.html"><strong aria-hidden="true">9.</strong> Declaring New Types</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="enum.html"><strong aria-hidden="true">9.1.</strong> Enumerated Types</a></li><li class="chapter-item "><a href="inductive.html"><strong aria-hidden="true">9.2.</strong> Inductive Types</a></li><li class="chapter-item "><a href="struct.html"><strong aria-hidden="true">9.3.</strong> Structures</a></li><li class="chapter-item "><a href="typeclass.html"><strong aria-hidden="true">9.4.</strong> Type classes</a></li><li class="chapter-item "><a href="unifhint.html"><strong aria-hidden="true">9.5.</strong> Unification Hints</a></li></ol></li><li class="chapter-item "><a href="builtintypes.html"><strong aria-hidden="true">10.</strong> Builtin Types</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="nat.html"><strong aria-hidden="true">10.1.</strong> Natural number</a></li><li class="chapter-item "><a href="int.html"><strong aria-hidden="true">10.2.</strong> Integer</a></li><li class="chapter-item "><a href="uint.html"><strong aria-hidden="true">10.3.</strong> Fixed precision unsigned integer</a></li><li class="chapter-item "><a href="float.html"><strong aria-hidden="true">10.4.</strong> Float</a></li><li class="chapter-item "><a href="array.html"><strong aria-hidden="true">10.5.</strong> Array</a></li><li class="chapter-item "><a href="list.html"><strong aria-hidden="true">10.6.</strong> List</a></li><li class="chapter-item "><a href="char.html"><strong aria-hidden="true">10.7.</strong> Character</a></li><li class="chapter-item "><a href="string.html"><strong aria-hidden="true">10.8.</strong> String</a></li><li class="chapter-item "><a href="option.html"><strong aria-hidden="true">10.9.</strong> Option</a></li><li class="chapter-item "><a href="thunk.html"><strong aria-hidden="true">10.10.</strong> Thunk</a></li><li class="chapter-item "><a href="task.html"><strong aria-hidden="true">10.11.</strong> Task and Thread</a></li></ol></li><li class="chapter-item "><a href="functions.html"><strong aria-hidden="true">11.</strong> Functions</a></li><li class="chapter-item affix "><li class="part-title">Other</li><li class="chapter-item "><a href="faq.html"><strong aria-hidden="true">12.</strong> Frequently Asked Questions</a></li><li class="chapter-item "><a href="lean3changes.html"><strong aria-hidden="true">13.</strong> Significant Changes from Lean 3</a></li><li class="chapter-item "><a href="syntax_highlight_in_latex.html"><strong aria-hidden="true">14.</strong> Syntax Highlighting Lean in LaTeX</a></li><li class="chapter-item "><a href="widgets.html"><strong aria-hidden="true">15.</strong> User Widgets</a></li><li class="chapter-item affix "><li class="part-title">Development</li><li class="chapter-item "><a href="dev/index.html"><strong aria-hidden="true">16.</strong> Development Guide</a></li><li class="chapter-item "><a href="make/index.html"><strong aria-hidden="true">17.</strong> Building Lean</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="make/ubuntu.html"><strong aria-hidden="true">17.1.</strong> Ubuntu Setup</a></li><li class="chapter-item "><a href="make/osx-10.9.html"><strong aria-hidden="true">17.2.</strong> macOS Setup</a></li><li class="chapter-item "><a href="make/msys2.html"><strong aria-hidden="true">17.3.</strong> Windows MSYS2 Setup</a></li><li class="chapter-item "><a href="make/wsl.html"><strong aria-hidden="true">17.4.</strong> Windows with WSL</a></li><li class="chapter-item "><a href="make/nix.html"><strong aria-hidden="true">17.5.</strong> Nix Setup (Experimental)</a></li></ol></li><li class="chapter-item "><a href="dev/bootstrap.html"><strong aria-hidden="true">18.</strong> Bootstrapping</a></li><li class="chapter-item "><a href="dev/testing.html"><strong aria-hidden="true">19.</strong> Testing</a></li><li class="chapter-item "><a href="dev/debugging.html"><strong aria-hidden="true">20.</strong> Debugging</a></li><li class="chapter-item "><a href="dev/commit_convention.html"><strong aria-hidden="true">21.</strong> Commit Convention</a></li><li class="chapter-item "><a href="dev/mdbook.html"><strong aria-hidden="true">22.</strong> Building This Manual</a></li><li class="chapter-item "><a href="dev/ffi.html"><strong aria-hidden="true">23.</strong> Foreign Function Interface</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Lean Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/leanprover/lean4" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="macro-overview"><a class="header" href="#macro-overview">Macro Overview</a></h1>
+<p>The offical paper describing the mechanics behind Lean 4's macro system can be
+found in <a href="https://arxiv.org/abs/2001.10490">Beyond Notations: Hygienic Macro Expansion for Theorem Proving
+Languages</a> by Sebastian Ullrich and Leonardo
+de Moura, and the accompanying repo with example code can be found in the
+paper's code <a href="https://github.com/Kha/macro-supplement">supplement</a>. The
+supplement also includes a working implementation of the macro expander, so it's
+a good case study for people interested in the details.</p>
+<h2 id="what-is-a-macro-in-lean"><a class="header" href="#what-is-a-macro-in-lean">What is a macro in Lean?</a></h2>
+<p>A macro is a function that takes in a syntax tree and produces a new syntax
+tree. Macros are useful for many reasons, but two of the big ones are a)
+allowing users to extend the language with new syntactic constructs without
+having to actually expand the core language, and b) allowing users to automate
+tasks that would otherwise be extremely repetitive, time-consuming, and/or
+error-prone.</p>
+<p>A motivating example is set builder notation. We would like to be able to write
+the set of natural numbers 0, 1, and 2 as just <code>{0, 1, 2}</code>. However, Lean does
+not natively support this syntax, and the actual definition of a set in Mathlib
+does not let us just declare sets in this manner; naively using the set API
+would force us to write <code>Set.insert 1 (Set.insert 2 (Set.singleton 3))</code>.
+Instead, we can teach Lean's macro system to recognize <code>{0, 1, 2}</code> as a
+shorthand for a composition of existing methods and let it do the repetitive
+work of creating the <code>Set.insert...</code> invocation for us. In this way, we can have
+our more readable and more convenient syntax without having to extend Lean
+itself, and while retaining the simple insert/singleton API.</p>
+<h2 id="how-macros-are-handled"><a class="header" href="#how-macros-are-handled">How macros are handled</a></h2>
+<p>The general procedure is as follows:</p>
+<ol>
+<li>
+<p>Lean parses a command, creating a Lean syntax tree which contains any
+unexpanded macros.</p>
+</li>
+<li>
+<p>Lean repeats the cycle (elaboration ~&gt; (macro hygiene and expansion) ~&gt;
+elaboration...)</p>
+</li>
+</ol>
+<p>The cycle in step 2 repeats until there are no more macros which need to be
+expanded, and elaboration can finish normally. This repetition is required since
+macros can expand to other macros, and may expand to code that needs information
+from the elaborator. As you can see, the process of macro parsing and expansion
+is interleaved with the parsing and elaboration of non-macro code.</p>
+<p>By default, macros in Lean are hygienic, which means the system avoids
+accidental name capture when reusing the same name inside and outside the macro.
+Users may occasionally want to disable hygiene, which can be accomplished with
+the command <code>set_option hygiene false</code>. More in-depth information about hygiene
+and how it's implemented in the official paper and supplement linked at the top
+of this guide.</p>
+<h2 id="elements-of-a-macro-important-types"><a class="header" href="#elements-of-a-macro-important-types">Elements of &quot;a&quot; macro (important types)</a></h2>
+<p>In the big picture, a macro has two components that must be implemented by the
+user, parsers and syntax transformers, where the latter is a function that says
+what the input syntax should expand to. There is a third component, syntax
+categories, such as <code>term</code>, <code>tactic</code>, and <code>command</code>, but declaring a new syntax
+category is not always necessary. When we say &quot;parser&quot; in the context of a
+macro, we refer to the core type <code>Lean.ParserDescr</code>, which parses elements of
+type <code>Lean.Syntax</code>, where <code>Lean.Syntax</code> represents elements of a Lean syntax
+tree. Syntax transformers are functions of type <code>Syntax -&gt; MacroM Syntax</code>. Lean
+has a synonym for this type, which is simply <code>Macro</code>. <code>MacroM</code> is a monad that
+carries state needed for macro expansion to work nicely, including the info
+needed to implement hygiene.</p>
+<p>As an example, we again refer to Mathlib's set builder notation:</p>
+<pre><code>/- Declares a parser -/
+syntax (priority := high) &quot;{&quot; term,+ &quot;}&quot; : term
+
+/- Declares two expansions/syntax transformers -/
+macro_rules
+  | `({$x}) =&gt; `(Set.singleton $x)
+  | `({$x, $xs:term,*}) =&gt; `(Set.insert $x {$xs,*})
+
+/- Provided `Set` has been imported (from Mathlib4), these are all we need for `{1, 2, 3}` to be valid notation to create a literal set -/
+
+</code></pre>
+<p>This example should also make clear the reason why macros (and pretty much all
+of Lean 4's metaprogramming facilities) are functions that take an argument of
+type <code>Syntax</code> e.g. <code>Syntax -&gt; MacroM Syntax</code>; the leading syntax element is the
+thing that actually triggers the macro expansion by matching with the declared
+parser, and as a user, you will almost always be interested in inspecting and
+transforming that initial syntax element (though there are cases in which it can
+just be ignored, as in the parameter-less exfalso tactic).</p>
+<p>Returning briefly to the API provided by Lean, <code>Lean.Syntax</code>, is pretty much
+what you would expect a basic syntax tree type to look like. Below is a slightly
+simplified representation which omits details in the <code>atom</code> and <code>ident</code>
+constructors; users can create atoms and idents which comport with this
+simplified representation using the <code>mkAtom</code> and <code>mkIdent</code> methods provided in
+the <code>Lean</code> namespace.</p>
+<pre><code>inductive Syntax where
+  | missing : Syntax
+  | node (kind : SyntaxNodeKind) (args : Array Syntax) : Syntax
+  | atom : String -&gt; Syntax
+  | ident : Name -&gt; Syntax
+</code></pre>
+<p>For those interested, <code>MacroM</code> is a <code>ReaderT</code>:</p>
+<pre><code>abbrev MacroM := ReaderT Macro.Context (EStateM Macro.Exception Macro.State)
+</code></pre>
+<p>The other relevant components are defined as follows:</p>
+<pre><code>structure Context where
+  methods        : MethodsRef
+  mainModule     : Name
+  currMacroScope : MacroScope
+  currRecDepth   : Nat := 0
+  maxRecDepth    : Nat := defaultMaxRecDepth
+  ref            : Syntax
+
+inductive Exception where
+  | error             : Syntax → String → Exception
+  | unsupportedSyntax : Exception
+
+structure State where
+  macroScope : MacroScope
+  traceMsgs  : List (Prod Name String) := List.nil
+  deriving Inhabited
+</code></pre>
+<p>As a review/checklist, the three (sometimes only two depending on whether you
+need a new syntax category) components users need to be concerned with are:</p>
+<ol start="0">
+<li>You may or may not need to declare a new syntax category using
+<code>declare_syntax_cat</code></li>
+<li>Declare a parser with either <code>syntax</code> or <code>macro</code></li>
+<li>Declare an expansion/syntax transformer with either <code>macro_rules</code> or <code>macro</code></li>
+</ol>
+<p>Parsers and syntax transformers can be declared manually, but use of the pattern
+language and <code>syntax</code>, <code>macro_rules</code>, and <code>macro</code> is recommended.</p>
+<h2 id="syntax-categories-with-declare_syntax_cat"><a class="header" href="#syntax-categories-with-declare_syntax_cat">syntax categories with declare_syntax_cat</a></h2>
+<p><code>declare_syntax_cat</code> declares a new syntax category, like <code>command</code>, <code>tactic</code>,
+or mathlib4's <code>binderterm</code>. These are the different categories of things that
+can be referred to in a quote/antiquote. <code>declare_syntax_cat</code> results in a call
+to <code>registerParserCategory</code> and produces a new parser descriptor:</p>
+<pre><code>set_option trace.Elab.definition true in
+declare_syntax_cat binderterm
+
+/-
+Output:
+
+[Elab.definition.body] binderterm.quot : Lean.ParserDescr :=
+Lean.ParserDescr.node `Lean.Parser.Term.quot 1024
+  (Lean.ParserDescr.binary `andthen (Lean.ParserDescr.symbol &quot;`(binderterm|&quot;)
+    (Lean.ParserDescr.binary `andthen (Lean.ParserDescr.cat `binderterm 0)
+      (Lean.ParserDescr.symbol &quot;)&quot;)))
+-/
+</code></pre>
+<p>Declaring a new syntax category like this one automatically declares a quotation
+operator <code> `(binderterm| ...)</code>. These pipe prefixes <code>&lt;thing&gt;|</code> are used in
+syntax quotations to say what category a given quotation is expected to be an
+element of. The pipe prefixes are <em>not</em> used for elements in the <code>term</code> and
+<code>command</code> categories (since they're considered the default), but need to be used
+for everything else.</p>
+<h2 id="parsers-and-the-syntax-keyword"><a class="header" href="#parsers-and-the-syntax-keyword">Parsers and the <code>syntax</code> keyword</a></h2>
+<p>Internally, elements of type <code>Lean.ParserDescr</code> are implemented as parser
+combinators. However, Lean offers the ability to write parsers using the
+macro/pattern language by way of the <code>syntax</code> keyword. This is the recommended
+means of writing parsers. As an example, the parser for the <code>rwa</code> (rewrite, then
+use assumption) tactic is:</p>
+<pre><code>set_option trace.Elab.definition true in
+syntax &quot;rwa &quot; rwRuleSeq (location)? : tactic
+
+/-
+which expands to:
+[Elab.definition.body] tacticRwa__ : Lean.ParserDescr :=
+Lean.ParserDescr.node `tacticRwa__ 1022
+  (Lean.ParserDescr.binary `andthen
+    (Lean.ParserDescr.binary `andthen (Lean.ParserDescr.nonReservedSymbol &quot;rwa &quot; false) Lean.Parser.Tactic.rwRuleSeq)
+    (Lean.ParserDescr.unary `optional Lean.Parser.Tactic.location))
+
+-/
+
+</code></pre>
+<p>Literals are written as double-quoted strings (<code>&quot;rwa &quot;</code> expects the literal
+sequence of characters <code>rwa</code>, while the trailing space provides a hint to the
+formatter that it should add a space after <code>rwa</code> when pretty printing this
+syntax); <code>rwRuleSeq</code> and <code>location</code> are themselves <code>ParserDescr</code>s, and we finish
+with <code>: tactic</code> specifying that the preceding parser is for an element in the
+<code>tactic</code> syntax category. The parentheses around <code>(location)?</code> are necessary
+(rather than <code>location?</code>) because Lean 4 allows question marks to be used in
+identifiers, so <code>location?</code> is one single identifier that ends with a question
+mark, which is not what we want.</p>
+<p>The name <code>tacticRwa__</code> is automatically generated. You can name parser
+descriptors declared with the <code>syntax</code> keyword like so:</p>
+<pre><code>set_option trace.Elab.definition true in
+syntax (name := introv) &quot;introv &quot; (colGt ident)* : tactic
+
+[Elab.definition.body] introv : Lean.ParserDescr :=
+Lean.ParserDescr.node `introv 1022
+  (Lean.ParserDescr.binary `andthen (Lean.ParserDescr.nonReservedSymbol &quot;introv &quot; false)
+    (Lean.ParserDescr.unary `many
+      (Lean.ParserDescr.binary `andthen (Lean.ParserDescr.const `colGt) (Lean.ParserDescr.const `ident))))
+</code></pre>
+<h2 id="the-pattern-language"><a class="header" href="#the-pattern-language">The pattern language</a></h2>
+<p>Available quantifiers are <code>?</code> (one or zero occurrences, see note below), <code>*</code>
+(zero or more occurrences), and <code>+</code> (one or more occurrences).</p>
+<p>Keep in mind that Lean makes <code>?</code> available for use in identifiers, so if we want
+a parser to look for an optional <code>location</code>, we would need to write
+<code>(location)?</code> with parenthesis acting as a separator, since <code>location?</code> would
+look for something under the identifier <code>location?</code> (where the <code>?</code> is part of
+the identifier).</p>
+<p>Parentheses can be used as delimiters.</p>
+<p>Separated lists can be constructed like so: <code>$ts,*</code> for a comma separated list.</p>
+<p>&quot;extended splices&quot; can be constructed as <code>$[..]</code>. See the official paper (p. 12)
+for more details.</p>
+<p>Literals are written as double-quoted strings. A literal may use trailing
+whitespace (see e.g. the <code>rwa</code> or <code>introv</code> tactics) to tell the pretty-printer
+how it should be displayed, but such whitespace will not prevent a literal with
+no trailing whitespace from matching. The spaces are relevant, but not
+interpreted literally. When the ParserDescr is turned into a Parser, the actual
+token matcher <a href="https://github.com/leanprover/lean4/blob/53ec43ff9b8f55989b12c271e368287b7b997b54/src/Lean/Parser/Basic.lean#L1193">uses the .trim of the provided
+string</a>,
+but the generated formatter <a href="https://github.com/leanprover/lean4/blob/8d370f151f7c88a687152a5b161dcb484c446ce2/src/Lean/PrettyPrinter/Formatter.lean#L328">uses the spaces as
+specified</a>,
+that is, turning the atom &quot;rwa&quot; in the syntax into the string rwa as part of the
+pretty printed output.</p>
+<h2 id="syntax-expansions-with-macro_rules-and-how-it-desugars"><a class="header" href="#syntax-expansions-with-macro_rules-and-how-it-desugars">Syntax expansions with <code>macro_rules</code>, and how it desugars.</a></h2>
+<p><code>macro_rules</code> lets you declare expansions for a given <code>Syntax</code> element using a
+syntax simlar to a <code>match</code> statement. The left-hand side of a match arm is a
+quotation (with a leading <code>&lt;cat&gt;|</code> for categories other than <code>term</code> and
+<code>command</code>) in which users can specify the pattern they'd like to write an
+expansion for. The right-hand side returns a syntax quotation which is the
+output the user wants to expand to.</p>
+<p>A feature of Lean's macro system is that if there are multiple expansions for a
+particular match, Lean will try the most recently declared expansion first, and
+will retry with other matching expansions if the previous attempt failed. This
+is particularly useful for extending existing tactics.</p>
+<p>The following example shows both the retry behavior, and the fact that macros
+declared using the shorthand <code>macro</code> syntax can still have additional expansions
+declared with <code>macro_rules</code>. This <code>transitivity</code> tactic is implemented such that
+it will work for either Nat.le or Nat.lt. The Nat.lt version was declared &quot;most
+recently&quot;, so it will be tried first, but if it fails (for example, if the
+actual term in question is Nat.le) the next potential expansion will be tried:</p>
+<pre><code>macro &quot;transitivity&quot; e:(colGt term) : tactic =&gt; `(tactic| apply Nat.le_trans (m := $e))
+macro_rules
+  | `(tactic| transitivity $e) =&gt; `(tactic| apply Nat.lt_trans (m := $e))
+
+example (a b c : Nat) (h0 : a &lt; b) (h1 : b &lt; c) : a &lt; c := by
+  transitivity b &lt;;&gt;
+  assumption
+
+example (a b c : Nat) (h0 : a &lt;= b) (h1 : b &lt;= c) : a &lt;= c := by
+  transitivity b &lt;;&gt;
+  assumption
+
+/- This will fail, but is interesting in that it exposes the &quot;most-recent first&quot; behavior, since the
+  error message complains about being unable to unify mvar1 &lt;= mvar2, rather than mvar1 &lt; mvar2. -/
+example (a b c : Nat) (h0 : a &lt;= b) (h1 : b &lt;= c) : False := by
+  transitivity b &lt;;&gt;
+  assumption
+</code></pre>
+<p>To see the desugared definition of the actual expansion, we can again use
+<code>set_option trace.Elab.definition true in</code> and observe the output of the humble
+<code>exfalso</code> tactic defined in Mathlib4:</p>
+<pre><code>
+set_option trace.Elab.definition true in
+macro &quot;exfalso&quot; : tactic =&gt; `(apply False.elim)
+
+/-
+Results in the expansion:
+
+[Elab.definition.body] _aux___macroRules_tacticExfalso_1 : Lean.Macro :=
+fun x =&gt;
+  let discr := x;
+  /- This is where Lean tries to actually identify that it's an invocation of the exfalso tactic -/
+  if Lean.Syntax.isOfKind discr `tacticExfalso = true then
+    let discr := Lean.Syntax.getArg discr 0;
+    let x := discr;
+    do
+      /- Lean getting scope/meta info from the macro monad -/
+      let info ← Lean.MonadRef.mkInfoFromRefPos
+      let scp ← Lean.getCurrMacroScope
+      let mainModule ← Lean.getMainModule
+      pure
+          (Lean.Syntax.node Lean.SourceInfo.none `Lean.Parser.Tactic.seq1
+            #[Lean.Syntax.node Lean.SourceInfo.none `null
+                #[Lean.Syntax.node Lean.SourceInfo.none `Lean.Parser.Tactic.apply
+                    #[Lean.Syntax.atom info &quot;apply&quot;,
+                      Lean.Syntax.ident info (String.toSubstring &quot;False.elim&quot;)
+                        (Lean.addMacroScope mainModule `False.elim scp) [(`False.elim, [])]]]])
+  else
+    /- If this wasn't actually an invocation of the exfalso tactic, throw the &quot;unsupportedSyntax&quot; error -/
+    let discr := x;
+    throw Lean.Macro.Exception.unsupportedSyntax
+-/
+</code></pre>
+<p>We can also create the syntax transformer declaration ourselves instead of using
+<code>macro_rules</code>. We'll need to name our parser and use the attribute <code>@[macro myExFalsoParser]</code> to associate our declaration with the parser:</p>
+<pre><code>syntax (name := myExfalsoParser) &quot;myExfalso&quot; : tactic
+
+-- remember that `Macro` is a synonym for `Syntax -&gt; TacticM Unit`
+@[macro myExfalsoParser] def implMyExfalso : Macro :=
+fun stx =&gt; `(tactic| apply False.elim)
+
+example (p : Prop) (h : p) (f : p -&gt; False) : 3 = 2 := by
+  myExfalso
+  exact f h
+</code></pre>
+<p>In the above example, we're still using the sugar Lean provides for creating
+quotations, as it feels more intuitive and saves us some work. It is possible to
+forego the sugar altogether:</p>
+<pre><code>syntax (name := myExfalsoParser) &quot;myExfalso&quot; : tactic
+
+@[macro myExfalsoParser] def implMyExfalso : Lean.Macro :=
+  fun stx =&gt; Lean.mkNode `Lean.Parser.Tactic.apply
+    #[Lean.mkAtomFrom stx &quot;apply&quot;, Lean.mkCIdentFrom stx ``False.elim]
+
+example (p : Prop) (h : p) (f : p -&gt; False) : 3 = 2 := by
+  myExfalso
+  exact f h
+</code></pre>
+<h2 id="the-macro-keyword"><a class="header" href="#the-macro-keyword">The <code>macro</code> keyword</a></h2>
+<p><code>macro</code> is a shortcut which allows users to declare both a parser and an
+expansion at the same time as a matter of convenience. Additional expansions for
+the parser generated by the <code>macro</code> invocation can be added with a separate
+<code>macro_rules</code> block (see the example in the <code>macro_rules</code> section).</p>
+<h2 id="unexpanders"><a class="header" href="#unexpanders">Unexpanders</a></h2>
+<p>TODO; for now, see the unexpander in Mathlib.Set for an example.</p>
+<h2 id="more-illustrative-examples"><a class="header" href="#more-illustrative-examples">More illustrative examples:</a></h2>
+<p>The
+<a href="https://github.com/leanprover-community/mathlib4/blob/master/Mathlib/Tactic/Basic.lean">Tactic.Basic</a>
+file in Mathlib4 contains many good examples to learn from.</p>
+<h2 id="practical-tips"><a class="header" href="#practical-tips">Practical tips:</a></h2>
+<p>You can observe the output of commands and functions that in some way use the
+macro system by setting this option to true : <code>set_option trace.Elab.definition true</code></p>
+<p>Lean also offers the option of limiting the region in which option is set with
+the syntax <code>set_option ... in</code>):</p>
+<p>Hygiene can be disabled with the command option <code>set_option hygiene false</code></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="notation.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                            <a rel="next" href="elaborators.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="notation.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                    <a rel="next" href="elaborators.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        <script type="text/javascript" src="alectryon.js"></script>
+    </body>
+</html>

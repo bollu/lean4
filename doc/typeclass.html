@@ -4,47 +4,29 @@
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
         <title>Type classes - Lean Manual</title>
-        
-        
-
-
         <!-- Custom HTML head -->
-        
-
-
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
 
-        
         <link rel="icon" href="favicon.svg">
-        
-        
         <link rel="shortcut icon" href="favicon.png">
-        
         <link rel="stylesheet" href="css/variables.css">
         <link rel="stylesheet" href="css/general.css">
         <link rel="stylesheet" href="css/chrome.css">
-        
         <link rel="stylesheet" href="css/print.css" media="print">
-        
-
         <!-- Fonts -->
         <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-        
         <link rel="stylesheet" href="fonts/fonts.css">
-        
-
         <!-- Highlight.js Stylesheets -->
         <link rel="stylesheet" href="highlight.css">
         <link rel="stylesheet" href="tomorrow-night.css">
         <link rel="stylesheet" href="ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
-        
-
-        
+        <link rel="stylesheet" href="alectryon.css">
+        <link rel="stylesheet" href="pygments.css">
     </head>
     <body>
         <!-- Provide site root to javascript -->
@@ -59,11 +41,11 @@
                 var theme = localStorage.getItem('mdbook-theme');
                 var sidebar = localStorage.getItem('mdbook-sidebar');
 
-                if (theme.startsWith('"') && theme.endsWith('"')) {
+                if (theme && theme.startsWith('"') && theme.endsWith('"')) {
                     localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
                 }
 
-                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                if (sidebar && sidebar.startsWith('"') && sidebar.endsWith('"')) {
                     localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
                 }
             } catch (e) { }
@@ -95,7 +77,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="whatIsLean.html"><strong aria-hidden="true">1.</strong> What is Lean</a></li><li class="chapter-item expanded "><a href="tour.html"><strong aria-hidden="true">2.</strong> Tour of Lean</a></li><li class="chapter-item expanded "><a href="setup.html"><strong aria-hidden="true">3.</strong> Setting Up Lean</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="quickstart.html"><strong aria-hidden="true">3.1.</strong> Quickstart</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Language Manual</li><li class="chapter-item expanded "><a href="using_lean.html"><strong aria-hidden="true">4.</strong> Using Lean</a></li><li class="chapter-item expanded "><a href="lexical_structure.html"><strong aria-hidden="true">5.</strong> Lexical Structure</a></li><li class="chapter-item expanded "><a href="expressions.html"><strong aria-hidden="true">6.</strong> Expressions</a></li><li class="chapter-item expanded "><a href="declarations.html"><strong aria-hidden="true">7.</strong> Declarations</a></li><li class="chapter-item expanded "><a href="organization.html"><strong aria-hidden="true">8.</strong> Organizational features</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="sections.html"><strong aria-hidden="true">8.1.</strong> Sections</a></li><li class="chapter-item expanded "><a href="namespaces.html"><strong aria-hidden="true">8.2.</strong> Namespaces</a></li><li class="chapter-item expanded "><a href="implicit.html"><strong aria-hidden="true">8.3.</strong> Implicit Arguments</a></li><li class="chapter-item expanded "><a href="autobound.html"><strong aria-hidden="true">8.4.</strong> Auto Bound Implicit Arguments</a></li></ol></li><li class="chapter-item expanded "><a href="deptypes.html"><strong aria-hidden="true">9.</strong> Dependent Types</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="simptypes.html"><strong aria-hidden="true">9.1.</strong> Simple Type Theory</a></li><li class="chapter-item expanded "><a href="typeobjs.html"><strong aria-hidden="true">9.2.</strong> Types as objects</a></li><li class="chapter-item expanded "><a href="funabst.html"><strong aria-hidden="true">9.3.</strong> Function Abstraction and Evaluation</a></li><li class="chapter-item expanded "><a href="introdef.html"><strong aria-hidden="true">9.4.</strong> Introducing Definitions</a></li><li class="chapter-item expanded "><a href="dep.html"><strong aria-hidden="true">9.5.</strong> What makes dependent type theory dependent?</a></li></ol></li><li class="chapter-item expanded "><a href="tactics.html"><strong aria-hidden="true">10.</strong> Tactics</a></li><li class="chapter-item expanded "><a href="syntax.html"><strong aria-hidden="true">11.</strong> Syntax Extensions</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="do.html"><strong aria-hidden="true">11.1.</strong> The do Notation</a></li><li class="chapter-item expanded "><a href="stringinterp.html"><strong aria-hidden="true">11.2.</strong> String Interpolation</a></li></ol></li><li class="chapter-item expanded "><a href="metaprogramming.html"><strong aria-hidden="true">12.</strong> Metaprogramming</a></li><li class="chapter-item expanded "><a href="decltypes.html"><strong aria-hidden="true">13.</strong> Declaring New Types</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="enum.html"><strong aria-hidden="true">13.1.</strong> Enumerated Types</a></li><li class="chapter-item expanded "><a href="inductive.html"><strong aria-hidden="true">13.2.</strong> Inductive Types</a></li><li class="chapter-item expanded "><a href="struct.html"><strong aria-hidden="true">13.3.</strong> Structures</a></li><li class="chapter-item expanded "><a href="typeclass.html" class="active"><strong aria-hidden="true">13.4.</strong> Type classes</a></li><li class="chapter-item expanded "><a href="unifhint.html"><strong aria-hidden="true">13.5.</strong> Unification Hints</a></li></ol></li><li class="chapter-item expanded "><a href="builtintypes.html"><strong aria-hidden="true">14.</strong> Builtin Types</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="nat.html"><strong aria-hidden="true">14.1.</strong> Natural number</a></li><li class="chapter-item expanded "><a href="int.html"><strong aria-hidden="true">14.2.</strong> Integer</a></li><li class="chapter-item expanded "><a href="uint.html"><strong aria-hidden="true">14.3.</strong> Fixed precision unsigned integer</a></li><li class="chapter-item expanded "><a href="float.html"><strong aria-hidden="true">14.4.</strong> Float</a></li><li class="chapter-item expanded "><a href="array.html"><strong aria-hidden="true">14.5.</strong> Array</a></li><li class="chapter-item expanded "><a href="list.html"><strong aria-hidden="true">14.6.</strong> List</a></li><li class="chapter-item expanded "><a href="char.html"><strong aria-hidden="true">14.7.</strong> Character</a></li><li class="chapter-item expanded "><a href="string.html"><strong aria-hidden="true">14.8.</strong> String</a></li><li class="chapter-item expanded "><a href="option.html"><strong aria-hidden="true">14.9.</strong> Option</a></li><li class="chapter-item expanded "><a href="thunk.html"><strong aria-hidden="true">14.10.</strong> Thunk</a></li><li class="chapter-item expanded "><a href="task.html"><strong aria-hidden="true">14.11.</strong> Task and Thread</a></li></ol></li><li class="chapter-item expanded "><a href="functions.html"><strong aria-hidden="true">15.</strong> Functions</a></li><li class="chapter-item expanded "><a href="tactics.html"><strong aria-hidden="true">16.</strong> Tactics</a></li><li class="chapter-item expanded affix "><li class="part-title">Other</li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">17.</strong> Frequently Asked Questions</a></li><li class="chapter-item expanded "><a href="lean3changes.html"><strong aria-hidden="true">18.</strong> Significant Changes from Lean 3</a></li><li class="chapter-item expanded "><a href="syntax_highlight_in_latex.html"><strong aria-hidden="true">19.</strong> Syntax Highlighting Lean in LaTeX</a></li><li class="chapter-item expanded affix "><li class="part-title">Development</li><li class="chapter-item expanded "><a href="dev/index.html"><strong aria-hidden="true">20.</strong> Development Guide</a></li><li class="chapter-item expanded "><a href="dev/commit_convention.html"><strong aria-hidden="true">21.</strong> Commit Convention</a></li><li class="chapter-item expanded "><a href="make/index.html"><strong aria-hidden="true">22.</strong> Building Lean</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="make/ubuntu-16.04.html"><strong aria-hidden="true">22.1.</strong> Ubuntu Setup</a></li><li class="chapter-item expanded "><a href="make/osx-10.9.html"><strong aria-hidden="true">22.2.</strong> macOS Setup</a></li><li class="chapter-item expanded "><a href="make/msys2.html"><strong aria-hidden="true">22.3.</strong> Windows MSYS2 Setup</a></li><li class="chapter-item expanded "><a href="make/wsl.html"><strong aria-hidden="true">22.4.</strong> Windows with WSL</a></li><li class="chapter-item expanded "><a href="make/nix.html"><strong aria-hidden="true">22.5.</strong> Nix Setup (Experimental)</a></li></ol></li><li class="chapter-item expanded "><a href="dev/testing.html"><strong aria-hidden="true">23.</strong> Unit Testing</a></li><li class="chapter-item expanded "><a href="dev/mdbook.html"><strong aria-hidden="true">24.</strong> Building This Manual</a></li><li class="chapter-item expanded "><a href="dev/fixing_tests.html"><strong aria-hidden="true">25.</strong> Fixing Tests</a></li><li class="chapter-item expanded "><a href="dev/debugging.html"><strong aria-hidden="true">26.</strong> Debugging</a></li><li class="chapter-item expanded "><a href="dev/cpp_coding_style.html"><strong aria-hidden="true">27.</strong> C++ Coding Style</a></li></ol>
+                <ol class="chapter"><li class="chapter-item "><a href="whatIsLean.html"><strong aria-hidden="true">1.</strong> What is Lean</a></li><li class="chapter-item "><a href="tour.html"><strong aria-hidden="true">2.</strong> Tour of Lean</a></li><li class="chapter-item "><a href="quickstart.html"><strong aria-hidden="true">3.</strong> Setting Up Lean</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="setup.html"><strong aria-hidden="true">3.1.</strong> Extended Setup Notes</a></li></ol></li><li class="chapter-item "><a href="tpil.html"><strong aria-hidden="true">4.</strong> Theorem Proving in Lean</a></li><li class="chapter-item "><a href="fplean.html"><strong aria-hidden="true">5.</strong> Functional Programming in Lean</a></li><li class="chapter-item "><a href="examples.html"><strong aria-hidden="true">6.</strong> Examples</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="examples/palindromes.lean.html"><strong aria-hidden="true">6.1.</strong> Palindromes</a></li><li class="chapter-item "><a href="examples/bintree.lean.html"><strong aria-hidden="true">6.2.</strong> Binary Search Trees</a></li><li class="chapter-item "><a href="examples/tc.lean.html"><strong aria-hidden="true">6.3.</strong> A Certified Type Checker</a></li><li class="chapter-item "><a href="examples/interp.lean.html"><strong aria-hidden="true">6.4.</strong> The Well-Typed Interpreter</a></li><li class="chapter-item "><a href="examples/deBruijn.lean.html"><strong aria-hidden="true">6.5.</strong> Dependent de Bruijn Indices</a></li><li class="chapter-item "><a href="examples/phoas.lean.html"><strong aria-hidden="true">6.6.</strong> Parametric Higher-Order Abstract Syntax</a></li></ol></li><li class="chapter-item "><li class="part-title">Language Manual</li><li class="chapter-item "><a href="organization.html"><strong aria-hidden="true">7.</strong> Organizational features</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="sections.html"><strong aria-hidden="true">7.1.</strong> Sections</a></li><li class="chapter-item "><a href="namespaces.html"><strong aria-hidden="true">7.2.</strong> Namespaces</a></li><li class="chapter-item "><a href="implicit.html"><strong aria-hidden="true">7.3.</strong> Implicit Arguments</a></li><li class="chapter-item "><a href="autobound.html"><strong aria-hidden="true">7.4.</strong> Auto Bound Implicit Arguments</a></li></ol></li><li class="chapter-item "><a href="syntax.html"><strong aria-hidden="true">8.</strong> Syntax Extensions</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="do.html"><strong aria-hidden="true">8.1.</strong> The do Notation</a></li><li class="chapter-item "><a href="stringinterp.html"><strong aria-hidden="true">8.2.</strong> String Interpolation</a></li><li class="chapter-item "><a href="notation.html"><strong aria-hidden="true">8.3.</strong> User-Defined Notation</a></li><li class="chapter-item "><a href="macro_overview.html"><strong aria-hidden="true">8.4.</strong> Macro Overview</a></li><li class="chapter-item "><a href="elaborators.html"><strong aria-hidden="true">8.5.</strong> Elaborators</a></li><li class="chapter-item "><a href="syntax_examples.html"><strong aria-hidden="true">8.6.</strong> Examples</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="syntax_example.html"><strong aria-hidden="true">8.6.1.</strong> Balanced Parentheses</a></li><li class="chapter-item "><a href="metaprogramming-arith.html"><strong aria-hidden="true">8.6.2.</strong> Arithmetic DSL</a></li></ol></li></ol></li><li class="chapter-item expanded "><a href="decltypes.html"><strong aria-hidden="true">9.</strong> Declaring New Types</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="enum.html"><strong aria-hidden="true">9.1.</strong> Enumerated Types</a></li><li class="chapter-item "><a href="inductive.html"><strong aria-hidden="true">9.2.</strong> Inductive Types</a></li><li class="chapter-item "><a href="struct.html"><strong aria-hidden="true">9.3.</strong> Structures</a></li><li class="chapter-item expanded "><a href="typeclass.html" class="active"><strong aria-hidden="true">9.4.</strong> Type classes</a></li><li class="chapter-item "><a href="unifhint.html"><strong aria-hidden="true">9.5.</strong> Unification Hints</a></li></ol></li><li class="chapter-item "><a href="builtintypes.html"><strong aria-hidden="true">10.</strong> Builtin Types</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="nat.html"><strong aria-hidden="true">10.1.</strong> Natural number</a></li><li class="chapter-item "><a href="int.html"><strong aria-hidden="true">10.2.</strong> Integer</a></li><li class="chapter-item "><a href="uint.html"><strong aria-hidden="true">10.3.</strong> Fixed precision unsigned integer</a></li><li class="chapter-item "><a href="float.html"><strong aria-hidden="true">10.4.</strong> Float</a></li><li class="chapter-item "><a href="array.html"><strong aria-hidden="true">10.5.</strong> Array</a></li><li class="chapter-item "><a href="list.html"><strong aria-hidden="true">10.6.</strong> List</a></li><li class="chapter-item "><a href="char.html"><strong aria-hidden="true">10.7.</strong> Character</a></li><li class="chapter-item "><a href="string.html"><strong aria-hidden="true">10.8.</strong> String</a></li><li class="chapter-item "><a href="option.html"><strong aria-hidden="true">10.9.</strong> Option</a></li><li class="chapter-item "><a href="thunk.html"><strong aria-hidden="true">10.10.</strong> Thunk</a></li><li class="chapter-item "><a href="task.html"><strong aria-hidden="true">10.11.</strong> Task and Thread</a></li></ol></li><li class="chapter-item "><a href="functions.html"><strong aria-hidden="true">11.</strong> Functions</a></li><li class="chapter-item affix "><li class="part-title">Other</li><li class="chapter-item "><a href="faq.html"><strong aria-hidden="true">12.</strong> Frequently Asked Questions</a></li><li class="chapter-item "><a href="lean3changes.html"><strong aria-hidden="true">13.</strong> Significant Changes from Lean 3</a></li><li class="chapter-item "><a href="syntax_highlight_in_latex.html"><strong aria-hidden="true">14.</strong> Syntax Highlighting Lean in LaTeX</a></li><li class="chapter-item "><a href="widgets.html"><strong aria-hidden="true">15.</strong> User Widgets</a></li><li class="chapter-item affix "><li class="part-title">Development</li><li class="chapter-item "><a href="dev/index.html"><strong aria-hidden="true">16.</strong> Development Guide</a></li><li class="chapter-item "><a href="make/index.html"><strong aria-hidden="true">17.</strong> Building Lean</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="make/ubuntu.html"><strong aria-hidden="true">17.1.</strong> Ubuntu Setup</a></li><li class="chapter-item "><a href="make/osx-10.9.html"><strong aria-hidden="true">17.2.</strong> macOS Setup</a></li><li class="chapter-item "><a href="make/msys2.html"><strong aria-hidden="true">17.3.</strong> Windows MSYS2 Setup</a></li><li class="chapter-item "><a href="make/wsl.html"><strong aria-hidden="true">17.4.</strong> Windows with WSL</a></li><li class="chapter-item "><a href="make/nix.html"><strong aria-hidden="true">17.5.</strong> Nix Setup (Experimental)</a></li></ol></li><li class="chapter-item "><a href="dev/bootstrap.html"><strong aria-hidden="true">18.</strong> Bootstrapping</a></li><li class="chapter-item "><a href="dev/testing.html"><strong aria-hidden="true">19.</strong> Testing</a></li><li class="chapter-item "><a href="dev/debugging.html"><strong aria-hidden="true">20.</strong> Debugging</a></li><li class="chapter-item "><a href="dev/commit_convention.html"><strong aria-hidden="true">21.</strong> Commit Convention</a></li><li class="chapter-item "><a href="dev/mdbook.html"><strong aria-hidden="true">22.</strong> Building This Manual</a></li><li class="chapter-item "><a href="dev/ffi.html"><strong aria-hidden="true">23.</strong> Foreign Function Interface</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -103,7 +85,6 @@
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
-                
                 <div id="menu-bar-hover-placeholder"></div>
                 <div id="menu-bar" class="menu-bar sticky bordered">
                     <div class="left-buttons">
@@ -120,33 +101,26 @@
                             <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
                         </ul>
-                        
                         <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
                             <i class="fa fa-search"></i>
                         </button>
-                        
                     </div>
 
                     <h1 class="menu-title">Lean Manual</h1>
 
                     <div class="right-buttons">
-                        
                         <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        
-                        
                         <a href="https://github.com/leanprover/lean4" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        
                     </div>
                 </div>
 
-                
                 <div id="search-wrapper" class="hidden">
                     <form id="searchbar-outer" class="searchbar-outer">
-                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
                     </form>
                     <div id="searchresults-outer" class="searchresults-outer hidden">
                         <div id="searchresults-header" class="searchresults-header"></div>
@@ -154,8 +128,6 @@
                         </ul>
                     </div>
                 </div>
-                
-
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
                 <script type="text/javascript">
                     document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
@@ -167,7 +139,7 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1><a class="header" href="#type-classes" id="type-classes">Type classes</a></h1>
+                        <h1 id="type-classes"><a class="header" href="#type-classes">Type classes</a></h1>
 <p>Typeclasses were introduced as a principled way of enabling
 ad-hoc polymorphism in functional programming languages. We first observe that it
 would be easy to implement an ad-hoc polymorphic function (such as addition) if the
@@ -238,7 +210,7 @@ general, instances may depend on other instances in complicated ways. For exampl
 you can declare an (anonymous) instance stating that if <code>a</code> has addition, then <code>Array a</code>
 has addition:</p>
 <pre><code class="language-lean">instance [Add a] : Add (Array a) where
-  add x y := Array.zipWith x y (. + .)
+  add x y := Array.zipWith x y (· + ·)
 
 #eval Add.add #[1, 2] #[3, 4]
 -- #[4, 6]
@@ -312,31 +284,7 @@ instance : Inhabited Prop where
 -- true
 <span class="boring">end Ex
 </span></code></pre>
-<p>Sometimes we want to think of the default element of a type as being an <em>arbitrary</em> element, whose specific value should not play a role in our proofs.
-For that purpose, we can write <code>arbitrary</code> instead of <code>default</code>. We define <code>arbitrary</code> as an <em>opaque</em> constant.
-Opaque constants are never unfolded by the type checker.</p>
-<pre><code class="language-lean"><span class="boring">namespace Ex
-</span><span class="boring">export Inhabited (default)
-</span>theorem defNatEq0 : (default : Nat) = 0 :=
-  rfl
-
-constant arbitrary [Inhabited a] : a :=
-  Inhabited.default
-
--- theorem arbitraryNatEq0 : (arbitrary : Nat) = 0 :=
---   rfl
-/-
-error: type mismatch
-  rfl
-has type
-  arbitrary = arbitrary
-but is expected to have type
-  arbitrary = 0
--/
-<span class="boring">end Ex
-</span></code></pre>
-<p>The theorem <code>defNatEq0</code> type checks because the type checker can unfold <code>(default : Nat)</code> and reduce it to <code>0</code>. This is not the case in the theorem <code>arbitraryNatEq0</code> because <code>arbitrary</code> is an opaque constant.</p>
-<h2><a class="header" href="#chaining-instances" id="chaining-instances">Chaining Instances</a></h2>
+<h2 id="chaining-instances"><a class="header" href="#chaining-instances">Chaining Instances</a></h2>
 <p>If that were the extent of type class inference, it would not be all that impressive;
 it would be simply a mechanism of storing a list of instances for the elaborator to find in a lookup table.
 What makes type class inference powerful is that one can <em>chain</em> instances. That is,
@@ -344,7 +292,7 @@ an instance declaration can in turn depend on an implicit instance of a type cla
 This causes class inference to chain through instances recursively, backtracking when necessary, in a Prolog-like search.</p>
 <p>For example, the following definition shows that if two types <code>a</code> and <code>b</code> are inhabited, then so is their product:</p>
 <pre><code class="language-lean">instance [Inhabited a] [Inhabited b] : Inhabited (a × b) where
-  default := (arbitrary, arbitrary)
+  default := (default, default)
 </code></pre>
 <p>With this added to the earlier instance declarations, type class instance can infer, for example, a default element of <code>Nat × Bool</code>:</p>
 <pre><code class="language-lean"><span class="boring">namespace Ex
@@ -354,18 +302,18 @@ This causes class inference to chain through instances recursively, backtracking
 </span><span class="boring"> default := true
 </span><span class="boring">instance : Inhabited Nat where
 </span><span class="boring"> default := 0
-</span><span class="boring">constant arbitrary [Inhabited a] : a :=
+</span><span class="boring">opaque default [Inhabited a] : a :=
 </span><span class="boring"> Inhabited.default
 </span>instance [Inhabited a] [Inhabited b] : Inhabited (a × b) where
-  default := (arbitrary, arbitrary)
+  default := (default, default)
 
-#eval (arbitrary : Nat × Bool)
+#eval (default : Nat × Bool)
 -- (0, true)
 <span class="boring">end Ex
 </span></code></pre>
 <p>Similarly, we can inhabit type function with suitable constant functions:</p>
 <pre><code class="language-lean">instance [Inhabited b] : Inhabited (a -&gt; b) where
-  default := fun _ =&gt; arbitrary
+  default := fun _ =&gt; default
 </code></pre>
 <p>As an exercise, try defining default instances for other types, such as <code>List</code> and <code>Sum</code> types.</p>
 <p>The Lean standard library contains the definition <code>inferInstance</code>. It has type <code>{α : Sort u} → [i : α] → α</code>,
@@ -375,13 +323,13 @@ and is useful for triggering the type class resolution procedure when the expect
 def foo : Inhabited (Nat × Nat) :=
   inferInstance
 
-theorem ex : foo.default = (arbitrary, arbitrary) :=
+theorem ex : foo.default = (default, default) :=
   rfl
 </code></pre>
 <p>You can use the command <code>#print</code> to inspect how simple <code>inferInstance</code> is.</p>
 <pre><code class="language-lean">#print inferInstance
 </code></pre>
-<h2><a class="header" href="#tostring" id="tostring">ToString</a></h2>
+<h2 id="tostring"><a class="header" href="#tostring">ToString</a></h2>
 <p>The polymorphic method <code>toString</code> has type <code>{α : Type u} → [ToString α] → α → String</code>. You implement the instance
 for your own types and use chaining to convert complex values into strings. Lean comes with <code>ToString</code> instances
 for most builtin types.</p>
@@ -395,7 +343,7 @@ instance : ToString Person where
 #eval toString { name := &quot;Leo&quot;, age := 542 : Person }
 #eval toString ({ name := &quot;Daniel&quot;, age := 18 : Person }, &quot;hello&quot;)
 </code></pre>
-<h2><a class="header" href="#numerals" id="numerals">Numerals</a></h2>
+<h2 id="numerals"><a class="header" href="#numerals">Numerals</a></h2>
 <p>Numerals are polymorphic in Lean. You can use a numeral (e.g., <code>2</code>) to denote an element of any type that implements
 the type class <code>OfNat</code>.</p>
 <pre><code class="language-lean">structure Rational where
@@ -434,11 +382,24 @@ instance [s : Monoid α] : OfNat α (nat_lit 1) where
 def getUnit [Monoid α] : α :=
   1
 </code></pre>
-<h2><a class="header" href="#output-parameters" id="output-parameters">Output parameters</a></h2>
+<p>Because many users were forgetting the <code>nat_lit</code> when defining <code>OfNat</code> instances, Lean also accepts <code>OfNat</code> instance
+declarations not using <code>nat_lit</code>. Thus, the following is also accepted.</p>
+<pre><code class="language-lean">class Monoid (α : Type u) where
+  unit : α
+  op   : α → α → α
+
+instance [s : Monoid α] : OfNat α 1 where
+  ofNat := s.unit
+
+def getUnit [Monoid α] : α :=
+  1
+</code></pre>
+<h2 id="output-parameters"><a class="header" href="#output-parameters">Output parameters</a></h2>
 <p>By default, Lean only tries to synthesize an instance <code>Inhabited T</code> when the term <code>T</code> is known and does not
 contain missing parts. The following command produces the error
 &quot;failed to create type class instance for <code>Inhabited (Nat × ?m.1499)</code>&quot; because the type has a missing part (i.e., the <code>_</code>).</p>
-<pre><code class="language-lean">#check_failure (inferInstance : Inhabited (Nat × _))
+<pre><code class="language-lean"><span class="boring">-- FIXME: should fail
+</span>#check (inferInstance : Inhabited (Nat × _))
 </code></pre>
 <p>You can view the parameter of the type class <code>Inhabited</code> as an <em>input</em> value for the type class synthesizer.
 When a type class has multiple parameters, you can mark some of them as output parameters.
@@ -491,7 +452,7 @@ instance [HMul α β γ] : HMul α (Array β) (Array γ) where
 <p>You can use our new scalar array multiplication instance on arrays of type <code>Array β</code>
 with a scalar of type <code>α</code> whenever you have an instance <code>HMul α β γ</code>.
 In the last <code>#eval</code>, note that the instance was used twice on an array of arrays.</p>
-<h2><a class="header" href="#default-instances" id="default-instances">Default instances</a></h2>
+<h2 id="default-instances"><a class="header" href="#default-instances">Default instances</a></h2>
 <p>In the class <code>HMul</code>, the parameters <code>α</code> and <code>β</code> are treated as input values.
 Thus, type class synthesis only starts after these two types are known. This may often
 be too restrictive.</p>
@@ -506,8 +467,9 @@ instance : HMul Int Int Int where
 
 def xs : List Int := [1, 2, 3]
 
--- Error &quot;failed to create type class instance for HMul Int ?m.1767 (?m.1797 x)&quot;
-#check_failure fun y =&gt; xs.map (fun x =&gt; hMul x y)
+<span class="boring">-- TODO: fix error message
+</span>-- Error &quot;failed to create type class instance for HMul Int ?m.1767 (?m.1797 x)&quot;
+-- #check fun y =&gt; xs.map (fun x =&gt; hMul x y)
 <span class="boring">end Ex
 </span></code></pre>
 <p>The instance <code>HMul</code> is not synthesized by Lean because the type of <code>y</code> has not been provided.
@@ -532,7 +494,7 @@ def xs : List Int := [1, 2, 3]
 to use this instance on pending type class synthesis problems.
 The actual Lean implementation defines homogeneous and heterogeneous classes for arithmetical operators.
 Moreover, <code>a+b</code>, <code>a*b</code>, <code>a-b</code>, <code>a/b</code>, and <code>a%b</code> are notations for the heterogeneous versions.
-The instance <code>OfNat Nat n</code> is the default instance for the <code>OfNat</code> class. This is why the numeral
+The instance <code>OfNat Nat n</code> is the default instance (with priority <code>100</code>) for the <code>OfNat</code> class. This is why the numeral
 <code>2</code> has type <code>Nat</code> when the expected type is not known. You can define default instances with higher
 priority to override the builtin ones.</p>
 <pre><code class="language-lean">structure Rational where
@@ -540,7 +502,7 @@ priority to override the builtin ones.</p>
   den : Nat
   inv : den ≠ 0
 
-@[defaultInstance 1]
+@[defaultInstance 200]
 instance : OfNat Rational n where
   ofNat := { num := n, den := 1, inv := by decide }
 
@@ -576,76 +538,48 @@ infixl:70 &quot; * &quot;  =&gt; HMul.hMul
 <span class="boring">end Ex
 </span></code></pre>
 <p>The <code>Mul</code> class is convenient for types that only implement the homogeneous multiplication.</p>
-<h2><a class="header" href="#scoped-instances" id="scoped-instances">Scoped Instances</a></h2>
+<h2 id="scoped-instances"><a class="header" href="#scoped-instances">Scoped Instances</a></h2>
 <p>TODO</p>
-<h2><a class="header" href="#local-instances" id="local-instances">Local Instances</a></h2>
+<h2 id="local-instances"><a class="header" href="#local-instances">Local Instances</a></h2>
 <p>TODO</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                        
                             <a rel="prev" href="struct.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
-                        
-
-                        
                             <a rel="next" href="unifhint.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
-                        
-
                         <div style="clear: both"></div>
                     </nav>
                 </div>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                
                     <a rel="prev" href="struct.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
-                
-
-                
                     <a rel="next" href="unifhint.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
-                
             </nav>
 
         </div>
 
-        
-
-        
-
-        
-
-        
         <script type="text/javascript">
             window.playground_copyable = true;
         </script>
-        
-
-        
-
-        
         <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
-        
-
         <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
         <script src="book.js" type="text/javascript" charset="utf-8"></script>
 
         <!-- Custom JS scripts -->
-        
-
-        
-
+        <script type="text/javascript" src="alectryon.js"></script>
     </body>
 </html>

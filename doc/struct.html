@@ -4,47 +4,29 @@
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
         <title>Structures - Lean Manual</title>
-        
-        
-
-
         <!-- Custom HTML head -->
-        
-
-
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
 
-        
         <link rel="icon" href="favicon.svg">
-        
-        
         <link rel="shortcut icon" href="favicon.png">
-        
         <link rel="stylesheet" href="css/variables.css">
         <link rel="stylesheet" href="css/general.css">
         <link rel="stylesheet" href="css/chrome.css">
-        
         <link rel="stylesheet" href="css/print.css" media="print">
-        
-
         <!-- Fonts -->
         <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-        
         <link rel="stylesheet" href="fonts/fonts.css">
-        
-
         <!-- Highlight.js Stylesheets -->
         <link rel="stylesheet" href="highlight.css">
         <link rel="stylesheet" href="tomorrow-night.css">
         <link rel="stylesheet" href="ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
-        
-
-        
+        <link rel="stylesheet" href="alectryon.css">
+        <link rel="stylesheet" href="pygments.css">
     </head>
     <body>
         <!-- Provide site root to javascript -->
@@ -59,11 +41,11 @@
                 var theme = localStorage.getItem('mdbook-theme');
                 var sidebar = localStorage.getItem('mdbook-sidebar');
 
-                if (theme.startsWith('"') && theme.endsWith('"')) {
+                if (theme && theme.startsWith('"') && theme.endsWith('"')) {
                     localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
                 }
 
-                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                if (sidebar && sidebar.startsWith('"') && sidebar.endsWith('"')) {
                     localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
                 }
             } catch (e) { }
@@ -95,7 +77,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="whatIsLean.html"><strong aria-hidden="true">1.</strong> What is Lean</a></li><li class="chapter-item expanded "><a href="tour.html"><strong aria-hidden="true">2.</strong> Tour of Lean</a></li><li class="chapter-item expanded "><a href="setup.html"><strong aria-hidden="true">3.</strong> Setting Up Lean</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="quickstart.html"><strong aria-hidden="true">3.1.</strong> Quickstart</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Language Manual</li><li class="chapter-item expanded "><a href="using_lean.html"><strong aria-hidden="true">4.</strong> Using Lean</a></li><li class="chapter-item expanded "><a href="lexical_structure.html"><strong aria-hidden="true">5.</strong> Lexical Structure</a></li><li class="chapter-item expanded "><a href="expressions.html"><strong aria-hidden="true">6.</strong> Expressions</a></li><li class="chapter-item expanded "><a href="declarations.html"><strong aria-hidden="true">7.</strong> Declarations</a></li><li class="chapter-item expanded "><a href="organization.html"><strong aria-hidden="true">8.</strong> Organizational features</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="sections.html"><strong aria-hidden="true">8.1.</strong> Sections</a></li><li class="chapter-item expanded "><a href="namespaces.html"><strong aria-hidden="true">8.2.</strong> Namespaces</a></li><li class="chapter-item expanded "><a href="implicit.html"><strong aria-hidden="true">8.3.</strong> Implicit Arguments</a></li><li class="chapter-item expanded "><a href="autobound.html"><strong aria-hidden="true">8.4.</strong> Auto Bound Implicit Arguments</a></li></ol></li><li class="chapter-item expanded "><a href="deptypes.html"><strong aria-hidden="true">9.</strong> Dependent Types</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="simptypes.html"><strong aria-hidden="true">9.1.</strong> Simple Type Theory</a></li><li class="chapter-item expanded "><a href="typeobjs.html"><strong aria-hidden="true">9.2.</strong> Types as objects</a></li><li class="chapter-item expanded "><a href="funabst.html"><strong aria-hidden="true">9.3.</strong> Function Abstraction and Evaluation</a></li><li class="chapter-item expanded "><a href="introdef.html"><strong aria-hidden="true">9.4.</strong> Introducing Definitions</a></li><li class="chapter-item expanded "><a href="dep.html"><strong aria-hidden="true">9.5.</strong> What makes dependent type theory dependent?</a></li></ol></li><li class="chapter-item expanded "><a href="tactics.html"><strong aria-hidden="true">10.</strong> Tactics</a></li><li class="chapter-item expanded "><a href="syntax.html"><strong aria-hidden="true">11.</strong> Syntax Extensions</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="do.html"><strong aria-hidden="true">11.1.</strong> The do Notation</a></li><li class="chapter-item expanded "><a href="stringinterp.html"><strong aria-hidden="true">11.2.</strong> String Interpolation</a></li></ol></li><li class="chapter-item expanded "><a href="metaprogramming.html"><strong aria-hidden="true">12.</strong> Metaprogramming</a></li><li class="chapter-item expanded "><a href="decltypes.html"><strong aria-hidden="true">13.</strong> Declaring New Types</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="enum.html"><strong aria-hidden="true">13.1.</strong> Enumerated Types</a></li><li class="chapter-item expanded "><a href="inductive.html"><strong aria-hidden="true">13.2.</strong> Inductive Types</a></li><li class="chapter-item expanded "><a href="struct.html" class="active"><strong aria-hidden="true">13.3.</strong> Structures</a></li><li class="chapter-item expanded "><a href="typeclass.html"><strong aria-hidden="true">13.4.</strong> Type classes</a></li><li class="chapter-item expanded "><a href="unifhint.html"><strong aria-hidden="true">13.5.</strong> Unification Hints</a></li></ol></li><li class="chapter-item expanded "><a href="builtintypes.html"><strong aria-hidden="true">14.</strong> Builtin Types</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="nat.html"><strong aria-hidden="true">14.1.</strong> Natural number</a></li><li class="chapter-item expanded "><a href="int.html"><strong aria-hidden="true">14.2.</strong> Integer</a></li><li class="chapter-item expanded "><a href="uint.html"><strong aria-hidden="true">14.3.</strong> Fixed precision unsigned integer</a></li><li class="chapter-item expanded "><a href="float.html"><strong aria-hidden="true">14.4.</strong> Float</a></li><li class="chapter-item expanded "><a href="array.html"><strong aria-hidden="true">14.5.</strong> Array</a></li><li class="chapter-item expanded "><a href="list.html"><strong aria-hidden="true">14.6.</strong> List</a></li><li class="chapter-item expanded "><a href="char.html"><strong aria-hidden="true">14.7.</strong> Character</a></li><li class="chapter-item expanded "><a href="string.html"><strong aria-hidden="true">14.8.</strong> String</a></li><li class="chapter-item expanded "><a href="option.html"><strong aria-hidden="true">14.9.</strong> Option</a></li><li class="chapter-item expanded "><a href="thunk.html"><strong aria-hidden="true">14.10.</strong> Thunk</a></li><li class="chapter-item expanded "><a href="task.html"><strong aria-hidden="true">14.11.</strong> Task and Thread</a></li></ol></li><li class="chapter-item expanded "><a href="functions.html"><strong aria-hidden="true">15.</strong> Functions</a></li><li class="chapter-item expanded "><a href="tactics.html"><strong aria-hidden="true">16.</strong> Tactics</a></li><li class="chapter-item expanded affix "><li class="part-title">Other</li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">17.</strong> Frequently Asked Questions</a></li><li class="chapter-item expanded "><a href="lean3changes.html"><strong aria-hidden="true">18.</strong> Significant Changes from Lean 3</a></li><li class="chapter-item expanded "><a href="syntax_highlight_in_latex.html"><strong aria-hidden="true">19.</strong> Syntax Highlighting Lean in LaTeX</a></li><li class="chapter-item expanded affix "><li class="part-title">Development</li><li class="chapter-item expanded "><a href="dev/index.html"><strong aria-hidden="true">20.</strong> Development Guide</a></li><li class="chapter-item expanded "><a href="dev/commit_convention.html"><strong aria-hidden="true">21.</strong> Commit Convention</a></li><li class="chapter-item expanded "><a href="make/index.html"><strong aria-hidden="true">22.</strong> Building Lean</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="make/ubuntu-16.04.html"><strong aria-hidden="true">22.1.</strong> Ubuntu Setup</a></li><li class="chapter-item expanded "><a href="make/osx-10.9.html"><strong aria-hidden="true">22.2.</strong> macOS Setup</a></li><li class="chapter-item expanded "><a href="make/msys2.html"><strong aria-hidden="true">22.3.</strong> Windows MSYS2 Setup</a></li><li class="chapter-item expanded "><a href="make/wsl.html"><strong aria-hidden="true">22.4.</strong> Windows with WSL</a></li><li class="chapter-item expanded "><a href="make/nix.html"><strong aria-hidden="true">22.5.</strong> Nix Setup (Experimental)</a></li></ol></li><li class="chapter-item expanded "><a href="dev/testing.html"><strong aria-hidden="true">23.</strong> Unit Testing</a></li><li class="chapter-item expanded "><a href="dev/mdbook.html"><strong aria-hidden="true">24.</strong> Building This Manual</a></li><li class="chapter-item expanded "><a href="dev/fixing_tests.html"><strong aria-hidden="true">25.</strong> Fixing Tests</a></li><li class="chapter-item expanded "><a href="dev/debugging.html"><strong aria-hidden="true">26.</strong> Debugging</a></li><li class="chapter-item expanded "><a href="dev/cpp_coding_style.html"><strong aria-hidden="true">27.</strong> C++ Coding Style</a></li></ol>
+                <ol class="chapter"><li class="chapter-item "><a href="whatIsLean.html"><strong aria-hidden="true">1.</strong> What is Lean</a></li><li class="chapter-item "><a href="tour.html"><strong aria-hidden="true">2.</strong> Tour of Lean</a></li><li class="chapter-item "><a href="quickstart.html"><strong aria-hidden="true">3.</strong> Setting Up Lean</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="setup.html"><strong aria-hidden="true">3.1.</strong> Extended Setup Notes</a></li></ol></li><li class="chapter-item "><a href="tpil.html"><strong aria-hidden="true">4.</strong> Theorem Proving in Lean</a></li><li class="chapter-item "><a href="fplean.html"><strong aria-hidden="true">5.</strong> Functional Programming in Lean</a></li><li class="chapter-item "><a href="examples.html"><strong aria-hidden="true">6.</strong> Examples</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="examples/palindromes.lean.html"><strong aria-hidden="true">6.1.</strong> Palindromes</a></li><li class="chapter-item "><a href="examples/bintree.lean.html"><strong aria-hidden="true">6.2.</strong> Binary Search Trees</a></li><li class="chapter-item "><a href="examples/tc.lean.html"><strong aria-hidden="true">6.3.</strong> A Certified Type Checker</a></li><li class="chapter-item "><a href="examples/interp.lean.html"><strong aria-hidden="true">6.4.</strong> The Well-Typed Interpreter</a></li><li class="chapter-item "><a href="examples/deBruijn.lean.html"><strong aria-hidden="true">6.5.</strong> Dependent de Bruijn Indices</a></li><li class="chapter-item "><a href="examples/phoas.lean.html"><strong aria-hidden="true">6.6.</strong> Parametric Higher-Order Abstract Syntax</a></li></ol></li><li class="chapter-item "><li class="part-title">Language Manual</li><li class="chapter-item "><a href="organization.html"><strong aria-hidden="true">7.</strong> Organizational features</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="sections.html"><strong aria-hidden="true">7.1.</strong> Sections</a></li><li class="chapter-item "><a href="namespaces.html"><strong aria-hidden="true">7.2.</strong> Namespaces</a></li><li class="chapter-item "><a href="implicit.html"><strong aria-hidden="true">7.3.</strong> Implicit Arguments</a></li><li class="chapter-item "><a href="autobound.html"><strong aria-hidden="true">7.4.</strong> Auto Bound Implicit Arguments</a></li></ol></li><li class="chapter-item "><a href="syntax.html"><strong aria-hidden="true">8.</strong> Syntax Extensions</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="do.html"><strong aria-hidden="true">8.1.</strong> The do Notation</a></li><li class="chapter-item "><a href="stringinterp.html"><strong aria-hidden="true">8.2.</strong> String Interpolation</a></li><li class="chapter-item "><a href="notation.html"><strong aria-hidden="true">8.3.</strong> User-Defined Notation</a></li><li class="chapter-item "><a href="macro_overview.html"><strong aria-hidden="true">8.4.</strong> Macro Overview</a></li><li class="chapter-item "><a href="elaborators.html"><strong aria-hidden="true">8.5.</strong> Elaborators</a></li><li class="chapter-item "><a href="syntax_examples.html"><strong aria-hidden="true">8.6.</strong> Examples</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="syntax_example.html"><strong aria-hidden="true">8.6.1.</strong> Balanced Parentheses</a></li><li class="chapter-item "><a href="metaprogramming-arith.html"><strong aria-hidden="true">8.6.2.</strong> Arithmetic DSL</a></li></ol></li></ol></li><li class="chapter-item expanded "><a href="decltypes.html"><strong aria-hidden="true">9.</strong> Declaring New Types</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="enum.html"><strong aria-hidden="true">9.1.</strong> Enumerated Types</a></li><li class="chapter-item "><a href="inductive.html"><strong aria-hidden="true">9.2.</strong> Inductive Types</a></li><li class="chapter-item expanded "><a href="struct.html" class="active"><strong aria-hidden="true">9.3.</strong> Structures</a></li><li class="chapter-item "><a href="typeclass.html"><strong aria-hidden="true">9.4.</strong> Type classes</a></li><li class="chapter-item "><a href="unifhint.html"><strong aria-hidden="true">9.5.</strong> Unification Hints</a></li></ol></li><li class="chapter-item "><a href="builtintypes.html"><strong aria-hidden="true">10.</strong> Builtin Types</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="nat.html"><strong aria-hidden="true">10.1.</strong> Natural number</a></li><li class="chapter-item "><a href="int.html"><strong aria-hidden="true">10.2.</strong> Integer</a></li><li class="chapter-item "><a href="uint.html"><strong aria-hidden="true">10.3.</strong> Fixed precision unsigned integer</a></li><li class="chapter-item "><a href="float.html"><strong aria-hidden="true">10.4.</strong> Float</a></li><li class="chapter-item "><a href="array.html"><strong aria-hidden="true">10.5.</strong> Array</a></li><li class="chapter-item "><a href="list.html"><strong aria-hidden="true">10.6.</strong> List</a></li><li class="chapter-item "><a href="char.html"><strong aria-hidden="true">10.7.</strong> Character</a></li><li class="chapter-item "><a href="string.html"><strong aria-hidden="true">10.8.</strong> String</a></li><li class="chapter-item "><a href="option.html"><strong aria-hidden="true">10.9.</strong> Option</a></li><li class="chapter-item "><a href="thunk.html"><strong aria-hidden="true">10.10.</strong> Thunk</a></li><li class="chapter-item "><a href="task.html"><strong aria-hidden="true">10.11.</strong> Task and Thread</a></li></ol></li><li class="chapter-item "><a href="functions.html"><strong aria-hidden="true">11.</strong> Functions</a></li><li class="chapter-item affix "><li class="part-title">Other</li><li class="chapter-item "><a href="faq.html"><strong aria-hidden="true">12.</strong> Frequently Asked Questions</a></li><li class="chapter-item "><a href="lean3changes.html"><strong aria-hidden="true">13.</strong> Significant Changes from Lean 3</a></li><li class="chapter-item "><a href="syntax_highlight_in_latex.html"><strong aria-hidden="true">14.</strong> Syntax Highlighting Lean in LaTeX</a></li><li class="chapter-item "><a href="widgets.html"><strong aria-hidden="true">15.</strong> User Widgets</a></li><li class="chapter-item affix "><li class="part-title">Development</li><li class="chapter-item "><a href="dev/index.html"><strong aria-hidden="true">16.</strong> Development Guide</a></li><li class="chapter-item "><a href="make/index.html"><strong aria-hidden="true">17.</strong> Building Lean</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="make/ubuntu.html"><strong aria-hidden="true">17.1.</strong> Ubuntu Setup</a></li><li class="chapter-item "><a href="make/osx-10.9.html"><strong aria-hidden="true">17.2.</strong> macOS Setup</a></li><li class="chapter-item "><a href="make/msys2.html"><strong aria-hidden="true">17.3.</strong> Windows MSYS2 Setup</a></li><li class="chapter-item "><a href="make/wsl.html"><strong aria-hidden="true">17.4.</strong> Windows with WSL</a></li><li class="chapter-item "><a href="make/nix.html"><strong aria-hidden="true">17.5.</strong> Nix Setup (Experimental)</a></li></ol></li><li class="chapter-item "><a href="dev/bootstrap.html"><strong aria-hidden="true">18.</strong> Bootstrapping</a></li><li class="chapter-item "><a href="dev/testing.html"><strong aria-hidden="true">19.</strong> Testing</a></li><li class="chapter-item "><a href="dev/debugging.html"><strong aria-hidden="true">20.</strong> Debugging</a></li><li class="chapter-item "><a href="dev/commit_convention.html"><strong aria-hidden="true">21.</strong> Commit Convention</a></li><li class="chapter-item "><a href="dev/mdbook.html"><strong aria-hidden="true">22.</strong> Building This Manual</a></li><li class="chapter-item "><a href="dev/ffi.html"><strong aria-hidden="true">23.</strong> Foreign Function Interface</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -103,7 +85,6 @@
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
-                
                 <div id="menu-bar-hover-placeholder"></div>
                 <div id="menu-bar" class="menu-bar sticky bordered">
                     <div class="left-buttons">
@@ -120,33 +101,26 @@
                             <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
                         </ul>
-                        
                         <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
                             <i class="fa fa-search"></i>
                         </button>
-                        
                     </div>
 
                     <h1 class="menu-title">Lean Manual</h1>
 
                     <div class="right-buttons">
-                        
                         <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        
-                        
                         <a href="https://github.com/leanprover/lean4" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        
                     </div>
                 </div>
 
-                
                 <div id="search-wrapper" class="hidden">
                     <form id="searchbar-outer" class="searchbar-outer">
-                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
                     </form>
                     <div id="searchresults-outer" class="searchresults-outer hidden">
                         <div id="searchresults-header" class="searchresults-header"></div>
@@ -154,8 +128,6 @@
                         </ul>
                     </div>
                 </div>
-                
-
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
                 <script type="text/javascript">
                     document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
@@ -167,7 +139,7 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1><a class="header" href="#structures" id="structures">Structures</a></h1>
+                        <h1 id="structures"><a class="header" href="#structures">Structures</a></h1>
 <p>Structure is a special case of inductive datatype. It has only one constructor and is not recursive.
 Similar to the <code>inductive</code> command, the <code>structure</code> command introduces a namespace with the same name.
 The general form is as follows:</p>
@@ -275,7 +247,7 @@ def p : Point Nat :=
 #eval (p.smul 3).x -- 3
 #eval (p.smul 3).y -- 6
 </code></pre>
-<h2><a class="header" href="#inheritance" id="inheritance">Inheritance</a></h2>
+<h2 id="inheritance"><a class="header" href="#inheritance">Inheritance</a></h2>
 <p>We can <em>extend</em> existing structures by adding new fields. This feature allows us to simulate a form of <em>inheritance</em>.</p>
 <pre><code class="language-lean">structure Point (α : Type u) where
   x : α
@@ -318,7 +290,7 @@ theorem ex :
     { x := x, y := y, w := w, z := z, bit := b } :=
   rfl
 </code></pre>
-<h2><a class="header" href="#default-field-values" id="default-field-values">Default field values</a></h2>
+<h2 id="default-field-values"><a class="header" href="#default-field-values">Default field values</a></h2>
 <p>You can assign default value to fields when declaring a new structure.</p>
 <pre><code class="language-lean">inductive MessageSeverity
   | error | warning
@@ -359,74 +331,51 @@ def msg2 : MessageExt where
 #eval msg2.timestamp -- 10
 #eval msg2.caption   -- &quot;extended&quot;
 </code></pre>
-<h2><a class="header" href="#updating-structure-fields" id="updating-structure-fields">Updating structure fields</a></h2>
-<p>TODO</p>
+<h2 id="updating-structure-fields"><a class="header" href="#updating-structure-fields">Updating structure fields</a></h2>
+<p>Structure fields can be updated using <code>{ &lt;struct-val&gt; with &lt;field&gt; := &lt;new-value&gt;, ... }</code>:</p>
+<pre><code class="language-lean"><span class="boring">structure Point (α : Type u) where
+</span><span class="boring"> x : α
+</span><span class="boring"> y : α
+</span>def incrementX (p : Point Nat) : Point Nat := { p with x := p.x + 1 }
+</code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                        
                             <a rel="prev" href="inductive.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
-                        
-
-                        
                             <a rel="next" href="typeclass.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
-                        
-
                         <div style="clear: both"></div>
                     </nav>
                 </div>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                
                     <a rel="prev" href="inductive.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
-                
-
-                
                     <a rel="next" href="typeclass.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
-                
             </nav>
 
         </div>
 
-        
-
-        
-
-        
-
-        
         <script type="text/javascript">
             window.playground_copyable = true;
         </script>
-        
-
-        
-
-        
         <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
-        
-
         <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
         <script src="book.js" type="text/javascript" charset="utf-8"></script>
 
         <!-- Custom JS scripts -->
-        
-
-        
-
+        <script type="text/javascript" src="alectryon.js"></script>
     </body>
 </html>
