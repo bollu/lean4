@@ -90,7 +90,17 @@ opaque floatTypeInContext (ctx: @&Ptr Context): IO (Ptr LLVMType)
 opaque doubleTypeInContext (ctx: @&Ptr Context): IO (Ptr LLVMType)
 
 @[extern "lean_llvm_pointer_type"]
-opaque pointerType (ty: @&Ptr LLVMType): IO (Ptr LLVMType)
+opaque pointerType (elemty: @&Ptr LLVMType): IO (Ptr LLVMType)
+
+@[extern "lean_llvm_array_type"]
+opaque arrayType (elemty: @&Ptr LLVMType): IO (Ptr LLVMType)
+
+@[extern "lean_llvm_const_array"]
+opaque constArray (elemty: @&Ptr LLVMType) (vals: @&Array (Ptr Value)): IO (Ptr LLVMType)
+
+-- `stringConst` provides a `String` as a constant array of element type `i8`
+@[extern "lean_llvm_const_string"]
+opaque constString (ctx: @&Ptr Context) (str: @&String): IO (Ptr Value)
 
 @[extern "lean_llvm_create_builder_in_context"]
 opaque createBuilderInContext (ctx: @&Ptr Context): IO (Ptr Builder)
@@ -293,7 +303,7 @@ def callLeanBox (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value) (nam
 
 
 -- ***lean_{inc, dec}_{ref?}_{1,n}***
-inductive RefcountKind where 
+inductive RefcountKind where
 | inc | dec
 
 instance : ToString RefcountKind where
@@ -301,7 +311,7 @@ instance : ToString RefcountKind where
   | .inc => "inc"
   | .dec => "dec"
 
-inductive RefcountDelta where 
+inductive RefcountDelta where
 | one | n
 
 deriving instance BEq for RefcountDelta
@@ -320,7 +330,7 @@ def getOrCreateLeanRefcountFn (kind: RefcountKind) (ref?: Bool) (size: RefcountD
 def callLeanRefcountFn (builder: LLVM.Ptr LLVM.Builder)
   (kind: RefcountKind) (ref?: Bool) (arg: LLVM.Ptr LLVM.Value)
   (size: Option (LLVM.Ptr LLVM.Value) := Option.none): M Unit := do
-  match size with 
+  match size with
   | .none => let _ ← LLVM.buildCall builder (← getOrCreateLeanRefcountFn kind ref? RefcountDelta.one) #[arg] ""
   | .some n => let _ ← LLVM.buildCall builder (← getOrCreateLeanRefcountFn kind ref? RefcountDelta.n) #[arg, n] ""
 
@@ -803,6 +813,86 @@ def emitCtor (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (c : CtorInfo) (ys : A
 
 
 -- ^^^ emitVDecl.emitCtor
+
+-- vvv emitVDecl vvv
+
+
+
+/-
+def emitDec (x : VarId) (n : Nat) (checkRef : Bool) : M Unit := do
+  emit (if checkRef then "lean_dec" else "lean_dec_ref");
+  emit "("; emit x;
+  if n != 1 then emit ", "; emit n
+  emitLn ");"
+-/
+
+def emitDec (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (n : Nat) (checkRef : Bool) : M Unit := do
+  let xslot ← emitLhs x
+  let xv ← LLVM.buildLoad builder xslot ""
+  if n != 1
+  then throw (Error.compileError "expected n = 1 for emitDec")
+  else callLeanRefcountFn builder (kind := RefcountKind.inc) (ref? := checkRef) xv
+
+
+
+/-
+def emitNumLit (t : IRType) (v : Nat) : M Unit := do
+  if t.isObj then
+    if v < UInt32.size then
+      emit "lean_unsigned_to_nat("; emit v; emit "u)"
+    else
+      emit "lean_cstr_to_nat(\""; emit v; emit "\")"
+  else
+    emit v
+-/
+def emitNumLit (builder: LLVM.Ptr LLVM.Builder) (t : IRType) (v : Nat) : M (LLVM.Ptr LLVM.Value) := do
+  if t.isObj then
+    if v < UInt32.size then
+      callLeanUnsignedToNatFn builder v ""
+      -- emit "lean_unsigned_to_nat("; emit v; emit "u)"
+    else
+      callLeanCStrToNatFn builder v ""
+      -- emit "lean_cstr_to_nat(\""; emit v; emit "\")"
+  else
+    LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat v)
+
+def toHexDigit (c : Nat) : String :=
+  String.singleton c.digitChar
+
+def quoteString (s : String) : String :=
+  let q := "\"";
+  let q := s.foldl
+    (fun q c => q ++
+      if c == '\n' then "\\n"
+      else if c == '\r' then "\\r"
+      else if c == '\t' then "\\t"
+      else if c == '\\' then "\\\\"
+      else if c == '\"' then "\\\""
+      else if c.toNat <= 31 then
+        "\\x" ++ toHexDigit (c.toNat / 16) ++ toHexDigit (c.toNat % 16)
+      -- TODO(Leo): we should use `\unnnn` for escaping unicode characters.
+      else String.singleton c)
+    q;
+  q ++ "\""
+
+/-
+def emitLit (z : VarId) (t : IRType) (v : LitVal) : M Unit := do
+  emitLhs z;
+  match v with
+  | LitVal.num v => emitNumLit t v; emitLn ";"
+  | LitVal.str v => emit "lean_mk_string_from_bytes("; emit (quoteString v); emit ", "; emit v.utf8ByteSize; emitLn ");"
+-/
+def emitLit (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : LitVal) : M Unit := do
+  let zslot ← LLVM.buildAlloca builder (← toLLVMType (← getLLVMContext) t) ""
+  addVartoState z zslot
+  let zv ← match v with
+            | LitVal.num v => emitNumLit builder t v -- emitNumLit t v; emitLn ";"
+            | LitVal.str v =>
+                 -- TODO (bollu): We should be able to get the underlying UTF8 data and send it to LLVM.
+                 LLVM.constString (← getLLVMContext) (quoteString v) -- (v.utf8ByteSize)
+  LLVM.buildStore builder zv zslot
+
+
 /-
 def emitVDecl (z : VarId) (t : IRType) (v : Expr) : M Unit :=
   match v with
@@ -836,7 +926,9 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.unbox x        => throw (Error.unimplemented "emitUnbox z t x")
   | Expr.isShared x     => throw (Error.unimplemented "emitIsShared z x")
   | Expr.isTaggedPtr x  => throw (Error.unimplemented "emitIsTaggedPtr z x")
-  | Expr.lit v          => throw (Error.unimplemented "emitLit z t v")
+  | Expr.lit v          => emitLit builder z t v
+
+-- ^^^ emitVDecl ^^^
 
 
 /-
@@ -881,65 +973,6 @@ partial def declareVars (builder: LLVM.Ptr LLVM.Builder): FnBody → M Unit
   | e => do
       if e.isTerminal then pure () else declareVars builder e.body
 
-
-/-
-def emitDec (x : VarId) (n : Nat) (checkRef : Bool) : M Unit := do
-  emit (if checkRef then "lean_dec" else "lean_dec_ref");
-  emit "("; emit x;
-  if n != 1 then emit ", "; emit n
-  emitLn ");"
--/
-
-def emitDec (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (n : Nat) (checkRef : Bool) : M Unit := do
-  let xslot ← emitLhs x
-  let xv ← LLVM.buildLoad builder xslot ""
-  if n != 1
-  then throw (Error.compileError "expected n = 1 for emitDec")
-  else callLeanRefcountFn builder (kind := RefcountKind.inc) (ref? := checkRef) xv
-
-
-
-/-
-def emitNumLit (t : IRType) (v : Nat) : M Unit := do
-  if t.isObj then
-    if v < UInt32.size then
-      emit "lean_unsigned_to_nat("; emit v; emit "u)"
-    else
-      emit "lean_cstr_to_nat(\""; emit v; emit "\")"
-  else
-    emit v
--/
-def emitNumLit (builder: LLVM.Ptr LLVM.Builder) (t : IRType) (v : Nat) : M (LLVM.Ptr LLVM.Value) := do
-  if t.isObj then
-    if v < UInt32.size then
-      callLeanUnsignedToNatFn builder v ""
-      -- emit "lean_unsigned_to_nat("; emit v; emit "u)"
-    else
-      callLeanCStrToNatFn v
-      -- emit "lean_cstr_to_nat(\""; emit v; emit "\")"
-  else
-    LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat v)
-
-/-
-def emitLit (z : VarId) (t : IRType) (v : LitVal) : M Unit := do
-  emitLhs z;
-  match v with
-  | LitVal.num v => emitNumLit t v; emitLn ";"
-  | LitVal.str v => emit "lean_mk_string_from_bytes("; emit (quoteString v); emit ", "; emit v.utf8ByteSize; emitLn ");"
--/
-def emitLit (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : LitVal) : M Unit := do
-  let zslot ← LLVM.buildAlloca builder (← toLLVMType (← getLLVMContext) t) ""
-  addVartoState z zslot
-  let zv ← match v with
-            | LitVal.num v => sorry -- emitNumLit t v; emitLn ";"
-            | LitVal.str v => sorry -- emit "lean_mk_string_from_bytes("; emit (quoteString v); emit ", "; emit v.utf8ByteSize; emitLn ");"
-  LLVM.buildStore builder zv zslot
-
-  -- let xslot ← emitLhs z
-  -- let xv ← LLVM.buildLoad builder xslot ""
-  -- match v with
-  -- | LitVal.num v => emitNumLit t v; emitLn ";"
-  -- | LitVal.str v => emit "lean_mk_string_from_bytes("; emit (quoteString v); emit ", "; emit v.utf8ByteSize; emitLn ");"
 
 /-
 mutual
