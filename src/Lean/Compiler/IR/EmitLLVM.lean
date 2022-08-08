@@ -78,7 +78,7 @@ opaque setInitializer (glbl: @&Ptr Value) (val: @&Ptr Value): IO Unit
 opaque functionType(retty: @&Ptr LLVMType) (args: @&Array (Ptr LLVMType)) (isVarArg: Bool := false): IO (Ptr LLVMType)
 
 @[extern "lean_llvm_void_type_in_context"]
-opaque voidTypeInContext (ctx: @&Ptr Context): IO (Ptr LLVMType)
+opaque voidType (ctx: @&Ptr Context): IO (Ptr LLVMType)
 
 @[extern "lean_llvm_int_type_in_context"]
 opaque intTypeInContext (ctx: @&Ptr Context) (width: UInt64): IO (Ptr LLVMType)
@@ -185,7 +185,7 @@ def voidPtrType (ctx: LLVM.Ptr LLVM.Context): IO (LLVM.Ptr LLVM.LLVMType) :=
 def i8PtrType (ctx: LLVM.Ptr LLVM.Context): IO (LLVM.Ptr LLVM.LLVMType) := voidPtrType ctx
 
 -- TODO: instantiate target triple and find out what size_t is.
-def size_tTypeInContext (ctx: @&Ptr Context): IO (Ptr LLVMType) := i64Type ctx
+def size_tType (ctx: @&Ptr Context): IO (Ptr LLVMType) := i64Type ctx
 
 def True (ctx: Ptr Context): IO (Ptr Value) :=
   do constInt (← i1Type ctx) 1 (signExtend := false)
@@ -282,15 +282,58 @@ def getOrCreateFunctionPrototype (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLV
   LLVM.getOrAddFunction mod name $
      (← LLVM.functionType retty args (isVarArg := false))
 
-
+-- ***lean_box***
 def getOrCreateLeanBoxFn: M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
   getOrCreateFunctionPrototype ctx (← getLLVMModule)
-    (← LLVM.voidPtrType ctx) "lean_box"  #[(← LLVM.size_tTypeInContext ctx)]
+    (← LLVM.voidPtrType ctx) "lean_box"  #[(← LLVM.size_tType ctx)]
 
 def callLeanBox (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
   LLVM.buildCall builder (← getOrCreateLeanBoxFn) #[arg] name
 
+
+-- ***lean_{inc, dec}_{ref?}_{1,n}***
+inductive RefcountKind where 
+| inc | dec
+
+instance : ToString RefcountKind where
+  toString
+  | .inc => "inc"
+  | .dec => "dec"
+
+inductive RefcountDelta where 
+| one | n
+
+deriving instance BEq for RefcountDelta
+
+instance : ToString RefcountDelta where
+  toString
+  | .one => "1"
+  | .n => "n"
+
+def getOrCreateLeanRefcountFn (kind: RefcountKind) (ref?: Bool) (size: RefcountDelta): M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  getOrCreateFunctionPrototype ctx (← getLLVMModule)
+    (← LLVM.voidType ctx) s!"lean_{kind}{if ref? then "" else "_ref"}{if size == .one then "" else "_n"}"
+      (if size == .one then #[← LLVM.voidPtrType ctx] else #[← LLVM.voidPtrType ctx, ← LLVM.size_tType ctx])
+
+def callLeanRefcountFn (builder: LLVM.Ptr LLVM.Builder)
+  (kind: RefcountKind) (ref?: Bool) (arg: LLVM.Ptr LLVM.Value)
+  (size: Option (LLVM.Ptr LLVM.Value) := Option.none): M Unit := do
+  match size with 
+  | .none => let _ ← LLVM.buildCall builder (← getOrCreateLeanRefcountFn kind ref? RefcountDelta.one) #[arg] ""
+  | .some n => let _ ← LLVM.buildCall builder (← getOrCreateLeanRefcountFn kind ref? RefcountDelta.n) #[arg, n] ""
+
+
+-- decRef1
+def callLeanDecRef1 (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value): M Unit := do
+   callLeanRefcountFn builder RefcountKind.dec (ref? := True) arg
+
+-- decRefN
+def callLeanDecRefN (builder: LLVM.Ptr LLVM.Builder) (arg n: LLVM.Ptr LLVM.Value): M Unit := do
+  callLeanRefcountFn builder RefcountKind.dec (ref? := True) arg (size := n)
+
+-- ***lean_io_mk_world***
 def getOrCreateLeanIOMkWorldFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
   -- lean_object* lean_io_mk_world();
   getOrCreateFunctionPrototype ctx mod (← LLVM.voidPtrType ctx) "lean_io_mk_world"  #[]
@@ -309,7 +352,7 @@ def callLeanIOResultIsError (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM
 -- lean_alloc_ctor (unsigned tag, unsigned num_obj, unsigned scalar_sz)
 def getOrCreateLeanAllocCtorFn: M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
-  let unsigned ← LLVM.size_tTypeInContext ctx
+  let unsigned ← LLVM.size_tType ctx
   getOrCreateFunctionPrototype ctx (← getLLVMModule)
     (← LLVM.voidPtrType ctx) "lean_alloc_ctor"  #[unsigned, unsigned, unsigned]
 
@@ -319,10 +362,10 @@ def callLeanAllocCtor (builder: LLVM.Ptr LLVM.Builder) (tag num_objs scalar_sz: 
 -- void lean_ctor_set(b_lean_obj_arg o, unsigned i, lean_obj_arg v)
 def getOrCreateLeanCtorSetFn: M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
-  let unsigned ← LLVM.size_tTypeInContext ctx
+  let unsigned ← LLVM.size_tType ctx
   let voidptr ← LLVM.voidPtrType ctx
   getOrCreateFunctionPrototype ctx (← getLLVMModule)
-    (← LLVM.voidTypeInContext ctx) "lean_ctor_set"  #[voidptr, unsigned, voidptr]
+    (← LLVM.voidType ctx) "lean_ctor_set"  #[voidptr, unsigned, voidptr]
 
 def callLeanCtorSet (builder: LLVM.Ptr LLVM.Builder) (o i v: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
   LLVM.buildCall builder (← getOrCreateLeanCtorSetFn) #[o, i, v] name
@@ -361,7 +404,7 @@ def toLLVMType (ctx: LLVM.Ptr LLVM.Context): IRType → IO (LLVM.Ptr LLVM.LLVMTy
   | IRType.uint32     => LLVM.intTypeInContext ctx 32
   | IRType.uint64     => LLVM.intTypeInContext ctx 64
   -- TODO: how to cleanly size_t in LLVM? We can do eg. instantiate the current target and query for size.
-  | IRType.usize      => LLVM.size_tTypeInContext ctx
+  | IRType.usize      => LLVM.size_tType ctx
   | IRType.object     => do LLVM.pointerType (← LLVM.i8Type ctx)
   | IRType.tobject    => do LLVM.pointerType (← LLVM.i8Type ctx)
   | IRType.irrelevant => do LLVM.pointerType (← LLVM.i8Type ctx)
@@ -729,7 +772,7 @@ def emitCtor (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (c : CtorInfo) (ys : A
 
   let ctx ← getLLVMContext
   if c.size == 0 && c.usize == 0 && c.ssize == 0 then do
-    let v ← callLeanBox builder (← LLVM.constInt (← LLVM.size_tTypeInContext ctx) 0) "lean_box_outv"
+    let v ← callLeanBox builder (← LLVM.constInt (← LLVM.size_tType ctx) 0) "lean_box_outv"
     let _ ← LLVM.buildStore builder v slot
   else do
     let v ← emitAllocCtor builder c;
@@ -817,6 +860,14 @@ partial def declareVars (builder: LLVM.Ptr LLVM.Builder): FnBody → M Unit
   | e => do
       if e.isTerminal then pure () else declareVars builder e.body
 
+
+def emitDec (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (n : Nat) (checkRef : Bool) : M Unit := do
+  let xslot ← emitLhs x
+  let xv ← LLVM.buildLoad builder xslot ""
+  if n != 1
+  then throw (Error.compileError "expected n = 1 for emitDec")
+  else callLeanRefcountFn builder (kind := RefcountKind.inc) (ref? := checkRef) xv
+
 /-
 mutual
 -/
@@ -889,11 +940,9 @@ partial def emitBlock (builder: LLVM.Ptr LLVM.Builder) (b : FnBody) : M Unit := 
     unless p do emitInc x n c
     emitBlock b
   -/
-  | FnBody.dec x n c p b       => throw (Error.unimplemented "dec")
-  /-
-    unless p do emitDec x n c
-    emitBlock b
-  -/
+  | FnBody.dec x n c p b       =>
+    unless p do emitDec builder x n c
+    emitBlock builder b
   | FnBody.del x b             => throw (Error.unimplemented "del")
   /-
   emitDel x; emitBlock b
@@ -1239,20 +1288,20 @@ def emitInitFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
 
 def getOrCreateLeanInitialize (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
   -- void lean_initialize();
-  getOrCreateFunctionPrototype ctx mod (← LLVM.voidTypeInContext ctx) "lean_initialize"  #[]
+  getOrCreateFunctionPrototype ctx mod (← LLVM.voidType ctx) "lean_initialize"  #[]
 
 def getOrCreateLeanInitializeRuntimeModule (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
   -- void lean_initialize();
-  getOrCreateFunctionPrototype ctx mod (← LLVM.voidTypeInContext ctx) "lean_initialize_runtime_module"  #[]
+  getOrCreateFunctionPrototype ctx mod (← LLVM.voidType ctx) "lean_initialize_runtime_module"  #[]
 
 def getOrCreateLeanSetPanicMessages (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
   -- void lean_set_panic_messages();
-  getOrCreateFunctionPrototype ctx mod (← LLVM.voidTypeInContext ctx) "lean_set_panic_messages"  #[(← LLVM.i1Type ctx)]
+  getOrCreateFunctionPrototype ctx mod (← LLVM.voidType ctx) "lean_set_panic_messages"  #[(← LLVM.i1Type ctx)]
 
 
 def getOrCreateLeanIOMarkEndInitializationFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
   -- lean_object* lean_io_mk_world();
-  getOrCreateFunctionPrototype ctx mod (← LLVM.voidTypeInContext ctx) "lean_io_mark_end_initialization"  #[]
+  getOrCreateFunctionPrototype ctx mod (← LLVM.voidType ctx) "lean_io_mark_end_initialization"  #[]
 
 def getOrCreateLeanIOResultIsOkFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
   -- lean_object* lean_io_mk_world();
@@ -1262,18 +1311,13 @@ def callLeanIOResultIsOk (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Va
   LLVM.buildCall builder (← getOrCreateLeanIOResultIsOkFn (← getLLVMContext) (← getLLVMModule)) #[arg] name
 
 
-def getOrCreateLeanDecRefFn: M (LLVM.Ptr LLVM.Value) := do
-  let ctx ← getLLVMContext
-  getOrCreateFunctionPrototype ctx (← getLLVMModule)
-    (← LLVM.voidTypeInContext ctx) "lean_dec_ref"  #[(← LLVM.i8PtrType ctx)]
 
-def callLeanDecRef (builder: LLVM.Ptr LLVM.Builder) (res: LLVM.Ptr LLVM.Value): M Unit := do
-   let _ ← LLVM.buildCall builder (← getOrCreateLeanDecRefFn) #[res] ""
 
+-- lean_init_task_manager
 def getOrCreateLeanInitTaskManagerFn: M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
   getOrCreateFunctionPrototype ctx (← getLLVMModule)
-    (← LLVM.voidTypeInContext ctx) "lean_init_task_manager"  #[]
+    (← LLVM.voidType ctx) "lean_init_task_manager"  #[]
 
 
 def callLeanInitTaskManager (builder: LLVM.Ptr LLVM.Builder): M Unit := do
@@ -1283,7 +1327,7 @@ def callLeanInitTaskManager (builder: LLVM.Ptr LLVM.Builder): M Unit := do
 def getOrCreateLeanFinalizeTaskManager: M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
   getOrCreateFunctionPrototype ctx (← getLLVMModule)
-    (← LLVM.voidTypeInContext ctx) "lean_finalize_task_manager"  #[]
+    (← LLVM.voidType ctx) "lean_finalize_task_manager"  #[]
 
 
 def callLeanFinalizeTaskManager (builder: LLVM.Ptr LLVM.Builder): M Unit := do
@@ -1298,6 +1342,7 @@ def getOrCreateCallLeanUnboxUint32Fn: M (LLVM.Ptr LLVM.Value) := do
 def callLeanUnboxUint32 (builder: LLVM.Ptr LLVM.Builder) (v: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
    LLVM.buildCall builder (← getOrCreateCallLeanUnboxUint32Fn) #[v] name
 
+-- ***lean_io_result_get_value**
 def getOrCreateLeanIOResultGetValueFn: M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
   getOrCreateFunctionPrototype ctx (← getLLVMModule)
@@ -1308,10 +1353,11 @@ def callLeanIOResultGetValue (builder: LLVM.Ptr LLVM.Builder) (v: LLVM.Ptr LLVM.
 
 
 
+-- ***lean_io_result_show_error**
 def getOrCreateLeanIOResultShowErrorFn: M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
   getOrCreateFunctionPrototype ctx (← getLLVMModule)
-    (← LLVM.voidTypeInContext ctx) "lean_io_result_show_error"  #[← LLVM.voidPtrType ctx]
+    (← LLVM.voidType ctx) "lean_io_result_show_error"  #[← LLVM.voidPtrType ctx]
 
 def callLeanIOResultShowError (builder: LLVM.Ptr LLVM.Builder) (v: LLVM.Ptr LLVM.Value) (name: String): M Unit := do
    let _ ← LLVM.buildCall builder (← getOrCreateLeanIOResultShowErrorFn) #[v] name
@@ -1395,10 +1441,10 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
   let res_is_ok ← callLeanIOResultIsOk builder resv "res_is_ok"
   buildIfThen_ builder main "resIsOkBranches"  res_is_ok
     (fun builder => do -- then clause of the builder)
-      callLeanDecRef builder resv
+      callLeanDecRef1 builder resv
       callLeanInitTaskManager builder
       if xs.size == 2 then
-        let inv ← callLeanBox builder (← LLVM.constInt (← LLVM.size_tTypeInContext ctx) 0) "inv"
+        let inv ← callLeanBox builder (← LLVM.constInt (← LLVM.size_tType ctx) 0) "inv"
         let _ ← LLVM.buildStore builder inv in_
         -- TODO: have yet to do the while loop!
         -- TODO: have yet to do the while loop!
@@ -1472,7 +1518,7 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
     (fun builder => do -- else builder
         let resv ← LLVM.buildLoad builder res "resv"
         callLeanIOResultShowError builder resv ""
-        callLeanDecRef builder resv
+        callLeanDecRef1 builder resv
         let _ ← LLVM.buildRet builder (← LLVM.constInt64 ctx 0)
         pure ShouldForwardControlFlow.no)
   -- at the merge
