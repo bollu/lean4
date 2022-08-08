@@ -875,6 +875,88 @@ def quoteString (s : String) : String :=
     q;
   q ++ "\""
 
+
+/-
+def toStringArgs (ys : Array Arg) : List String :=
+  ys.toList.map argToCString
+-/
+
+/-
+def emitSimpleExternalCall (f : String) (ps : Array Param) (ys : Array Arg) : M Unit := do
+  emit f; emit "("
+  -- We must remove irrelevant arguments to extern calls.
+  discard <| ys.size.foldM
+    (fun i (first : Bool) =>
+      if ps[i]!.ty.isIrrelevant then
+        pure first
+      else do
+        unless first do emit ", "
+        emitArg ys[i]!
+        pure false)
+    true
+  emitLn ");"
+  pure ()
+-/
+
+def emitSimpleExternalCall
+  (builder: LLVM.Ptr LLVM.Builder) (f : String) (ps : Array Param) (ys : Array Arg)
+  (retty: IRType) (name: String): M (LLVM.Ptr LLVM.Value) := do
+  let mut args := #[]
+  let mut argTys := #[]
+  for (p, y) in ps.zip ys do
+    if !p.ty.isIrrelevant then
+      argTys := argTys.push (← toLLVMType (← getLLVMContext) p.ty)
+      args := args.push (← emitArg builder y)
+  let fnty ← LLVM.functionType (← toLLVMType (← getLLVMContext) retty) argTys
+  let fn ← LLVM.getOrAddFunction (← getLLVMModule) f fnty
+  LLVM.buildCall builder fn args name
+
+
+
+
+def emitExternCall (builder: LLVM.Ptr LLVM.Builder)
+  (f : FunId)
+  (ps : Array Param)
+  (extData : ExternAttrData)
+  (ys : Array Arg) (retty: IRType)
+  (name: String): M (LLVM.Ptr LLVM.Value) :=
+  match getExternEntryFor extData `c with
+  | some (ExternEntry.standard _ extFn) => emitSimpleExternalCall builder extFn ps ys retty name
+  | some (ExternEntry.inline "llvm" pat)     => throw (Error.unimplemented "unimplemented codegen of inline LLVM")
+  | some (ExternEntry.inline _ pat)     => throw (Error.compileError "cannot codegen non-LLVM inline code")
+  | some (ExternEntry.foreign _ extFn)  => emitSimpleExternalCall builder extFn ps ys retty name
+  | _ => throw (Error.compileError s!"failed to emit extern application '{f}'")
+
+
+/-
+def emitFullApp (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
+  emitLhs z
+  let decl ← getDecl f
+  match decl with
+  | Decl.extern _ ps _ extData => emitExternCall f ps extData ys
+  | _ =>
+    emitCName f
+    if ys.size > 0 then emit "("; emitArgs ys; emit ")"
+    emitLn ";"
+-/
+def emitFullApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
+  let zslot ← emitLhs z
+  let decl ← getDecl f
+  match decl with
+  | Decl.extern _ ps retty extData =>
+     let zv ← emitExternCall builder f ps extData ys retty ""
+     LLVM.buildStore builder zv zslot
+  | _ =>
+
+  let fv ← match  (← LLVM.getNamedFunction (← getLLVMModule) (← toCName f)) with
+           | .some fv => pure fv
+           | .none => throw (α := LLVM.Ptr LLVM.Value) (Error.compileError s!"unable to find function {f}")
+  let ys ←  ys.mapM (emitArg builder)
+  let _ ← LLVM.buildCall builder fv ys ""
+   -- if ys.size > 0 then emit "("; emitArgs ys; emit ")"
+  -- emitLn ";"
+
+
 /-
 def emitLit (z : VarId) (t : IRType) (v : LitVal) : M Unit := do
   emitLhs z;
@@ -919,7 +1001,7 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.proj i x       => throw (Error.unimplemented "emitProj z i x")
   | Expr.uproj i x      => throw (Error.unimplemented "emitUProj z i x")
   | Expr.sproj n o x    => throw (Error.unimplemented "emitSProj z t n o x")
-  | Expr.fap c ys       => throw (Error.unimplemented "emitFullApp z c ys")
+  | Expr.fap c ys       => emitFullApp builder z c ys
   | Expr.pap c ys       => throw (Error.unimplemented "emitPartialApp z c ys")
   | Expr.ap x ys        => throw (Error.unimplemented "emitApp z x ys")
   | Expr.box t x        => throw (Error.unimplemented "emitBox z x t")
