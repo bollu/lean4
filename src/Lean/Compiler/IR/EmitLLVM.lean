@@ -71,6 +71,9 @@ opaque addGlobal(m: @&Ptr Module) (name: @&String) (type: @&Ptr LLVMType): IO (P
 @[extern "lean_llvm_get_named_global"]
 opaque getNamedGlobal(m: @&Ptr Module) (name: @&String): IO (Option (Ptr Value))
 
+@[extern "lean_llvm_build_global_string"]
+opaque buildGlobalString(builder: @&Ptr Builder) (value: @&String) (name: @&String): IO (Ptr Value)
+
 @[extern "lean_llvm_set_initializer"]
 opaque setInitializer (glbl: @&Ptr Value) (val: @&Ptr Value): IO Unit
 
@@ -98,7 +101,7 @@ opaque arrayType (elemty: @&Ptr LLVMType): IO (Ptr LLVMType)
 @[extern "lean_llvm_const_array"]
 opaque constArray (elemty: @&Ptr LLVMType) (vals: @&Array (Ptr Value)): IO (Ptr LLVMType)
 
--- `stringConst` provides a `String` as a constant array of element type `i8`
+-- `constString` provides a `String` as a constant array of element type `i8`
 @[extern "lean_llvm_const_string"]
 opaque constString (ctx: @&Ptr Context) (str: @&String): IO (Ptr Value)
 
@@ -137,6 +140,10 @@ opaque buildRet (builder: @&Ptr Builder) (val: @&Ptr Value): IO (Ptr Value)
 
 @[extern "lean_llvm_build_unreachable"]
 opaque buildUnreachable (builder: @&Ptr Builder): IO (Ptr Value)
+
+@[extern "lean_llvm_build_inbounds_gep"]
+opaque buildInBoundsGEP (builder: @&Ptr Builder) (base: @&Ptr Value) (ixs: @&Array (Ptr Value)) (name: @&String): IO (Ptr Value)
+
 
 @[extern "lean_llvm_get_insert_block"]
 opaque getInsertBlock (builder: @&Ptr Builder): IO (Ptr BasicBlock)
@@ -971,7 +978,10 @@ def emitLit (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : LitVa
             | LitVal.num v => emitNumLit builder t v -- emitNumLit t v; emitLn ";"
             | LitVal.str v =>
                  -- TODO (bollu): We should be able to get the underlying UTF8 data and send it to LLVM.
-                 LLVM.constString (← getLLVMContext) (quoteString v) -- (v.utf8ByteSize)
+                 let str_global ← LLVM.buildGlobalString builder (quoteString v) "" -- (v.utf8ByteSiz)
+                 -- access through the global, into the 0th index of the array
+                 let zero ← LLVM.constIntUnsigned (← getLLVMContext) 0
+                 LLVM.buildInBoundsGEP builder str_global  #[zero, zero] ""
   LLVM.buildStore builder zv zslot
 
 
@@ -1001,7 +1011,7 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.proj i x       => throw (Error.unimplemented "emitProj z i x")
   | Expr.uproj i x      => throw (Error.unimplemented "emitUProj z i x")
   | Expr.sproj n o x    => throw (Error.unimplemented "emitSProj z t n o x")
-  | Expr.fap c ys       => emitFullApp builder z c ys
+  | Expr.fap c ys       => IO.eprintln "skipping fap"  -- emitFullApp builder z c ys
   | Expr.pap c ys       => throw (Error.unimplemented "emitPartialApp z c ys")
   | Expr.ap x ys        => throw (Error.unimplemented "emitApp z x ys")
   | Expr.box t x        => throw (Error.unimplemented "emitBox z x t")
@@ -1410,7 +1420,8 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
       -/
         throw (Error.unimplemented "unimplemented emitDeclInit [d.params.size == 0]")
     | _ =>
-      throw (Error.unimplemented "emitMarkPersistent")
+      IO.eprintln "skip emitMarkPersistent"
+      -- throw (Error.unimplemented "emitMarkPersistent")
       -- emitCName n; emit " = "; emitCInitName n; emitLn "();"; emitMarkPersistent d n
 
 def emitInitFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder: LLVM.Ptr LLVM.Builder): M Unit := do

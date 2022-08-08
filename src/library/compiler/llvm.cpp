@@ -274,6 +274,25 @@ lean_llvm_get_named_global(lean_object *mod, lean_object *name,
 }
 
 extern "C" LEAN_EXPORT lean_object *
+lean_llvm_build_global_string(lean_object *builder, lean_object *str, lean_object *name, lean_object * /* w */) {
+  lean::string_ref sref = lean::string_ref(str);
+  lean::string_ref nameref = lean::string_ref(name);
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; s: %s\n", __PRETTY_FUNCTION__, sref.data());
+    fprintf(stderr, "...%s ; s: %s\n", __PRETTY_FUNCTION__, nameref.data());
+  }
+
+  LLVMValueRef out = LLVMBuildGlobalString(lean_to_Builder(builder), 
+					   sref.data(), nameref.data());
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "...%s ; val: %s\n", __PRETTY_FUNCTION__,
+            LLVMPrintValueToString(out));
+  }
+  return lean_io_result_mk_ok(Value_to_lean(out));
+}
+
+
+extern "C" LEAN_EXPORT lean_object *
 lean_llvm_set_initializer(lean_object *global, lean_object *initializer,
                           lean_object * /* w */) {
   if (LLVM_DEBUG) {
@@ -580,6 +599,25 @@ lean_llvm_build_unreachable(lean_object *builder, lean_object * /* w */) {
 }
 
 extern "C" LEAN_EXPORT lean_object *
+lean_llvm_build_inbounds_gep(lean_object *builder, lean_object *pointer, lean_object *indices,
+			     lean_object *name, lean_object * /* w */) {
+  lean::array_ref<lean_object *> indices_array_ref(
+      indices, true); // TODO: why do I need to bump up refcount here?
+  LLVMValueRef *indices_carr = array_ref_to_ArrayLLVMValue(indices_array_ref);
+  lean::string_ref name_ref(name);
+  
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; builder: %p\n", __PRETTY_FUNCTION__, builder);
+    fprintf(stderr, "...%s ; pointer: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(pointer)));
+  }
+  LLVMValueRef out = LLVMBuildInBoundsGEP(lean_to_Builder(builder), lean_to_Value(pointer),
+					  indices_carr, indices_array_ref.size(), name_ref.data());
+  free(indices_carr);
+  fprintf(stderr, "...%s ; out: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(out));
+  return lean_io_result_mk_ok(Value_to_lean(out));
+}
+
+extern "C" LEAN_EXPORT lean_object *
 lean_llvm_get_basic_block_parent(lean_object *bb, lean_object * /* w */) {
   if (LLVM_DEBUG) {
     fprintf(stderr, "%s ; bb: %p\n", __PRETTY_FUNCTION__, bb);
@@ -680,6 +718,7 @@ lean_llvm_const_string(lean_object *ctx, lean_object *s, lean_object * /* w */) 
   }
   return lean_io_result_mk_ok(Value_to_lean(out));
 }
+
 
 extern "C" LEAN_EXPORT lean_object *llvm_get_param(lean_object *f, uint64_t ix,
                                                    lean_object * /* w */) {
