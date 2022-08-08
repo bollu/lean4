@@ -325,13 +325,34 @@ def callLeanRefcountFn (builder: LLVM.Ptr LLVM.Builder)
   | .some n => let _ ← LLVM.buildCall builder (← getOrCreateLeanRefcountFn kind ref? RefcountDelta.n) #[arg, n] ""
 
 
--- decRef1
+
+-- **decRef1***
 def callLeanDecRef1 (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value): M Unit := do
    callLeanRefcountFn builder RefcountKind.dec (ref? := True) arg
 
--- decRefN
+-- ***decRefN***
 def callLeanDecRefN (builder: LLVM.Ptr LLVM.Builder) (arg n: LLVM.Ptr LLVM.Value): M Unit := do
   callLeanRefcountFn builder RefcountKind.dec (ref? := True) arg (size := n)
+
+-- ***lean_unsigned_to_nat***
+def getOrCreateLeanUnsignedToNatFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
+  getOrCreateFunctionPrototype ctx mod (← LLVM.voidPtrType ctx) "lean_unsigned_to_nat"  #[← LLVM.i64Type ctx]
+
+def callLeanUnsignedToNatFn (builder: LLVM.Ptr LLVM.Builder) (n: Nat) (name: String): M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  let nv ← LLVM.constIntUnsigned ctx (UInt64.ofNat n)
+  LLVM.buildCall builder (← getOrCreateLeanUnsignedToNatFn ctx (← getLLVMModule)) #[nv] name
+
+-- ***lean_cstr_to_nat***
+-- TODO: build strings.
+def getOrCreateLeanCStrToNatFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
+  getOrCreateFunctionPrototype ctx mod (← LLVM.voidPtrType ctx) "lean_cstr_to_nat"  #[← LLVM.voidPtrType ctx]
+
+def callLeanCStrToNatFn (builder: LLVM.Ptr LLVM.Builder) (n: Nat) (name: String): M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  let nv ← LLVM.constIntUnsigned ctx (UInt64.ofNat n)
+  LLVM.buildCall builder (← getOrCreateLeanUnsignedToNatFn ctx (← getLLVMModule)) #[nv] name
+
 
 -- ***lean_io_mk_world***
 def getOrCreateLeanIOMkWorldFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
@@ -861,12 +882,64 @@ partial def declareVars (builder: LLVM.Ptr LLVM.Builder): FnBody → M Unit
       if e.isTerminal then pure () else declareVars builder e.body
 
 
+/-
+def emitDec (x : VarId) (n : Nat) (checkRef : Bool) : M Unit := do
+  emit (if checkRef then "lean_dec" else "lean_dec_ref");
+  emit "("; emit x;
+  if n != 1 then emit ", "; emit n
+  emitLn ");"
+-/
+
 def emitDec (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (n : Nat) (checkRef : Bool) : M Unit := do
   let xslot ← emitLhs x
   let xv ← LLVM.buildLoad builder xslot ""
   if n != 1
   then throw (Error.compileError "expected n = 1 for emitDec")
   else callLeanRefcountFn builder (kind := RefcountKind.inc) (ref? := checkRef) xv
+
+
+
+/-
+def emitNumLit (t : IRType) (v : Nat) : M Unit := do
+  if t.isObj then
+    if v < UInt32.size then
+      emit "lean_unsigned_to_nat("; emit v; emit "u)"
+    else
+      emit "lean_cstr_to_nat(\""; emit v; emit "\")"
+  else
+    emit v
+-/
+def emitNumLit (builder: LLVM.Ptr LLVM.Builder) (t : IRType) (v : Nat) : M (LLVM.Ptr LLVM.Value) := do
+  if t.isObj then
+    if v < UInt32.size then
+      callLeanUnsignedToNatFn builder v ""
+      -- emit "lean_unsigned_to_nat("; emit v; emit "u)"
+    else
+      callLeanCStrToNatFn v
+      -- emit "lean_cstr_to_nat(\""; emit v; emit "\")"
+  else
+    LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat v)
+
+/-
+def emitLit (z : VarId) (t : IRType) (v : LitVal) : M Unit := do
+  emitLhs z;
+  match v with
+  | LitVal.num v => emitNumLit t v; emitLn ";"
+  | LitVal.str v => emit "lean_mk_string_from_bytes("; emit (quoteString v); emit ", "; emit v.utf8ByteSize; emitLn ");"
+-/
+def emitLit (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : LitVal) : M Unit := do
+  let zslot ← LLVM.buildAlloca builder (← toLLVMType (← getLLVMContext) t) ""
+  addVartoState z zslot
+  let zv ← match v with
+            | LitVal.num v => sorry -- emitNumLit t v; emitLn ";"
+            | LitVal.str v => sorry -- emit "lean_mk_string_from_bytes("; emit (quoteString v); emit ", "; emit v.utf8ByteSize; emitLn ");"
+  LLVM.buildStore builder zv zslot
+
+  -- let xslot ← emitLhs z
+  -- let xv ← LLVM.buildLoad builder xslot ""
+  -- match v with
+  -- | LitVal.num v => emitNumLit t v; emitLn ";"
+  -- | LitVal.str v => emit "lean_mk_string_from_bytes("; emit (quoteString v); emit ", "; emit v.utf8ByteSize; emitLn ");"
 
 /-
 mutual
