@@ -238,7 +238,6 @@ lean_llvm_add_function(lean_object *mod, lean_object *name, lean_object *type,
     fprintf(stderr, "... %s ; out: %s\n", __PRETTY_FUNCTION__,
             LLVMPrintValueToString(out));
   }
-  getchar();
   return lean_io_result_mk_ok(Value_to_lean(out));
 }
 
@@ -269,7 +268,6 @@ lean_llvm_add_global(lean_object *mod, lean_object *name, lean_object *type,
   LLVMValueRef out = LLVMAddGlobal(lean_to_Module(mod), lean_to_Type(type), lean_string_cstr(name));
   if (LLVM_DEBUG) {
     fprintf(stderr, "...%s ; out: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(out));
-    getchar();
   }
   
   return lean_io_result_mk_ok(Value_to_lean(out));
