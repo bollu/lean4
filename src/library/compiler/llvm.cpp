@@ -12,6 +12,7 @@ Lean's IR.
 #include <lean/lean.h>
 #include <llvm-c/BitWriter.h>
 #include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
 
 #include "runtime/array_ref.h"
 #include "runtime/string_ref.h"
@@ -212,8 +213,7 @@ lean_llvm_module_to_string(lean_object *mod, lean_object * /* w */) {
   if (LLVM_DEBUG) {
     fprintf(stderr, "%s ; mod: %p\n", __PRETTY_FUNCTION__, mod);
   }
-  return lean_io_result_mk_ok(
-      lean_mk_string(LLVMPrintModuleToString((LLVMModuleRef)mod)));
+  return lean_io_result_mk_ok(lean_mk_string(LLVMPrintModuleToString(lean_to_Module(mod))));
 };
 
 extern "C" LEAN_EXPORT lean_object *
@@ -231,8 +231,15 @@ lean_llvm_add_function(lean_object *mod, lean_object *name, lean_object *type,
     fprintf(stderr, "... %s ; type: %s\n", __PRETTY_FUNCTION__,
             LLVMPrintTypeToString(lean_to_Type(type)));
   }
-  return lean_io_result_mk_ok(Value_to_lean(LLVMAddFunction(
-      lean_to_Module(mod), lean_string_cstr(name), lean_to_Type(type))));
+  LLVMValueRef out =
+    LLVMAddFunction(
+      lean_to_Module(mod), lean_string_cstr(name), lean_to_Type(type));
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "... %s ; out: %s\n", __PRETTY_FUNCTION__,
+            LLVMPrintValueToString(out));
+  }
+  getchar();
+  return lean_io_result_mk_ok(Value_to_lean(out));
 }
 
 extern "C" LEAN_EXPORT lean_object *
@@ -256,9 +263,16 @@ lean_llvm_add_global(lean_object *mod, lean_object *name, lean_object *type,
                      lean_object * /* w */) {
   if (LLVM_DEBUG) {
     fprintf(stderr, "%s ; mod: %p\n", __PRETTY_FUNCTION__, mod);
+    fprintf(stderr, "...%s ; name: %s\n", __PRETTY_FUNCTION__, lean_string_cstr(name));
+    fprintf(stderr, "...%s ; type: %s\n", __PRETTY_FUNCTION__, LLVMPrintTypeToString(lean_to_Type(type)));
   }
-  return lean_io_result_mk_ok(Value_to_lean(LLVMAddGlobal(
-      lean_to_Module(mod), lean_to_Type(type), lean_string_cstr(name))));
+  LLVMValueRef out = LLVMAddGlobal(lean_to_Module(mod), lean_to_Type(type), lean_string_cstr(name));
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "...%s ; out: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(out));
+    getchar();
+  }
+  
+  return lean_io_result_mk_ok(Value_to_lean(out));
 }
 
 extern "C" LEAN_EXPORT lean_object *
@@ -267,7 +281,8 @@ lean_llvm_get_named_global(lean_object *mod, lean_object *name,
   LLVMValueRef g =
       LLVMGetNamedGlobal(lean_to_Module(mod), lean_string_cstr(name));
   if (LLVM_DEBUG) {
-    fprintf(stderr, "%s ; g: %p\n", __PRETTY_FUNCTION__, g);
+    fprintf(stderr, "%s ; name: %s\n", __PRETTY_FUNCTION__, lean_string_cstr(name));
+    fprintf(stderr, "...%s ; g: %p\n", __PRETTY_FUNCTION__, g);
   }
   return lean_io_result_mk_ok(g ? lean::mk_option_some(Value_to_lean(g))
                                 : lean::mk_option_none());
@@ -714,6 +729,21 @@ lean_llvm_const_string(lean_object *ctx, lean_object *s, lean_object * /* w */) 
 					      sref.length(), /*DontNullTerminate=*/false);
   if (LLVM_DEBUG) {
     fprintf(stderr, "...%s ; val: %s\n", __PRETTY_FUNCTION__,
+            LLVMPrintValueToString(out));
+  }
+  return lean_io_result_mk_ok(Value_to_lean(out));
+}
+
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_const_pointer_null(lean_object *elemty, lean_object * /* w */) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; elemty: %s\n", __PRETTY_FUNCTION__, LLVMPrintTypeToString(lean_to_Type(elemty)));
+  }
+
+  LLVMValueRef out = LLVMConstPointerNull(lean_to_Type(elemty));
+
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "...%s ; out: %s\n", __PRETTY_FUNCTION__,
             LLVMPrintValueToString(out));
   }
   return lean_io_result_mk_ok(Value_to_lean(out));

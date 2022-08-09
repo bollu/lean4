@@ -105,6 +105,9 @@ opaque constArray (elemty: @&Ptr LLVMType) (vals: @&Array (Ptr Value)): IO (Ptr 
 @[extern "lean_llvm_const_string"]
 opaque constString (ctx: @&Ptr Context) (str: @&String): IO (Ptr Value)
 
+@[extern "lean_llvm_const_pointer_null"]
+opaque constPointerNull (elemTy: @&Ptr LLVMType): IO (Ptr Value)
+
 @[extern "lean_llvm_create_builder_in_context"]
 opaque createBuilderInContext (ctx: @&Ptr Context): IO (Ptr Builder)
 
@@ -474,6 +477,23 @@ def toCName (n : Name) : M String := do
   | some _                   => throwInvalidExportName n
   | none                     => if n == `main then pure leanMainFn else pure n.mangle
 
+/-
+def toCInitName (n : Name) : M String := do
+  let env ← getEnv;
+  -- TODO: we should support simple export names only
+  match getExportNameFor? env n with
+  | some (.str .anonymous s) => return "_init_" ++ s
+  | some _                   => throwInvalidExportName n
+  | none                     => pure ("_init_" ++ n.mangle)
+-/
+def toCInitName (n : Name) : M String := do
+  let env ← getEnv;
+  -- TODO: we should support simple export names only
+  match getExportNameFor? env n with
+  | some (.str .anonymous s) => return "_init_" ++ s
+  | some _                   => throwInvalidExportName n
+  | none                     => pure ("_init_" ++ n.mangle)
+
 
 -- vvvv LLVM UTILS vvvv
 
@@ -575,6 +595,8 @@ def emitFnDeclAux (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module)
   -- let types : Array LLVM.LLVMType ← decl.params.mapM (toLLVMType ctx)
   let ps := decl.params
   let env ← getEnv
+  -- bollu: if we have a declaration with no parameters, then we emit it as a global pointer.
+  -- bollu: Otherwise, it gets emitted as a function
   -- if ps.isEmpty then
   --   if isClosedTermName env decl.name then emit "static "
   --   else if isExternal then emit "extern "
@@ -582,35 +604,40 @@ def emitFnDeclAux (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module)
   -- else
   --   if !isExternal then emit "LEAN_EXPORT "
   -- emit (toCType decl.resultType ++ " " ++ cppBaseName)
-  IO.eprintln s!"creating result type ({decl.resultType})"
-  let retty ← (toLLVMType ctx decl.resultType)
-  IO.eprintln s!"...created!"
-  let mut argtys := #[]
-  for p in ps do
-    -- if it is extern, then we must not add irrelevant args
-    if !(isExternC env decl.name) || !p.ty.isIrrelevant then
-      IO.eprintln s!"adding argument of type {p.ty}"
-      argtys := argtys.push (← toLLVMType ctx p.ty)
-      IO.eprintln "...added argument!"
-  -- QUESTION: why do we care if it is boxed?
-  if argtys.size > closureMaxArgs && isBoxedName decl.name then
-    argtys := #[(← LLVM.voidPtrType ctx)]
-  IO.eprintln "creating function type..."
-  let fnty ← LLVM.functionType retty argtys (isVarArg := false)
-  IO.eprintln "created function type!"
-  LLVM.getOrAddFunction mod cppBaseName fnty
-  -- unless ps.isEmpty do
-  --   emit "("
-  --   -- We omit irrelevant parameters for extern constants
-  --   let ps := if isExternC env decl.name then ps.filter (fun p => !p.ty.isIrrelevant) else ps
-  --   if ps.size > closureMaxArgs && isBoxedName decl.name then
-  --     emit "lean_object**"
-  --   else
-  --     ps.size.forM fun i => do
-  --       if i > 0 then emit ", "
-  --       emit (toCType ps[i]!.ty)
-  --   emit ")"
-  -- emitLn ";"
+  if ps.isEmpty then
+      -- bollu, TODO: handle `extern` specially?
+      let retty ← (toLLVMType ctx decl.resultType)
+      LLVM.getOrAddGlobal mod cppBaseName retty
+  else
+      IO.eprintln s!"creating result type ({decl.resultType})"
+      let retty ← (toLLVMType ctx decl.resultType)
+      IO.eprintln s!"...created!"
+      let mut argtys := #[]
+      for p in ps do
+        -- if it is extern, then we must not add irrelevant args
+        if !(isExternC env decl.name) || !p.ty.isIrrelevant then
+          IO.eprintln s!"adding argument of type {p.ty}"
+          argtys := argtys.push (← toLLVMType ctx p.ty)
+          IO.eprintln "...added argument!"
+      -- QUESTION: why do we care if it is boxed?
+      if argtys.size > closureMaxArgs && isBoxedName decl.name then
+        argtys := #[(← LLVM.voidPtrType ctx)]
+      IO.eprintln "creating function type..."
+      let fnty ← LLVM.functionType retty argtys (isVarArg := false)
+      IO.eprintln "created function type!"
+      LLVM.getOrAddFunction mod cppBaseName fnty
+      -- unless ps.isEmpty do
+      --   emit "("
+      --   -- We omit irrelevant parameters for extern constants
+      --   let ps := if isExternC env decl.name then ps.filter (fun p => !p.ty.isIrrelevant) else ps
+      --   if ps.size > closureMaxArgs && isBoxedName decl.name then
+      --     emit "lean_object**"
+      --   else
+      --     ps.size.forM fun i => do
+      --       if i > 0 then emit ", "
+      --       emit (toCType ps[i]!.ty)
+      --   emit ")"
+      -- emitLn ";"
 
 
 /-
@@ -934,6 +961,27 @@ def emitExternCall (builder: LLVM.Ptr LLVM.Builder)
   | some (ExternEntry.foreign _ extFn)  => emitSimpleExternalCall builder extFn ps ys retty name
   | _ => throw (Error.compileError s!"failed to emit extern application '{f}'")
 
+/--
+Create a function declaration and return a pointer to the function.
+If the function actually takes arguments, then we must have a function pointer in scope.
+If the function takes no arguments, then it is a top-level closed term, and its value will
+be stored in a global pointer. So, we load from the global pointer. The type of the global is function pointer pointer.
+This returns a *function pointer.*
+-/
+def getOrAddFunIdValue (builder: LLVM.Ptr LLVM.Builder) (f: FunId): M (LLVM.Ptr LLVM.Value) := do
+  let decl ← getDecl f
+  let fcname ← toCName f
+  let retty ← toLLVMType (← getLLVMContext) decl.resultType
+  if decl.params.isEmpty then
+     let gslot ← LLVM.getOrAddGlobal (← getLLVMModule) fcname retty
+     LLVM.buildLoad builder gslot ""
+  else
+    let argtys ← decl.params.mapM (fun p => do toLLVMType (← getLLVMContext) p.ty)
+    let fnty ← LLVM.functionType retty argtys
+    LLVM.getOrAddFunction (← getLLVMModule) fcname fnty
+
+
+
 
 /-
 def emitFullApp (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
@@ -955,17 +1003,23 @@ def emitFullApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys : A
      let zv ← emitExternCall builder f ps extData ys retty ""
      LLVM.buildStore builder zv zslot
   | _ =>
+    /-
     let fcname ← toCName f
     let fv ← match  (← LLVM.getNamedFunction (← getLLVMModule) fcname) with
            | .some fv => pure fv
            | .none => throw (α := LLVM.Ptr LLVM.Value) (Error.compileError s!"unable to find function {f}")
-    -- throw (Error.compileError s!"emitFullApp.Decl._  {f}")
-    let ys ←  ys.mapM (fun y => do
+    -/
+    if ys.size > 0 then
+        let fv ← getOrAddFunIdValue builder f
+        let ys ←  ys.mapM (fun y => do
             let yslot ← emitArg builder y
             LLVM.buildLoad builder yslot "")
-    -- throw (Error.compileError s!"emitFullApp.Decl._  '{f}'")
-    let zv ← LLVM.buildCall builder fv ys ""
-    LLVM.buildStore builder zv zslot
+        let zv ← LLVM.buildCall builder fv ys ""
+        LLVM.buildStore builder zv zslot
+    else
+       let zv ← getOrAddFunIdValue builder f
+       LLVM.buildStore builder zv zslot
+
    -- if ys.size > 0 then emit "("; emitArgs ys; emit ")"
   -- emitLn ";"
 
@@ -1426,9 +1480,18 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
       -/
         throw (Error.unimplemented "unimplemented emitDeclInit [d.params.size == 0]")
     | _ =>
-      IO.eprintln "skip emitMarkPersistent"
       -- throw (Error.unimplemented "emitMarkPersistent")
       -- emitCName n; emit " = "; emitCInitName n; emitLn "();"; emitMarkPersistent d n
+      -- TODO: should this be global?
+      let llvmty ← toLLVMType (← getLLVMContext) d.resultType
+      let dslot ←  LLVM.getOrAddGlobal (← getLLVMModule) (← toCName n) llvmty
+      LLVM.setInitializer dslot (← LLVM.constPointerNull llvmty)
+      -- TODO (bollu): this should probably be getOrCreateNamedFunction
+      let dInitFn ← match (← LLVM.getNamedFunction (← getLLVMModule) (←  toCInitName n)) with
+                    | .some dInitFn =>pure dInitFn
+                    | .none => throw (Error.compileError s!"unable to find function {← toCInitName n}")
+      let dval ← LLVM.buildCall builder dInitFn #[] ""
+      LLVM.buildStore builder dval dslot
 
 def emitInitFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder: LLVM.Ptr LLVM.Builder): M Unit := do
   let env ← getEnv
