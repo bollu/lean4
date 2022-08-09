@@ -151,8 +151,17 @@ opaque buildInBoundsGEP (builder: @&Ptr Builder) (base: @&Ptr Value) (ixs: @&Arr
 @[extern "lean_llvm_build_pointer_cast"]
 opaque buildPointerCast (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String): IO (Ptr Value)
 
+@[extern "lean_llvm_build_switch"]
+opaque buildSwitch (builder: @&Ptr Builder) (val: @&Ptr Value) (elseBB: @&Ptr BasicBlock) (numCases: UInt64): IO (Ptr Value)
+
+@[extern "lean_llvm_add_case"]
+opaque addCase (builder: @&Ptr Builder) (switch onVal: @&Ptr Value) (destBB: @&Ptr BasicBlock): IO Unit
+
 @[extern "lean_llvm_get_insert_block"]
 opaque getInsertBlock (builder: @&Ptr Builder): IO (Ptr BasicBlock)
+
+@[extern "lean_llvm_clear_insertion_position"]
+opaque clearInsertionPosition (builder: @&Ptr Builder): IO Unit
 
 @[extern "lean_llvm_get_basic_block_parent"]
 opaque getBasicBlockParent (bb: @&Ptr BasicBlock): IO (Ptr Value)
@@ -508,6 +517,15 @@ def callLeanClosureSetFn (builder: LLVM.Ptr LLVM.Builder) (closure ix arg: LLVM.
   let _ ← LLVM.buildCall builder fn  #[closure, ix, arg] retName
 
 
+-- ***int lean_obj_tag(lean_obj_arg o)***
+def callLeanObjTag (builder: LLVM.Ptr LLVM.Builder) (closure: LLVM.Ptr LLVM.Value) (retName: String): M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  let fnName :=  "lean_obj_tag"
+  let retty ← LLVM.size_tType ctx
+  let argtys := #[ ← LLVM.voidPtrType ctx]
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  LLVM.buildCall builder fn  #[closure] retName
+
 
 
 /-
@@ -589,13 +607,22 @@ def toCInitName (n : Name) : M String := do
 inductive ShouldForwardControlFlow where
 | yes | no
 
+-- Get the function we are currently inserting into.
+def builderGetInsertionFn (builder: LLVM.Ptr LLVM.Builder): M (LLVM.Ptr LLVM.Value) := do
+  let builderBB ← LLVM.getInsertBlock builder
+  LLVM.getBasicBlockParent builderBB
+
+def builderAppendBasicBlock (builder: LLVM.Ptr LLVM.Builder) (name: String): M (LLVM.Ptr LLVM.BasicBlock) := do
+  let fn ← builderGetInsertionFn builder
+  LLVM.appendBasicBlockInContext (← getLLVMContext) fn name
+
+
 -- build an if, and position the builder at the merge basic block after execution.
 -- The '_' denotes that we return Unit on each branch.
 -- TODO: get current function from the builder.
 def buildIfThen_ (builder: LLVM.Ptr LLVM.Builder) (fn: LLVM.Ptr LLVM.Value)  (name: String) (brval: LLVM.Ptr LLVM.Value)
   (thencodegen: LLVM.Ptr LLVM.Builder → M ShouldForwardControlFlow): M Unit := do
-  let builderBB ← LLVM.getInsertBlock builder
-  let fn ← LLVM.getBasicBlockParent builderBB
+  let fn ← builderGetInsertionFn builder
   -- LLVM.positionBuilderAtEnd builder
 
   let nameThen := name ++ "Then"
@@ -1128,7 +1155,7 @@ def emitFullApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys : A
   let decl ← getDecl f
   match decl with
   | Decl.extern _ ps retty extData =>
-     throw (Error.compileError "emitFullApp.Decl.extern")
+     -- throw (Error.compileError "emitFullApp.Decl.extern")
      let zv ← emitExternCall builder f ps extData ys retty ""
      LLVM.buildStore builder zv zslot
   | _ =>
@@ -1160,7 +1187,8 @@ def emitLit (z : VarId) (t : IRType) (v : LitVal) : M Unit := do
   | LitVal.num v => emitNumLit t v; emitLn ";"
   | LitVal.str v => emit "lean_mk_string_from_bytes("; emit (quoteString v); emit ", "; emit v.utf8ByteSize; emitLn ");"
 -/
-def emitLit (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : LitVal) : M Unit := do
+-- Note that this returns a *slot*, just like `emitLhs`.
+def emitLit (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : LitVal) : M (LLVM.Ptr LLVM.Value) := do
   let zslot ← LLVM.buildAlloca builder (← toLLVMType (← getLLVMContext) t) ""
   addVartoState z zslot
   let zv ← match v with
@@ -1176,6 +1204,7 @@ def emitLit (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : LitVa
                  let nbytes ← LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat (v.utf8ByteSize))
                  callLeanMkStringFromBytesFn builder strPtr nbytes ""
   LLVM.buildStore builder zv zslot
+  return zslot
 
 
 /-
@@ -1196,7 +1225,7 @@ def emitVDecl (z : VarId) (t : IRType) (v : Expr) : M Unit :=
   | Expr.isTaggedPtr x  => emitIsTaggedPtr z x
   | Expr.lit v          => emitLit z t v
 -/
-def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Expr) : M Unit :=
+def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Expr) : M Unit := do
   match v with
   | Expr.ctor c ys      => emitCtor builder z c ys -- throw (Error.unimplemented "emitCtor z c ys")
   | Expr.reset n x      => throw (Error.unimplemented "emitReset z n x")
@@ -1211,7 +1240,7 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.unbox x        => throw (Error.unimplemented "emitUnbox z t x")
   | Expr.isShared x     => throw (Error.unimplemented "emitIsShared z x")
   | Expr.isTaggedPtr x  => throw (Error.unimplemented "emitIsTaggedPtr z x")
-  | Expr.lit v          => emitLit builder z t v
+  | Expr.lit v          => let _ ← emitLit builder z t v
 
 -- ^^^ emitVDecl ^^^
 
@@ -1260,6 +1289,30 @@ partial def declareVars (builder: LLVM.Ptr LLVM.Builder): FnBody → M Unit
 
 
 /-
+def emitTag (x : VarId) (xType : IRType) : M Unit := do
+  if xType.isObj then do
+    emit "lean_obj_tag("; emit x; emit ")"
+  else
+    emit x
+-/
+def emitTag (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (xType : IRType) : M (LLVM.Ptr LLVM.Value) := do
+  if xType.isObj then do
+    let xslot ← emitLhs x
+    let xval ← LLVM.buildLoad builder xslot ""
+    callLeanObjTag builder xval ""
+    -- emit "lean_obj_tag("; emit x; emit ")"
+  else if xType.isScalar then do
+    -- TODO (bollu): is it correct to assume that emitLit will do the right thing
+    -- if it's not an object?
+    let xslot ← emitLhs x
+    let xval ← LLVM.buildLoad builder xslot ""
+    return xval
+  else
+    throw (Error.compileError "don't know how to `emitTag` in general")
+
+
+
+/-
 mutual
 -/
 mutual
@@ -1285,6 +1338,36 @@ partial def emitCase (x : VarId) (xType : IRType) (alts : Array Alt) : M Unit :=
       | Alt.default b => emitLn "default: "; emitFnBody b
     emitLn "}"
 -/
+partial def emitCase (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (xType : IRType) (alts : Array Alt) : M Unit := do
+    let tag ← emitTag builder x xType
+    -- emit "switch ("; emitTag x xType; emitLn ") {";
+    let alts := ensureHasDefault alts;
+    let defaultBB ← builderAppendBasicBlock builder s!"case_{xType}_default"
+    -- TODO (bollu): what is the sensible but not expensive way to do this?
+    -- is it true that num cases = length alts - 1?
+    let mut numCases := 0
+    for alt in alts do
+      match alt with
+      | Alt.ctor .. => numCases := numCases + 1
+      | Alt.default _ => pure ()
+    if numCases != alts.size - 1
+    then throw (Error.compileError "we must have 'numCases == alts.size - 1'")
+    let switch ← LLVM.buildSwitch builder tag defaultBB (UInt64.ofNat numCases)
+    alts.forM fun alt => do
+      match alt with
+      | Alt.ctor c b  => throw (Error.unimplemented "still implementing emitting constructor")
+         xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+         -- emit "case "; emit c.cidx; emitLn ":"; emitFnBody b
+      | Alt.default b =>
+         LLVM.positionBuilderAtEnd builder defaultBB
+         emitFnBody builder b
+         -- emitLn "default: "; emitFnBody b
+    -- emitLn "}"
+    -- this builder does not have an insertion position after emitting a case
+    LLVM.clearInsertionPosition builder
+
+
+
 /-
 partial def emitBlock (b : FnBody) : M Unit := do
   match b with
@@ -1363,9 +1446,8 @@ partial def emitBlock (builder: LLVM.Ptr LLVM.Builder) (b : FnBody) : M Unit := 
       let xslot ← emitArg builder x
       let xv ← LLVM.buildLoad builder xslot "ret_val"
       let _ ← LLVM.buildRet builder xv
-  | FnBody.case _ x xType alts => throw (Error.unimplemented "case")
-  /- emitCase x xType alts
-  -/
+  | FnBody.case _ x xType alts => -- throw (Error.unimplemented "case")
+     emitCase builder x xType alts
   | FnBody.jmp j xs            => throw (Error.unimplemented "jump")
   /-
   emitJmp j xs
@@ -1392,7 +1474,7 @@ partial def emitFnBody (b : FnBody) : M Unit := do
   emitJPs b
   emitLn "}"
 -/
-partial def emitFnBody (llvmctx: LLVM.Ptr LLVM.Context) (b : FnBody) (llvmfn: LLVM.Ptr LLVM.Value) (builder: LLVM.Ptr LLVM.Builder): M Unit := do
+partial def emitFnBody  (builder: LLVM.Ptr LLVM.Builder)  (b : FnBody): M Unit := do
 
   -- let declared ← declareVars b false
   -- if declared then emitLn ""
@@ -1510,7 +1592,7 @@ def emitDeclAux (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builde
         let bb ← LLVM.appendBasicBlockInContext (← getLLVMContext) llvmfn "entry"
         LLVM.positionBuilderAtEnd builder bb
         emitFnArgs ctx builder llvmfn xs
-        emitFnBody ctx b llvmfn builder);
+        emitFnBody builder b);
       -- emitLn "}"
       pure ()
     | _ => pure ()

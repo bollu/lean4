@@ -644,6 +644,35 @@ lean_llvm_build_pointer_cast(lean_object *builder, lean_object *val, lean_object
   return lean_io_result_mk_ok(Value_to_lean(out));
 }
 
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_build_switch(lean_object *builder, lean_object *val, lean_object *elsebb,
+			     uint64_t numCases, lean_object * /* w */) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; builder: %p\n", __PRETTY_FUNCTION__, builder);
+    fprintf(stderr, "...%s ; val: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(val)));
+    fprintf(stderr, "...%s ; elsebb: %p\n", __PRETTY_FUNCTION__, elsebb);
+    fprintf(stderr, "...%s ; numCases: %lu\n", __PRETTY_FUNCTION__, numCases);    
+  }
+  LLVMValueRef out = LLVMBuildSwitch(lean_to_Builder(builder), lean_to_Value(val), lean_to_BasicBlock(elsebb),
+				     numCases);
+  fprintf(stderr, "...%s ; out: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(out));
+  return lean_io_result_mk_ok(Value_to_lean(out));
+}
+
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_add_case (lean_object *switch_, lean_object *onVal, lean_object *destbb) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "...%s ; switch_: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(switch_)));
+    fprintf(stderr, "...%s ; onVal: %p\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(onVal)));
+    fprintf(stderr, "...%s ; destbb: %p\n", __PRETTY_FUNCTION__, destbb);    
+  }
+  LLVMAddCase(lean_to_Value(switch_),
+	      lean_to_Value(onVal), lean_to_BasicBlock(destbb));
+  return lean_io_result_mk_ok(lean_box(0));
+
+
+}
+
 
 extern "C" LEAN_EXPORT lean_object *
 lean_llvm_get_basic_block_parent(lean_object *bb, lean_object * /* w */) {
