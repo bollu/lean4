@@ -1064,7 +1064,9 @@ def emitLit (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : LitVa
             | LitVal.num v => emitNumLit builder t v -- emitNumLit t v; emitLn ";"
             | LitVal.str v =>
                  -- TODO (bollu): We should be able to get the underlying UTF8 data and send it to LLVM.
-                 let str_global ← LLVM.buildGlobalString builder (quoteString v) "" -- (v.utf8ByteSiz)
+                 -- TODO (bollu): do we need to quote the string for LLVM?
+                 -- let str_global ← LLVM.buildGlobalString builder (quoteString v) "" -- (v.utf8ByteSiz)
+                 let str_global ← LLVM.buildGlobalString builder v "" -- (v.utf8ByteSiz)
                  -- access through the global, into the 0th index of the array
                  let zero ← LLVM.constIntUnsigned (← getLLVMContext) 0
                  let strPtr ← LLVM.buildInBoundsGEP builder str_global  #[zero, zero] ""
