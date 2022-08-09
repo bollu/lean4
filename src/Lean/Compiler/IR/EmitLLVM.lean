@@ -1,8 +1,9 @@
 /-
-Copyright (c) 2019 Microsoft Corporation. All rights reserved.
+Copyright (c) 2022 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Leonardo de Moura
+Authors: Siddharth Bhat
 -/
+
 import Lean.Runtime
 import Lean.Compiler.NameMangling
 import Lean.Compiler.ExportAttr
@@ -147,6 +148,8 @@ opaque buildUnreachable (builder: @&Ptr Builder): IO (Ptr Value)
 @[extern "lean_llvm_build_inbounds_gep"]
 opaque buildInBoundsGEP (builder: @&Ptr Builder) (base: @&Ptr Value) (ixs: @&Array (Ptr Value)) (name: @&String): IO (Ptr Value)
 
+@[extern "lean_llvm_build_pointer_cast"]
+opaque buildPointerCast (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String): IO (Ptr Value)
 
 @[extern "lean_llvm_get_insert_block"]
 opaque getInsertBlock (builder: @&Ptr Builder): IO (Ptr BasicBlock)
@@ -319,6 +322,42 @@ def callLeanMarkPersistentFn (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLV
   let _ ← LLVM.buildCall builder (← getOrCreateLeanMarkPersistentFn (← getLLVMContext) (← getLLVMModule)) #[arg] ""
 
 
+namespace CProto
+-- open Lean Elab Syntax Macro
+-- Machinery to generate calling conventions for functions from their C prototypes
+
+declare_syntax_cat ctypeish
+/-
+syntax "i64" : ctypeish
+syntax "i32" : ctypeish
+syntax "i1" : ctypeish
+syntax "i8*" : ctypeish
+syntax "unsigned" : ctypeish
+syntax "float" : ctypeish
+syntax "void" : ctypeish
+syntax "double" : ctypeish
+
+syntax "[ctypeish|" ctypeish "]" : term
+
+macro_rules
+| `([ctypeish| i64 ]) => `(LLVM.i64Type (← getLLVMContext))
+| `([ctypeish| i32 ]) => `(LLVM.i32Type (← getLLVMContext))
+| `([ctypeish| i1 ]) => `(LLVM.i1Type (← getLLVMContext))
+| `([ctypeish| i8* ]) => `(LLVM.voidPtrType (← getLLVMContext))
+
+
+open Lean Elab Term Macro in
+macro (name := declareLLVMFFI) "#declareLLVMFFI" retty:ctypeish leanName:ident "->" cName: ident "(" args:ctypeish* ")" : command => do
+  let nameStr : String := "getOrCreate" ++ leanName.getId.toString ++ "Fn"
+  let name := mkIdentFrom leanName nameStr
+  dbg_trace name
+  `(def $(name) ( $args )f := 42)
+
+#declareLLVMFFI i8* MkLeanPersistent ->  mk_lean_persistent ()
+-/
+
+
+end CProto
 
 -- ***lean_{inc, dec}_{ref?}_{1,n}***
 inductive RefcountKind where
@@ -447,6 +486,27 @@ def getOrCreateLeanIOResultMkOkFn: M (LLVM.Ptr LLVM.Value) := do
 
 def callLeanIOResultMKOk (builder: LLVM.Ptr LLVM.Builder) (v: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
   LLVM.buildCall builder (← getOrCreateLeanIOResultMkOkFn) #[v] name
+
+
+
+-- ***void* lean_obj_res lean_alloc_closure(void * fun, unsigned arity, unsigned num_fixed)***
+def callLeanAllocClosureFn (builder: LLVM.Ptr LLVM.Builder) (f arity nys: LLVM.Ptr LLVM.Value) (retName: String): M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  let fnName :=  "lean_alloc_closure"
+  let retty ← LLVM.voidPtrType ctx
+  let argtys := #[ ← LLVM.voidPtrType ctx, ← LLVM.size_tType ctx, ← LLVM.size_tType ctx]
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  LLVM.buildCall builder fn  #[f, arity, nys] retName
+
+-- ***void lean_closure_set(u_lean_obj_arg o, unsigned i, lean_obj_arg a)***
+def callLeanClosureSetFn (builder: LLVM.Ptr LLVM.Builder) (closure ix arg: LLVM.Ptr LLVM.Value) (retName: String): M Unit := do
+  let ctx ← getLLVMContext
+  let fnName :=  "lean_closure_set"
+  let retty ← LLVM.voidType ctx
+  let argtys := #[ ← LLVM.voidPtrType ctx, ← LLVM.size_tType ctx, ← LLVM.voidPtrType ctx]
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  let _ ← LLVM.buildCall builder fn  #[closure, ix, arg] retName
+
 
 
 
@@ -1023,7 +1083,33 @@ def getOrAddFunIdValue (builder: LLVM.Ptr LLVM.Builder) (f: FunId): M (LLVM.Ptr 
     let fnty ← LLVM.functionType retty argtys
     LLVM.getOrAddFunction (← getLLVMModule) fcname fnty
 
+def constIntUnsigned (n: Nat): M (LLVM.Ptr LLVM.Value) :=  do
+    LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat n)
 
+/-
+def emitPartialApp (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
+  let decl ← getDecl f
+  let arity := decl.params.size;
+  emitLhs z; emit "lean_alloc_closure((void*)("; emitCName f; emit "), "; emit arity; emit ", "; emit ys.size; emitLn ");";
+  ys.size.forM fun i => do
+    let y := ys[i]!
+    emit "lean_closure_set("; emit z; emit ", "; emit i; emit ", "; emitArg y; emitLn ");"
+-/
+
+def emitPartialApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
+  let decl ← getDecl f
+  let fv ← getOrAddFunIdValue builder f
+  let arity := decl.params.size;
+  let zslot ← emitLhs z
+  let fv_voidptr ← LLVM.buildPointerCast builder fv (← LLVM.voidPtrType (← getLLVMContext)) ""
+  let zval ← callLeanAllocClosureFn builder fv_voidptr
+                                    (← constIntUnsigned arity)
+                                    (← constIntUnsigned ys.size) ""
+  LLVM.buildStore builder zval zslot
+  ys.size.forM fun i => do
+    let yslot ← emitArg builder ys[i]!
+    let yval ← LLVM.buildLoad builder yslot ""
+    callLeanClosureSetFn builder zval (← constIntUnsigned i) yval ""
 
 
 /-
@@ -1119,7 +1205,7 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.uproj i x      => throw (Error.unimplemented "emitUProj z i x")
   | Expr.sproj n o x    => throw (Error.unimplemented "emitSProj z t n o x")
   | Expr.fap c ys       => emitFullApp builder z c ys
-  | Expr.pap c ys       => IO.eprintln "SKIP: emitPartialApp"   -- throw (Error.unimplemented "emitPartialApp z c ys")
+  | Expr.pap c ys       => emitPartialApp builder z c ys
   | Expr.ap x ys        => throw (Error.unimplemented "emitApp z x ys")
   | Expr.box t x        => throw (Error.unimplemented "emitBox z x t")
   | Expr.unbox x        => throw (Error.unimplemented "emitUnbox z t x")
