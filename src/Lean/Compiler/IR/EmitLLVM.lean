@@ -1492,7 +1492,7 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
       (fun builder => do
         let _ ← LLVM.buildRet builder res
         pure ShouldForwardControlFlow.no)
-    -- TODO: emit lean_dec_ref. For now, it does not matter.
+    -- TODO (bollu): emit lean_dec_ref. For now, it does not matter.
   else if d.params.size == 0 then
     match getInitFnNameFor? env d.name with
     | some initFn =>
