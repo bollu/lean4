@@ -151,11 +151,14 @@ opaque buildInBoundsGEP (builder: @&Ptr Builder) (base: @&Ptr Value) (ixs: @&Arr
 @[extern "lean_llvm_build_pointer_cast"]
 opaque buildPointerCast (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String): IO (Ptr Value)
 
+@[extern "lean_llvm_build_sext"]
+opaque buildSext (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String): IO (Ptr Value)
+
 @[extern "lean_llvm_build_switch"]
-opaque buildSwitch (builder: @&Ptr Builder) (val: @&Ptr Value) (elseBB: @&Ptr BasicBlock) (numCases: UInt64): IO (Ptr Value)
+opaque buildSwitch (builder: @&Ptr Builder) (val: @&Ptr Value) (elseBB: @&Ptr BasicBlock) (numCasesHint: @&UInt64): IO (Ptr Value)
 
 @[extern "lean_llvm_add_case"]
-opaque addCase (builder: @&Ptr Builder) (switch onVal: @&Ptr Value) (destBB: @&Ptr BasicBlock): IO Unit
+opaque addCase (switch onVal: @&Ptr Value) (destBB: @&Ptr BasicBlock): IO Unit
 
 @[extern "lean_llvm_get_insert_block"]
 opaque getInsertBlock (builder: @&Ptr Builder): IO (Ptr BasicBlock)
@@ -1340,23 +1343,20 @@ partial def emitCase (x : VarId) (xType : IRType) (alts : Array Alt) : M Unit :=
 -/
 partial def emitCase (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (xType : IRType) (alts : Array Alt) : M Unit := do
     let tag ← emitTag builder x xType
+    let tag ← LLVM.buildSext builder tag (← LLVM.i64Type (← getLLVMContext))  ""
+    -- TODO: sign extend tag into 64-bit.
     -- emit "switch ("; emitTag x xType; emitLn ") {";
     let alts := ensureHasDefault alts;
     let defaultBB ← builderAppendBasicBlock builder s!"case_{xType}_default"
-    -- TODO (bollu): what is the sensible but not expensive way to do this?
-    -- is it true that num cases = length alts - 1?
-    let mut numCases := 0
-    for alt in alts do
-      match alt with
-      | Alt.ctor .. => numCases := numCases + 1
-      | Alt.default _ => pure ()
-    if numCases != alts.size - 1
-    then throw (Error.compileError "we must have 'numCases == alts.size - 1'")
-    let switch ← LLVM.buildSwitch builder tag defaultBB (UInt64.ofNat numCases)
+    let numCasesHint := alts.size
+    let switch ← LLVM.buildSwitch builder tag defaultBB (UInt64.ofNat numCasesHint)
     alts.forM fun alt => do
       match alt with
-      | Alt.ctor c b  => throw (Error.unimplemented "still implementing emitting constructor")
-         xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      | Alt.ctor c b  =>
+         let destbb ← builderAppendBasicBlock builder s!"case_{xType}_{c.name}"
+         LLVM.addCase switch (← constIntUnsigned c.cidx) destbb
+         LLVM.positionBuilderAtEnd builder destbb
+         emitFnBody builder b
          -- emit "case "; emit c.cidx; emitLn ":"; emitFnBody b
       | Alt.default b =>
          LLVM.positionBuilderAtEnd builder defaultBB
@@ -1484,7 +1484,7 @@ partial def emitFnBody  (builder: LLVM.Ptr LLVM.Builder)  (b : FnBody): M Unit :
   emitBlock builder b   -- emitBlock b
   -- LLVM.positionBuilderAtEnd builder bb
 
-  -- emitJPs b
+  -- TODO (bollu): emitJPs b
   -- emitLn "}"
 
 /-

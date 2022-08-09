@@ -447,6 +447,17 @@ lean_llvm_position_builder_at_end(lean_object *builder, lean_object *bb,
 }
 
 extern "C" LEAN_EXPORT lean_object *
+lean_llvm_clear_insertion_position(lean_object *builder,
+                                   lean_object * /* w */) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; builder: %p\n", __PRETTY_FUNCTION__, builder);
+  }
+  LLVMClearInsertionPosition(lean_to_Builder(builder));
+  return lean_io_result_mk_ok(lean_box(0));
+}
+
+
+extern "C" LEAN_EXPORT lean_object *
 lean_llvm_build_call2(lean_object *builder, lean_object *fnty,
                       lean_object *fnval, lean_object *args, lean_object *name,
                       lean_object * /* w */) {
@@ -645,10 +656,25 @@ lean_llvm_build_pointer_cast(lean_object *builder, lean_object *val, lean_object
 }
 
 extern "C" LEAN_EXPORT lean_object *
+lean_llvm_build_sext(lean_object *builder, lean_object *val, lean_object *destty,
+			     lean_object *name, lean_object * /* w */) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; builder: %p\n", __PRETTY_FUNCTION__, builder);
+    fprintf(stderr, "...%s ; val: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(val)));
+    fprintf(stderr, "...%s ; destty: %s\n", __PRETTY_FUNCTION__, LLVMPrintTypeToString(lean_to_Type(destty)));    
+  }
+  LLVMValueRef out = LLVMBuildSExt(lean_to_Builder(builder), lean_to_Value(val), lean_to_Type(destty),
+					 lean_string_cstr(name));
+  fprintf(stderr, "...%s ; out: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(out));
+  return lean_io_result_mk_ok(Value_to_lean(out));
+}
+
+
+extern "C" LEAN_EXPORT lean_object *
 lean_llvm_build_switch(lean_object *builder, lean_object *val, lean_object *elsebb,
 			     uint64_t numCases, lean_object * /* w */) {
   if (LLVM_DEBUG) {
-    fprintf(stderr, "%s ; builder: %p\n", __PRETTY_FUNCTION__, builder);
+    fprintf(stderr, "%s ; : %p\n", __PRETTY_FUNCTION__, builder);
     fprintf(stderr, "...%s ; val: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(val)));
     fprintf(stderr, "...%s ; elsebb: %p\n", __PRETTY_FUNCTION__, elsebb);
     fprintf(stderr, "...%s ; numCases: %lu\n", __PRETTY_FUNCTION__, numCases);    
@@ -660,14 +686,16 @@ lean_llvm_build_switch(lean_object *builder, lean_object *val, lean_object *else
 }
 
 extern "C" LEAN_EXPORT lean_object *
-lean_llvm_add_case (lean_object *switch_, lean_object *onVal, lean_object *destbb) {
+lean_llvm_add_case (lean_object *switch_, lean_object *onVal, lean_object *destbb, lean_object * /* w */) {
   if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ;\n", __PRETTY_FUNCTION__);
     fprintf(stderr, "...%s ; switch_: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(switch_)));
-    fprintf(stderr, "...%s ; onVal: %p\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(onVal)));
+    fprintf(stderr, "...%s ; onVal: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(onVal)));
     fprintf(stderr, "...%s ; destbb: %p\n", __PRETTY_FUNCTION__, destbb);    
   }
   LLVMAddCase(lean_to_Value(switch_),
-	      lean_to_Value(onVal), lean_to_BasicBlock(destbb));
+	      lean_to_Value(onVal),
+	      lean_to_BasicBlock(destbb));
   return lean_io_result_mk_ok(lean_box(0));
 
 
