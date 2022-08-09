@@ -109,7 +109,7 @@ opaque constString (ctx: @&Ptr Context) (str: @&String): IO (Ptr Value)
 opaque createBuilderInContext (ctx: @&Ptr Context): IO (Ptr Builder)
 
 @[extern "lean_llvm_append_basic_block_in_context"]
-opaque appendBasicBlockInContext (ctx: @&Ptr Context) (fn: @& Ptr Value) (name: @&String): IO (Ptr BasicBlock)
+opaque appendBasicBlockInContext (ctx: @&Ptr Context) (fn: @& Ptr Value) (name:  @&String): IO (Ptr BasicBlock)
 
 @[extern "lean_llvm_position_builder_at_end"]
 opaque positionBuilderAtEnd (builder: @&Ptr Builder) (bb: @& Ptr BasicBlock): IO Unit
@@ -118,7 +118,7 @@ opaque positionBuilderAtEnd (builder: @&Ptr Builder) (bb: @& Ptr BasicBlock): IO
 -- opaque buildCall2 (builder: @&Ptr Builder) (fnty: @&Ptr LLVMType) (fn: @&Ptr Value) (args: @&Array (Ptr Value)) (name: @&String): IO (Ptr Value)
 
 @[extern "lean_llvm_build_call"]
-opaque buildCall (builder: @&Ptr Builder) (fn: @&Ptr Value) (args: @&Array (Ptr Value)) (name: @&String): IO (Ptr Value)
+opaque buildCall (builder: @&Ptr Builder) (fn: @&Ptr Value) (args: @&Array (Ptr Value)) (name:  @&String): IO (Ptr Value)
 
 @[extern "lean_llvm_build_cond_br"]
 opaque buildCondBr (builder: @&Ptr Builder) (if_: @&Ptr Value) (thenbb: @&Ptr BasicBlock) (elsebb: @&Ptr BasicBlock): IO (Ptr Value)
@@ -262,7 +262,7 @@ instance : ToString Error where
    | .unknownDeclaration n => s!"unknown declaration '{n}'"
    | .invalidExportName n => s!"invalid export name '{n}'"
    | .unimplemented s => s!"unimplemented '{s}'"
-   | .compileError s => s!"compile eror '{s}'"
+   | .compileError s => s!"compile error '{s}'"
 
 
 abbrev M := StateT State (ReaderT Context (ExceptT Error IO))
@@ -951,15 +951,21 @@ def emitFullApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys : A
   let decl ← getDecl f
   match decl with
   | Decl.extern _ ps retty extData =>
+     throw (Error.compileError "emitFullApp.Decl.extern")
      let zv ← emitExternCall builder f ps extData ys retty ""
      LLVM.buildStore builder zv zslot
   | _ =>
-
-  let fv ← match  (← LLVM.getNamedFunction (← getLLVMModule) (← toCName f)) with
+    let fcname ← toCName f
+    let fv ← match  (← LLVM.getNamedFunction (← getLLVMModule) fcname) with
            | .some fv => pure fv
            | .none => throw (α := LLVM.Ptr LLVM.Value) (Error.compileError s!"unable to find function {f}")
-  let ys ←  ys.mapM (emitArg builder)
-  let _ ← LLVM.buildCall builder fv ys ""
+    -- throw (Error.compileError s!"emitFullApp.Decl._  {f}")
+    let ys ←  ys.mapM (fun y => do
+            let yslot ← emitArg builder y
+            LLVM.buildLoad builder yslot "")
+    -- throw (Error.compileError s!"emitFullApp.Decl._  '{f}'")
+    let zv ← LLVM.buildCall builder fv ys ""
+    LLVM.buildStore builder zv zslot
    -- if ys.size > 0 then emit "("; emitArgs ys; emit ")"
   -- emitLn ";"
 
@@ -1011,7 +1017,7 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.proj i x       => throw (Error.unimplemented "emitProj z i x")
   | Expr.uproj i x      => throw (Error.unimplemented "emitUProj z i x")
   | Expr.sproj n o x    => throw (Error.unimplemented "emitSProj z t n o x")
-  | Expr.fap c ys       => IO.eprintln "skipping fap"  -- emitFullApp builder z c ys
+  | Expr.fap c ys       => emitFullApp builder z c ys
   | Expr.pap c ys       => throw (Error.unimplemented "emitPartialApp z c ys")
   | Expr.ap x ys        => throw (Error.unimplemented "emitApp z x ys")
   | Expr.box t x        => throw (Error.unimplemented "emitBox z x t")

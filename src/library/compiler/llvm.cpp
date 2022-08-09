@@ -185,8 +185,8 @@ lean_llvm_create_context(lean_object * /* w */) {
 extern "C" LEAN_EXPORT lean_object *
 lean_llvm_create_module(lean_object *ctx, lean_object *str,
                         lean_object * /* w */) {
-  LLVMModuleRef mod = LLVMModuleCreateWithNameInContext(
-      lean::string_ref(str).data(), lean_to_Context(ctx));
+  LLVMModuleRef mod =
+     LLVMModuleCreateWithNameInContext(lean_string_cstr(str), lean_to_Context(ctx));
   if (LLVM_DEBUG) {
     fprintf(stderr, "%s ; mod: %p\n", __PRETTY_FUNCTION__, mod);
   }
@@ -275,8 +275,8 @@ lean_llvm_get_named_global(lean_object *mod, lean_object *name,
 
 extern "C" LEAN_EXPORT lean_object *
 lean_llvm_build_global_string(lean_object *builder, lean_object *str, lean_object *name, lean_object * /* w */) {
-  lean::string_ref sref = lean::string_ref(str);
-  lean::string_ref nameref = lean::string_ref(name);
+  lean::string_ref sref = lean::string_ref(str, true);
+  lean::string_ref nameref = lean::string_ref(name, true);
   if (LLVM_DEBUG) {
     fprintf(stderr, "%s ; s: %s\n", __PRETTY_FUNCTION__, sref.data());
     fprintf(stderr, "...%s ; s: %s\n", __PRETTY_FUNCTION__, nameref.data());
@@ -604,7 +604,7 @@ lean_llvm_build_inbounds_gep(lean_object *builder, lean_object *pointer, lean_ob
   lean::array_ref<lean_object *> indices_array_ref(
       indices, true); // TODO: why do I need to bump up refcount here?
   LLVMValueRef *indices_carr = array_ref_to_ArrayLLVMValue(indices_array_ref);
-  lean::string_ref name_ref(name);
+  lean::string_ref name_ref(name, true);
   
   if (LLVM_DEBUG) {
     fprintf(stderr, "%s ; builder: %p\n", __PRETTY_FUNCTION__, builder);
@@ -704,7 +704,7 @@ lean_llvm_const_array(lean_object *elemty, lean_object *args,
 
 extern "C" LEAN_EXPORT lean_object *
 lean_llvm_const_string(lean_object *ctx, lean_object *s, lean_object * /* w */) {
-  lean::string_ref sref = lean::string_ref(s);
+  lean::string_ref sref = lean::string_ref(s, true);
   if (LLVM_DEBUG) {
     fprintf(stderr, "%s ; s: %s\n", __PRETTY_FUNCTION__, sref.data());
   }
