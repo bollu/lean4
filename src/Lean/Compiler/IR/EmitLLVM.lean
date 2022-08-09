@@ -311,6 +311,14 @@ def getOrCreateLeanBoxFn: M (LLVM.Ptr LLVM.Value) := do
 def callLeanBox (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
   LLVM.buildCall builder (← getOrCreateLeanBoxFn) #[arg] name
 
+-- ***void lean_mark_persistent (void *) ***--
+def getOrCreateLeanMarkPersistentFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
+  getOrCreateFunctionPrototype ctx mod (← LLVM.i1Type ctx) "lean_mark_persistent"  #[(← LLVM.voidPtrType ctx)]
+
+def callLeanMarkPersistentFn (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value): M Unit := do
+  let _ ← LLVM.buildCall builder (← getOrCreateLeanMarkPersistentFn (← getLLVMContext) (← getLLVMModule)) #[arg] ""
+
+
 
 -- ***lean_{inc, dec}_{ref?}_{1,n}***
 inductive RefcountKind where
@@ -1479,9 +1487,8 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
         emit "}"
       -/
         throw (Error.unimplemented "unimplemented emitDeclInit [d.params.size == 0]")
-    | _ =>
-      -- throw (Error.unimplemented "emitMarkPersistent")
-      -- emitCName n; emit " = "; emitCInitName n; emitLn "();"; emitMarkPersistent d n
+    | _ => do
+          -- emitCName n; emit " = "; emitCInitName n; emitLn "();"; emitMarkPersistent d n
       -- TODO: should this be global?
       let llvmty ← toLLVMType (← getLLVMContext) d.resultType
       let dslot ←  LLVM.getOrAddGlobal (← getLLVMModule) (← toCName n) llvmty
@@ -1492,6 +1499,16 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
                     | .none => throw (Error.compileError s!"unable to find function {← toCInitName n}")
       let dval ← LLVM.buildCall builder dInitFn #[] ""
       LLVM.buildStore builder dval dslot
+       /-
+       def emitMarkPersistent (d : Decl) (n : Name) : M Unit := do
+          if d.resultType.isObj then
+             emit "lean_mark_persistent("
+            emitCName n
+            emitLn ");"
+      -/
+      if d.resultType.isObj then
+         callLeanMarkPersistentFn builder dval
+
 
 def emitInitFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder: LLVM.Ptr LLVM.Builder): M Unit := do
   let env ← getEnv
@@ -1568,11 +1585,10 @@ def getOrCreateLeanSetPanicMessages (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr 
 
 
 def getOrCreateLeanIOMarkEndInitializationFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
-  -- lean_object* lean_io_mk_world();
   getOrCreateFunctionPrototype ctx mod (← LLVM.voidType ctx) "lean_io_mark_end_initialization"  #[]
 
+-- bool lean_io_result_is_ok (void *) --
 def getOrCreateLeanIOResultIsOkFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
-  -- lean_object* lean_io_mk_world();
   getOrCreateFunctionPrototype ctx mod (← LLVM.i1Type ctx) "lean_io_result_is_ok"  #[(← LLVM.voidPtrType ctx)]
 
 def callLeanIOResultIsOk (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
