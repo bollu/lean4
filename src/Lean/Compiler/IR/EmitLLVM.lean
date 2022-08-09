@@ -347,8 +347,8 @@ def getOrCreateLeanRefcountFn (kind: RefcountKind) (ref?: Bool) (size: RefcountD
 
 def callLeanRefcountFn (builder: LLVM.Ptr LLVM.Builder)
   (kind: RefcountKind) (ref?: Bool) (arg: LLVM.Ptr LLVM.Value)
-  (size: Option (LLVM.Ptr LLVM.Value) := Option.none): M Unit := do
-  match size with
+  (delta: Option (LLVM.Ptr LLVM.Value) := Option.none): M Unit := do
+  match delta with
   | .none => let _ ← LLVM.buildCall builder (← getOrCreateLeanRefcountFn kind ref? RefcountDelta.one) #[arg] ""
   | .some n => let _ ← LLVM.buildCall builder (← getOrCreateLeanRefcountFn kind ref? RefcountDelta.n) #[arg, n] ""
 
@@ -875,7 +875,24 @@ def emitCtor (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (c : CtorInfo) (ys : A
 -- ^^^ emitVDecl.emitCtor
 
 -- vvv emitVDecl vvv
+/-
+def emitInc (x : VarId) (n : Nat) (checkRef : Bool) : M Unit := do
+  emit $
+    if checkRef then (if n == 1 then "lean_inc" else "lean_inc_n")
+    else (if n == 1 then "lean_inc_ref" else "lean_inc_ref_n")
+  emit "("; emit x
+  if n != 1 then emit ", "; emit n
+  emitLn ");"
+-/
 
+def emitInc (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (n : Nat) (checkRef : Bool) : M Unit := do
+  let xslot ← emitLhs x
+  let xv ← LLVM.buildLoad builder xslot ""
+  if n != 1
+  then do
+     let nv ← LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat n)
+     callLeanRefcountFn builder (kind := RefcountKind.inc) (ref? := checkRef) (delta := nv) xv
+  else callLeanRefcountFn builder (kind := RefcountKind.inc) (ref? := checkRef) xv
 
 
 /-
@@ -891,7 +908,7 @@ def emitDec (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (n : Nat) (checkRef : B
   let xv ← LLVM.buildLoad builder xslot ""
   if n != 1
   then throw (Error.compileError "expected n = 1 for emitDec")
-  else callLeanRefcountFn builder (kind := RefcountKind.inc) (ref? := checkRef) xv
+  else callLeanRefcountFn builder (kind := RefcountKind.dec) (ref? := checkRef) xv
 
 
 
@@ -1102,7 +1119,7 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.uproj i x      => throw (Error.unimplemented "emitUProj z i x")
   | Expr.sproj n o x    => throw (Error.unimplemented "emitSProj z t n o x")
   | Expr.fap c ys       => emitFullApp builder z c ys
-  | Expr.pap c ys       => throw (Error.unimplemented "emitPartialApp z c ys")
+  | Expr.pap c ys       => IO.eprintln "SKIP: emitPartialApp"   -- throw (Error.unimplemented "emitPartialApp z c ys")
   | Expr.ap x ys        => throw (Error.unimplemented "emitApp z x ys")
   | Expr.box t x        => throw (Error.unimplemented "emitBox z x t")
   | Expr.unbox x        => throw (Error.unimplemented "emitUnbox z t x")
@@ -1223,11 +1240,9 @@ partial def emitBlock (builder: LLVM.Ptr LLVM.Builder) (b : FnBody) : M Unit := 
     else
       emitVDecl builder x t v
       emitBlock builder b
-  | FnBody.inc x n c p b       => throw (Error.unimplemented "inc")
-  /-
-    unless p do emitInc x n c
-    emitBlock b
-  -/
+  | FnBody.inc x n c p b       =>
+    unless p do emitInc builder x n c
+    emitBlock builder b
   | FnBody.dec x n c p b       =>
     unless p do emitDec builder x n c
     emitBlock builder b
