@@ -31,7 +31,8 @@ function compile_lean_llvm_backend {
     lean --c="$f.c" "$f" || fail "Failed to compile $f into C file"
     clang-format -i "$f.c"
     clang $(leanc --print-cflags) -S -emit-llvm "$f.c" -o "$f.c.ll" # generate ll.
-    opt -S -O2 "$f.c.ll" -o "$f.o2.ll" # optimise it a little to be much more readable.
+    sed -i "s/optnone//g" "$f.c.ll" # remove optnone to actually allow some optimisation.
+    opt -S -O2 "$f.c.ll" -o "$f.c.o2.ll" # optimise it a little to be much more readable.
 
     # TODO: find a sane way to pick this path up, similar to the way leanc hardcodes these paths via flags with --print-cflags
     # Also, this should be in stage0, since we want it to be present in all circumstances.

@@ -355,12 +355,16 @@ def callLeanRefcountFn (builder: LLVM.Ptr LLVM.Builder)
 
 
 -- **decRef1***
-def callLeanDecRef1 (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value): M Unit := do
-   callLeanRefcountFn builder RefcountKind.dec (ref? := True) arg
+def getOrCreateLeanDecRefFn: M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  getOrCreateFunctionPrototype ctx (← getLLVMModule)
+    (← LLVM.voidType ctx) "lean_dec_ref"  #[(← LLVM.i8PtrType ctx)]
 
--- ***decRefN***
-def callLeanDecRefN (builder: LLVM.Ptr LLVM.Builder) (arg n: LLVM.Ptr LLVM.Value): M Unit := do
-  callLeanRefcountFn builder RefcountKind.dec (ref? := True) arg (size := n)
+-- Do NOT attempt to merge this code with callLeanRefcountFn, because of the uber confusing
+-- semantics of 'ref?'. If 'ref?' is true, it calls the version that is lean_dec
+def callLeanDecRef (builder: LLVM.Ptr LLVM.Builder) (res: LLVM.Ptr LLVM.Value): M Unit := do
+   let _ ← LLVM.buildCall builder (← getOrCreateLeanDecRefFn) #[res] ""
+
 
 -- ***lean_unsigned_to_nat***
 def getOrCreateLeanUnsignedToNatFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
@@ -1725,7 +1729,7 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
   let res_is_ok ← callLeanIOResultIsOk builder resv "res_is_ok"
   buildIfThen_ builder main "resIsOkBranches"  res_is_ok
     (fun builder => do -- then clause of the builder)
-      callLeanDecRef1 builder resv
+      callLeanDecRef builder resv
       callLeanInitTaskManager builder
       if xs.size == 2 then
         let inv ← callLeanBox builder (← LLVM.constInt (← LLVM.size_tType ctx) 0) "inv"
@@ -1802,7 +1806,7 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
     (fun builder => do -- else builder
         let resv ← LLVM.buildLoad builder res "resv"
         callLeanIOResultShowError builder resv ""
-        callLeanDecRef1 builder resv
+        callLeanDecRef builder resv
         let _ ← LLVM.buildRet builder (← LLVM.constInt64 ctx 0)
         pure ShouldForwardControlFlow.no)
   -- at the merge
