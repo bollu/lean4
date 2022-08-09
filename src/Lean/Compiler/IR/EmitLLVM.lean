@@ -375,6 +375,20 @@ def callLeanUnsignedToNatFn (builder: LLVM.Ptr LLVM.Builder) (n: Nat) (name: Str
   let nv ← LLVM.constIntUnsigned ctx (UInt64.ofNat n)
   LLVM.buildCall builder (← getOrCreateLeanUnsignedToNatFn ctx (← getLLVMModule)) #[nv] name
 
+
+-- **lean_mk_string_from_bytes***
+def getOrCreateMkStringFromBytesFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
+  getOrCreateFunctionPrototype ctx mod (← LLVM.voidPtrType ctx) "lean_mk_string_from_bytes"
+    #[← LLVM.voidPtrType ctx, ← LLVM.i64Type ctx]
+
+def callLeanMkStringFromBytesFn
+   (builder: LLVM.Ptr LLVM.Builder) (strPtr nBytes: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  LLVM.buildCall builder (← getOrCreateMkStringFromBytesFn ctx (← getLLVMModule)) #[strPtr, nBytes] name
+
+
+
+
 -- ***lean_cstr_to_nat***
 -- TODO: build strings.
 def getOrCreateLeanCStrToNatFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
@@ -1053,7 +1067,9 @@ def emitLit (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : LitVa
                  let str_global ← LLVM.buildGlobalString builder (quoteString v) "" -- (v.utf8ByteSiz)
                  -- access through the global, into the 0th index of the array
                  let zero ← LLVM.constIntUnsigned (← getLLVMContext) 0
-                 LLVM.buildInBoundsGEP builder str_global  #[zero, zero] ""
+                 let strPtr ← LLVM.buildInBoundsGEP builder str_global  #[zero, zero] ""
+                 let nbytes ← LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat (v.utf8ByteSize))
+                 callLeanMkStringFromBytesFn builder strPtr nbytes ""
   LLVM.buildStore builder zv zslot
 
 
@@ -1549,11 +1565,11 @@ def emitInitFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
     "lean_dec_ref(res);"]
   -/
   env.imports.forM fun import => do
-    let importFnTy ← LLVM.functionType (← LLVM.voidPtrType ctx) #[ (← LLVM.i8Type ctx), (← LLVM.voidPtrType ctx)] (isVarArg := false)
+    let importFnTy ← LLVM.functionType (← LLVM.voidPtrType ctx) #[ (← LLVM.i8Type ctx), (← LLVM.voidPtrType ctx)]
     let importInitFn ← LLVM.getOrAddFunction mod (mkModuleInitializationFunctionName import.module) importFnTy
     let builtin ← LLVM.getParam initFn 0
     let world ← callLeanIOMkWorld builder
-    let res ← LLVM.buildCall builder initFn #[builtin, world] ("res_" ++ import.module.mangle)
+    let res ← LLVM.buildCall builder importInitFn #[builtin, world] ("res_" ++ import.module.mangle)
     let err? ← callLeanIOResultIsError builder res ("res_is_error_"  ++ import.module.mangle)
     buildIfThen_ builder initFn ("IsError" ++ import.module.mangle) err?
       (fun builder => do
