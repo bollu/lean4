@@ -170,6 +170,9 @@ opaque buildMul (builder: @&Ptr Builder) (x y: @&Ptr Value) (name: @&String): IO
 @[extern "lean_llvm_build_add"]
 opaque buildAdd (builder: @&Ptr Builder) (x y: @&Ptr Value) (name: @&String): IO (Ptr Value)
 
+@[extern "lean_llvm_build_not"]
+opaque buildNot (builder: @&Ptr Builder) (x: @&Ptr Value) (name: @&String := ""): IO (Ptr Value)
+
 @[extern "lean_llvm_add_case"]
 opaque addCase (switch onVal: @&Ptr Value) (destBB: @&Ptr BasicBlock): IO Unit
 
@@ -898,11 +901,9 @@ def emitLhsVal (builder: LLVM.Ptr LLVM.Builder) (x: VarId) (name: String := ""):
   let xslot ← emitLhsSlot_ x
   LLVM.buildLoad builder xslot name
 
-def updateLhsSlot (builder: LLVM.Ptr LLVM.Builder) (x: VarId) (name: String := "") (k: LLVM.Ptr LLVM.Value → M (LLVM.Ptr LLVM.Value)): M Unit := do
-  let xslot ← emitLhsSlot_ x
-  let xv ← LLVM.buildLoad builder xslot name
-  let xv' ← k xv
-  LLVM.buildStore builder xv' xslot
+def emitLhsSlotStore (builder: LLVM.Ptr LLVM.Builder) (x: VarId) (v: LLVM.Ptr LLVM.Value): M Unit := do
+  let slot ← emitLhsSlot_ x
+  LLVM.buildStore builder v slot
 
 
 
@@ -1255,10 +1256,9 @@ def callLeanCtorGet (builder: LLVM.Ptr LLVM.Builder) (x i: LLVM.Ptr LLVM.Value) 
 
 
 def emitProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (i : Nat) (x : VarId) : M Unit := do
-  let zslot ← emitLhsSlot_ z
   let xval ← emitLhsVal builder x
   let zval ← callLeanCtorGet builder xval (← constIntUnsigned i) ""
-  LLVM.buildStore builder zval zslot
+  emitLhsSlotStore builder z zval
 
 -- ***usize lean_ctor_get_usize(void *obj, int ix)***
 def callLeanCtorGetUsize (builder: LLVM.Ptr LLVM.Builder) (x i: LLVM.Ptr LLVM.Value) (retName: String): M (LLVM.Ptr LLVM.Value) := do
@@ -1271,10 +1271,9 @@ def callLeanCtorGetUsize (builder: LLVM.Ptr LLVM.Builder) (x i: LLVM.Ptr LLVM.Va
 
 
 def emitUProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (i : Nat) (x : VarId) : M Unit := do
-  let zslot ← emitLhsSlot_ z;
   let xval ← emitLhsVal builder x
   let zval ← callLeanCtorGetUsize builder xval (← constIntUnsigned i) ""
-  LLVM.buildStore builder zval zslot
+  emitLhsSlotStore builder z zval
 
 /-
 def emitOffset (n : Nat) (offset : Nat) : M Unit := do
@@ -1300,7 +1299,6 @@ def emitOffset (builder: LLVM.Ptr LLVM.Builder )(n : Nat) (offset : Nat) : M (LL
 
 def emitSProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (n offset : Nat) (x : VarId) : M Unit := do
   let ctx ← getLLVMContext
-  let zslot ← emitLhsSlot_ z;
   let (fnName, retty) ←
     match t with
     | IRType.float  => pure ("lean_ctor_get_float", ← LLVM.floatType ctx)
@@ -1314,14 +1312,23 @@ def emitSProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (n offse
   let xval ← emitLhsVal builder x
   let offset ← emitOffset builder n offset
   let zval ← LLVM.buildCall builder fn  #[xval, offset] ""
-  LLVM.buildStore builder zval zslot
-
-/-
-def emitIsShared (z : VarId) (x : VarId) : M Unit := do
-    emitLhsSlot_ z; emit "!lean_is_exclusive("; emit x; emitLn ");"
--/
+  emitLhsSlotStore builder z zval
 
 
+-- ***int lean_is_exclusive(lean_obj_arg o)***
+def callLeanIsExclusive (builder: LLVM.Ptr LLVM.Builder) (closure: LLVM.Ptr LLVM.Value) (retName: String := ""): M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  let fnName :=  "lean_is_exclusive"
+  let retty ← LLVM.size_tType ctx
+  let argtys := #[ ← LLVM.voidPtrType ctx]
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  LLVM.buildCall builder fn  #[closure] retName
+
+def emitIsShared (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (x : VarId) : M Unit := do
+    let xv ← emitLhsVal builder x
+    let exclusive? ← callLeanIsExclusive builder xv
+    let shared? ← LLVM.buildNot builder exclusive?
+    emitLhsSlotStore builder z shared?
 
 /-
 def emitVDecl (z : VarId) (t : IRType) (v : Expr) : M Unit :=
@@ -1354,7 +1361,7 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.ap x ys        => throw (Error.unimplemented "emitApp z x ys")
   | Expr.box t x        => throw (Error.unimplemented "emitBox z x t")
   | Expr.unbox x        => throw (Error.unimplemented "emitUnbox z t x")
-  | Expr.isShared x     => throw (Error.unimplemented "emitIsShared x z")
+  | Expr.isShared x     => emitIsShared builder z x
   | Expr.isTaggedPtr x  => throw (Error.unimplemented "emitIsTaggedPtr z x")
   | Expr.lit v          => let _ ← emitLit builder z t v
 
