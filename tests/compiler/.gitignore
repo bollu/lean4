@@ -1,3 +1,9 @@
 *.lean.out
 *.lean.c
 test_flags.sh
+*.lean.bc
+*.lean.bc.o2.ll
+*.lean.c.o2.ll
+*.lean.linked.bc
+*.lean.c.o2.ll
+*.lean.o
