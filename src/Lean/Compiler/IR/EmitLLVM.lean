@@ -1089,7 +1089,8 @@ def emitSimpleExternalCall
   for (p, y) in ps.zip ys do
     if !p.ty.isIrrelevant then
       argTys := argTys.push (← toLLVMType (← getLLVMContext) p.ty)
-      args := args.push (← emitArg builder y)
+      let argSlot ← emitArg builder y
+      args := args.push (← LLVM.buildLoad builder argSlot "")
   let fnty ← LLVM.functionType (← toLLVMType (← getLLVMContext) retty) argTys
   let fn ← LLVM.getOrAddFunction (← getLLVMModule) f fnty
   LLVM.buildCall builder fn args name
@@ -1188,7 +1189,8 @@ def emitFullApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys : A
         let fv ← getOrAddFunIdValue builder f
         let ys ←  ys.mapM (fun y => do
             let yslot ← emitArg builder y
-            LLVM.buildLoad builder yslot "")
+            let yv ← LLVM.buildLoad builder yslot ""
+            return yv)
         let zv ← LLVM.buildCall builder fv ys ""
         LLVM.buildStore builder zv zslot
     else
