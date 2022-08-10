@@ -888,11 +888,25 @@ def emitTailCall (v : Expr) : M Unit :=
 
 -- vvv emitVDecl.emitCtor
 -- TODO: think if I need to actually load the value from the slot here.
-def emitLhs (x: VarId): M (LLVM.Ptr LLVM.Value) := do
+def emitLhsSlot_ (x: VarId): M (LLVM.Ptr LLVM.Value) := do
   let state ← get
   match state.var2val.find? x with
   | .some v => return v
   | .none => throw (Error.compileError s!"unable to find variable {x}")
+
+def emitLhsVal (builder: LLVM.Ptr LLVM.Builder) (x: VarId) (name: String := ""): M (LLVM.Ptr LLVM.Value) := do
+  let xslot ← emitLhsSlot_ x
+  LLVM.buildLoad builder xslot name
+
+def updateLhsSlot (builder: LLVM.Ptr LLVM.Builder) (x: VarId) (name: String := "") (k: LLVM.Ptr LLVM.Value → M (LLVM.Ptr LLVM.Value)): M Unit := do
+  let xslot ← emitLhsSlot_ x
+  let xv ← LLVM.buildLoad builder xslot name
+  let xv' ← k xv
+  LLVM.buildStore builder xv' xslot
+
+
+
+
 
 /-
 def argToCString (x : Arg) : String :=
@@ -903,15 +917,19 @@ def argToCString (x : Arg) : String :=
 def emitArg (x : Arg) : M Unit :=
   emit (argToCString x)
 -/
-def emitArg (builder: LLVM.Ptr LLVM.Builder) (x : Arg) : M (LLVM.Ptr LLVM.Value) := do
+def emitArgSlot_ (builder: LLVM.Ptr LLVM.Builder) (x : Arg) : M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
   match x with
-  | Arg.var x => emitLhs x
+  | Arg.var x => emitLhsSlot_ x
   | _ => do
     let slot ← LLVM.buildAlloca builder (← LLVM.voidPtrType ctx) "irrelevant_slot"
     let v ← callLeanBox builder (← LLVM.constIntUnsigned ctx 0) "irrelevant_val"
     let _ ← LLVM.buildStore builder v slot
     return slot
+
+def emitArgVal (builder: LLVM.Ptr LLVM.Builder) (x: Arg) (name: String := ""): M (LLVM.Ptr LLVM.Value) := do
+  let xslot ← emitArgSlot_ builder x
+  LLVM.buildLoad builder xslot name
 /-
 def emitCtorScalarSize (usize : Nat) (ssize : Nat) : M Unit := do
   if usize == 0 then emit ssize
@@ -935,17 +953,17 @@ def emitAllocCtor (builder: LLVM.Ptr LLVM.Builder) (c : CtorInfo) : M (LLVM.Ptr 
 /-
 def emitCtorSetArgs (z : VarId) (ys : Array Arg) : M Unit :=
   ys.size.forM fun i => do
-    emit "lean_ctor_set("; emit z; emit ", "; emit i; emit ", "; emitArg ys[i]!; emitLn ");"
+    emit "lean_ctor_set("; emit z; emit ", "; emit i; emit ", "; emitArgSlot_ ys[i]!; emitLn ");"
 -/
 def emitCtorSetArgs (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (ys : Array Arg) : M Unit := do
   IO.eprintln "##-1##"
   ys.size.forM fun i => do
-    -- -- emit "lean_ctor_set("; emit z; emit ", "; emit i; emit ", "; emitArg ys[i]!; emitLn ");"
+    -- -- emit "lean_ctor_set("; emit z; emit ", "; emit i; emit ", "; emitArgSlot_ ys[i]!; emitLn ");"
     IO.println "#######0#######"
-    let zslot ← emitLhs z;
+    let zslot ← emitLhsSlot_ z;
     let zv ← LLVM.buildLoad builder zslot "z"
     -- IO.eprintln "##1##"
-    let yslot ← emitArg builder ys[i]!
+    let yslot ← emitArgSlot_ builder ys[i]!
     let yv ← LLVM.buildLoad builder yslot "y"
     -- IO.eprintln "##2##"
     let iv ← LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat i)
@@ -957,14 +975,14 @@ def emitCtorSetArgs (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (ys : Array Arg
     pure ()
 /-
 def emitCtor (z : VarId) (c : CtorInfo) (ys : Array Arg) : M Unit := do
-  emitLhs z;
+  emitLhsSlot_ z;
   if c.size == 0 && c.usize == 0 && c.ssize == 0 then do
     emit "lean_box("; emit c.cidx; emitLn ");"
   else do
     emitAllocCtor c; emitCtorSetArgs z ys
 -/
 def emitCtor (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (c : CtorInfo) (ys : Array Arg) : M Unit := do
-  let slot ← emitLhs z;
+  let slot ← emitLhsSlot_ z;
   addVartoState z slot
 
   let ctx ← getLLVMContext
@@ -992,8 +1010,7 @@ def emitInc (x : VarId) (n : Nat) (checkRef : Bool) : M Unit := do
 -/
 
 def emitInc (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (n : Nat) (checkRef : Bool) : M Unit := do
-  let xslot ← emitLhs x
-  let xv ← LLVM.buildLoad builder xslot ""
+  let xv ← emitLhsVal builder x
   if n != 1
   then do
      let nv ← LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat n)
@@ -1010,8 +1027,7 @@ def emitDec (x : VarId) (n : Nat) (checkRef : Bool) : M Unit := do
 -/
 
 def emitDec (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (n : Nat) (checkRef : Bool) : M Unit := do
-  let xslot ← emitLhs x
-  let xv ← LLVM.buildLoad builder xslot ""
+  let xv ← emitLhsVal builder x
   if n != 1
   then throw (Error.compileError "expected n = 1 for emitDec")
   else callLeanRefcountFn builder (kind := RefcountKind.dec) (ref? := checkRef) xv
@@ -1074,7 +1090,7 @@ def emitSimpleExternalCall (f : String) (ps : Array Param) (ys : Array Arg) : M 
         pure first
       else do
         unless first do emit ", "
-        emitArg ys[i]!
+        emitArgSlot_ ys[i]!
         pure false)
     true
   emitLn ");"
@@ -1089,8 +1105,7 @@ def emitSimpleExternalCall
   for (p, y) in ps.zip ys do
     if !p.ty.isIrrelevant then
       argTys := argTys.push (← toLLVMType (← getLLVMContext) p.ty)
-      let argSlot ← emitArg builder y
-      args := args.push (← LLVM.buildLoad builder argSlot "")
+      args := args.push (← emitArgVal builder y "")
   let fnty ← LLVM.functionType (← toLLVMType (← getLLVMContext) retty) argTys
   let fn ← LLVM.getOrAddFunction (← getLLVMModule) f fnty
   LLVM.buildCall builder fn args name
@@ -1137,41 +1152,41 @@ def constIntUnsigned (n: Nat): M (LLVM.Ptr LLVM.Value) :=  do
 def emitPartialApp (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
   let decl ← getDecl f
   let arity := decl.params.size;
-  emitLhs z; emit "lean_alloc_closure((void*)("; emitCName f; emit "), "; emit arity; emit ", "; emit ys.size; emitLn ");";
+  emitLhsSlot_ z; emit "lean_alloc_closure((void*)("; emitCName f; emit "), "; emit arity; emit ", "; emit ys.size; emitLn ");";
   ys.size.forM fun i => do
     let y := ys[i]!
-    emit "lean_closure_set("; emit z; emit ", "; emit i; emit ", "; emitArg y; emitLn ");"
+    emit "lean_closure_set("; emit z; emit ", "; emit i; emit ", "; emitArgSlot_ y; emitLn ");"
 -/
 
 def emitPartialApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
   let decl ← getDecl f
   let fv ← getOrAddFunIdValue builder f
   let arity := decl.params.size;
-  let zslot ← emitLhs z
+  let zslot ← emitLhsSlot_ z
   let fv_voidptr ← LLVM.buildPointerCast builder fv (← LLVM.voidPtrType (← getLLVMContext)) ""
   let zval ← callLeanAllocClosureFn builder fv_voidptr
                                     (← constIntUnsigned arity)
                                     (← constIntUnsigned ys.size) ""
   LLVM.buildStore builder zval zslot
   ys.size.forM fun i => do
-    let yslot ← emitArg builder ys[i]!
+    let yslot ← emitArgSlot_ builder ys[i]!
     let yval ← LLVM.buildLoad builder yslot ""
     callLeanClosureSetFn builder zval (← constIntUnsigned i) yval ""
 
 
 /-
 def emitFullApp (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
-  emitLhs z
+  emitLhsSlot_ z
   let decl ← getDecl f
   match decl with
   | Decl.extern _ ps _ extData => emitExternCall f ps extData ys
   | _ =>
     emitCName f
-    if ys.size > 0 then emit "("; emitArgs ys; emit ")"
+    if ys.size > 0 then emit "("; emitArgSlot_s ys; emit ")"
     emitLn ";"
 -/
 def emitFullApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
-  let zslot ← emitLhs z
+  let zslot ← emitLhsSlot_ z
   let decl ← getDecl f
   match decl with
   | Decl.extern _ ps retty extData =>
@@ -1188,7 +1203,7 @@ def emitFullApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys : A
     if ys.size > 0 then
         let fv ← getOrAddFunIdValue builder f
         let ys ←  ys.mapM (fun y => do
-            let yslot ← emitArg builder y
+            let yslot ← emitArgSlot_ builder y
             let yv ← LLVM.buildLoad builder yslot ""
             return yv)
         let zv ← LLVM.buildCall builder fv ys ""
@@ -1197,18 +1212,18 @@ def emitFullApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys : A
        let zv ← getOrAddFunIdValue builder f
        LLVM.buildStore builder zv zslot
 
-   -- if ys.size > 0 then emit "("; emitArgs ys; emit ")"
+   -- if ys.size > 0 then emit "("; emitArgSlot_s ys; emit ")"
   -- emitLn ";"
 
 
 /-
 def emitLit (z : VarId) (t : IRType) (v : LitVal) : M Unit := do
-  emitLhs z;
+  emitLhsSlot_ z;
   match v with
   | LitVal.num v => emitNumLit t v; emitLn ";"
   | LitVal.str v => emit "lean_mk_string_from_bytes("; emit (quoteString v); emit ", "; emit v.utf8ByteSize; emitLn ");"
 -/
--- Note that this returns a *slot*, just like `emitLhs`.
+-- Note that this returns a *slot*, just like `emitLhsSlot_`.
 def emitLit (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : LitVal) : M (LLVM.Ptr LLVM.Value) := do
   let zslot ← LLVM.buildAlloca builder (← toLLVMType (← getLLVMContext) t) ""
   addVartoState z zslot
@@ -1240,9 +1255,8 @@ def callLeanCtorGet (builder: LLVM.Ptr LLVM.Builder) (x i: LLVM.Ptr LLVM.Value) 
 
 
 def emitProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (i : Nat) (x : VarId) : M Unit := do
-  let zslot ← emitLhs z
-  let xslot ← emitLhs x
-  let xval ← LLVM.buildLoad builder xslot ""
+  let zslot ← emitLhsSlot_ z
+  let xval ← emitLhsVal builder x
   let zval ← callLeanCtorGet builder xval (← constIntUnsigned i) ""
   LLVM.buildStore builder zval zslot
 
@@ -1257,9 +1271,8 @@ def callLeanCtorGetUsize (builder: LLVM.Ptr LLVM.Builder) (x i: LLVM.Ptr LLVM.Va
 
 
 def emitUProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (i : Nat) (x : VarId) : M Unit := do
-  let zslot ← emitLhs z;
-  let xslot ← emitLhs x
-  let xval ← LLVM.buildLoad builder xslot ""
+  let zslot ← emitLhsSlot_ z;
+  let xval ← emitLhsVal builder x
   let zval ← callLeanCtorGetUsize builder xval (← constIntUnsigned i) ""
   LLVM.buildStore builder zval zslot
 
@@ -1287,7 +1300,7 @@ def emitOffset (builder: LLVM.Ptr LLVM.Builder )(n : Nat) (offset : Nat) : M (LL
 
 def emitSProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (n offset : Nat) (x : VarId) : M Unit := do
   let ctx ← getLLVMContext
-  let zslot ← emitLhs z;
+  let zslot ← emitLhsSlot_ z;
   let (fnName, retty) ←
     match t with
     | IRType.float  => pure ("lean_ctor_get_float", ← LLVM.floatType ctx)
@@ -1298,11 +1311,16 @@ def emitSProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (n offse
     | _             => throw (Error.compileError "invalid instruction")
   let argtys := #[ ← LLVM.voidPtrType ctx, ← LLVM.size_tType ctx]
   let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
-  let xslot ← emitLhs x
-  let xval ← LLVM.buildLoad builder xslot ""
+  let xval ← emitLhsVal builder x
   let offset ← emitOffset builder n offset
   let zval ← LLVM.buildCall builder fn  #[xval, offset] ""
   LLVM.buildStore builder zval zslot
+
+/-
+def emitIsShared (z : VarId) (x : VarId) : M Unit := do
+    emitLhsSlot_ z; emit "!lean_is_exclusive("; emit x; emitLn ");"
+-/
+
 
 
 /-
@@ -1336,7 +1354,7 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.ap x ys        => throw (Error.unimplemented "emitApp z x ys")
   | Expr.box t x        => throw (Error.unimplemented "emitBox z x t")
   | Expr.unbox x        => throw (Error.unimplemented "emitUnbox z t x")
-  | Expr.isShared x     => throw (Error.unimplemented "emitIsShared z x")
+  | Expr.isShared x     => throw (Error.unimplemented "emitIsShared x z")
   | Expr.isTaggedPtr x  => throw (Error.unimplemented "emitIsTaggedPtr z x")
   | Expr.lit v          => let _ ← emitLit builder z t v
 
@@ -1395,16 +1413,14 @@ def emitTag (x : VarId) (xType : IRType) : M Unit := do
 -/
 def emitTag (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (xType : IRType) : M (LLVM.Ptr LLVM.Value) := do
   if xType.isObj then do
-    let xslot ← emitLhs x
+    let xslot ← emitLhsSlot_ x
     let xval ← LLVM.buildLoad builder xslot ""
     callLeanObjTag builder xval ""
     -- emit "lean_obj_tag("; emit x; emit ")"
   else if xType.isScalar then do
     -- TODO (bollu): is it correct to assume that emitLit will do the right thing
     -- if it's not an object?
-    let xslot ← emitLhs x
-    let xval ← LLVM.buildLoad builder xslot ""
-    return xval
+    emitLhsVal builder x
   else
     throw (Error.compileError "don't know how to `emitTag` in general")
 
@@ -1486,7 +1502,7 @@ partial def emitBlock (b : FnBody) : M Unit := do
   | FnBody.uset x i y b        => emitUSet x i y; emitBlock b
   | FnBody.sset x i o y t b    => emitSSet x i o y t; emitBlock b
   | FnBody.mdata _ b           => emitBlock b
-  | FnBody.ret x               => emit "return "; emitArg x; emitLn ";"
+  | FnBody.ret x               => emit "return "; emitArgSlot_ x; emitLn ";"
   | FnBody.case _ x xType alts => emitCase x xType alts
   | FnBody.jmp j xs            => emitJmp j xs
   | FnBody.unreachable         => emitLn "lean_internal_panic_unreachable();"
@@ -1536,10 +1552,9 @@ partial def emitBlock (builder: LLVM.Ptr LLVM.Builder) (b : FnBody) : M Unit := 
   -/
   | FnBody.ret x               => do
       /-
-      emit "return "; emitArg x; emitLn ";"
+      emit "return "; emitArgSlot_ x; emitLn ";"
       -/
-      let xslot ← emitArg builder x
-      let xv ← LLVM.buildLoad builder xslot "ret_val"
+      let xv ← emitArgVal builder x "ret_val"
       let _ ← LLVM.buildRet builder xv
   | FnBody.case _ x xType alts => -- throw (Error.unimplemented "case")
      emitCase builder x xType alts
