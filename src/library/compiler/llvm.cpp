@@ -933,6 +933,20 @@ extern "C" LEAN_EXPORT uint64_t llvm_count_params(lean_object *f,
   return n;
 }
 
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_set_tail_call(lean_object *fnval, uint8_t isTail,
+                     lean_object * /* w */) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "...%s ; fnval: %s\n", __PRETTY_FUNCTION__,
+            LLVMPrintValueToString(lean_to_Value(fnval)));
+    fprintf(stderr, "...%s ; isTail?: %d\n", __PRETTY_FUNCTION__,
+            isTail);
+  }
+  LLVMSetTailCall(lean_to_Value(fnval), isTail);
+  return lean_io_result_mk_ok(lean_box(0));
+}
+
+
 /*
 /usr/bin/ld:
 /home/bollu/work/lean-llvm/lean4/build/stage1/lib/lean/libleanshared.so:

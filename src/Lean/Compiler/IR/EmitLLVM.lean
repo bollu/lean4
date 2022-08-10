@@ -127,6 +127,9 @@ opaque positionBuilderAtEnd (builder: @&Ptr Builder) (bb: @& Ptr BasicBlock): IO
 @[extern "lean_llvm_build_call"]
 opaque buildCall (builder: @&Ptr Builder) (fn: @&Ptr Value) (args: @&Array (Ptr Value)) (name:  @&String := ""): IO (Ptr Value)
 
+@[extern "lean_llvm_set_tail_call"]
+opaque setTailCall (fn: @&Ptr Value) (isTail: Bool): IO Unit
+
 @[extern "lean_llvm_build_cond_br"]
 opaque buildCondBr (builder: @&Ptr Builder) (if_: @&Ptr Value) (thenbb: @&Ptr BasicBlock) (elsebb: @&Ptr BasicBlock): IO (Ptr Value)
 
@@ -871,36 +874,6 @@ def emitFileHeader : M Unit := return () -- this is purely C++ ceremony
 -- vvvemitFnsvvv
 
 
-def emitTailCall (v : Expr) : M Unit := do
-  debugPrint "emitTailCall"
-  match v with
-  | Expr.fap _ ys => do
-    let ctx ← read
-    let ps := ctx.mainParams
-    unless ps.size == ys.size do throw (Error.compileError "invalid tail call")
-    throw (Error.unimplemented "emitTailCall")
-    /-
-    if overwriteParam ps ys then
-      emitLn "{"
-      ps.size.forM fun i => do
-        let p := ps[i]!
-        let y := ys[i]!
-        unless paramEqArg p y do
-          emit (toCType p.ty); emit " _tmp_"; emit i; emit " = "; emitArg y; emitLn ";"
-      ps.size.forM fun i => do
-        let p := ps[i]!
-        let y := ys[i]!
-        unless paramEqArg p y do emit p.x; emit " = _tmp_"; emit i; emitLn ";"
-      emitLn "}"
-    else
-      ys.size.forM fun i => do
-        let p := ps[i]!
-        let y := ys[i]!
-        unless paramEqArg p y do emit p.x; emit " = "; emitArg y; emitLn ";"
-    emitLn "goto _start;"
-    -/
-  | _ => throw (Error.compileError "bug at emitTailCall")
-
 
 -- vvv emitVDecl.emitCtor
 -- TODO: think if I need to actually load the value from the slot here.
@@ -1531,6 +1504,25 @@ def emitSet (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (i : Nat) (y : Arg) : M
   let _ ← LLVM.buildCall builder fn  #[← emitLhsVal builder x, ← constIntUnsigned i, ← emitArgVal builder y]
 
 
+def emitTailCall (builder: LLVM.Ptr LLVM.Builder) (v : Expr) : M Unit := do
+  debugPrint "emitTailCall"
+  match v with
+  | Expr.fap _ ys => do
+    let ctx ← read
+    let ps := ctx.mainParams
+    unless ps.size == ys.size do throw (Error.compileError "invalid tail call")
+    -- throw (Error.unimplemented "emitTailCall")
+    -- TODO (bollu): we currently sneak the notion of 'current function' to be tail called
+    -- based on the IR builder state. This is Very Bad. Instead, it should be
+    -- explicit in our model.
+    let args ← ys.mapM (emitArgVal builder)
+    let fn ← builderGetInsertionFn builder
+    let call ← LLVM.buildCall builder fn args
+    -- TODO (bollu): add 'musttail' attribute
+    LLVM.setTailCall call true -- mark as tail call
+    let _ ← LLVM.buildRet builder call
+  | _ => throw (Error.compileError "bug at emitTailCall")
+
 
 /-
 mutual
@@ -1623,7 +1615,7 @@ partial def emitBlock (builder: LLVM.Ptr LLVM.Builder) (b : FnBody) : M Unit := 
     -- throw (Error.unimplemented "vdecl")
     let ctx ← read
     if isTailCallTo ctx.mainFn d then
-      emitTailCall v
+      emitTailCall builder v
     else
       emitVDecl builder x t v
       emitBlock builder b
