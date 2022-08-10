@@ -2247,6 +2247,7 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
       if retTy.constName? == some ``UInt32 then do
         let resv ← LLVM.buildLoad builder res "resv"
         let retv ← callLeanUnboxUint32 builder (← callLeanIOResultGetValue builder resv "io_val") "retv"
+        let retv ← LLVM.buildSext builder retv (← LLVM.i64Type ctx) "retv_sext"
         let _ ← LLVM.buildRet builder retv
         pure ShouldForwardControlFlow.no
       else do
