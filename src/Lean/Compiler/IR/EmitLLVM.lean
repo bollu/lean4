@@ -1518,6 +1518,18 @@ def emitTag (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (xType : IRType) : M (L
   else
     throw (Error.compileError "don't know how to `emitTag` in general")
 
+/-
+def emitSet (x : VarId) (i : Nat) (y : Arg) : M Unit := do
+  emit "lean_ctor_set("; emit x; emit ", "; emit i; emit ", "; emitArg y; emitLn ");"
+-/
+def emitSet (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (i : Nat) (y : Arg) : M Unit := do
+  let ctx ← getLLVMContext
+  let fnName :=  "lean_ctor_set"
+  let retty ← LLVM.voidType ctx
+  let argtys := #[ ← LLVM.voidPtrType ctx, ← LLVM.size_tType ctx, ← LLVM.voidPtrType ctx]
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  let _ ← LLVM.buildCall builder fn  #[← emitLhsVal builder x, ← constIntUnsigned i, ← emitArgVal builder y]
+
 
 
 /-
@@ -1629,10 +1641,8 @@ partial def emitBlock (builder: LLVM.Ptr LLVM.Builder) (b : FnBody) : M Unit := 
   /-
   emitSetTag x i; emitBlock b
   -/
-  | FnBody.set x i y b         => throw (Error.unimplemented "set")
-  /-
-  emitSet x i y; emitBlock b
-  -/
+  | FnBody.set x i y b         =>
+     emitSet builder x i y; emitBlock builder b
   | FnBody.uset x i y b        => throw (Error.unimplemented "uset")
   /-
   emitUSet x i y; emitBlock b
