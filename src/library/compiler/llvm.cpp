@@ -303,6 +303,19 @@ lean_llvm_build_global_string(lean_object *builder, lean_object *str, lean_objec
   }
   return lean_io_result_mk_ok(Value_to_lean(out));
 }
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_get_undef(lean_object *ty,
+                           lean_object * /* w */) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; ty: %s\n", __PRETTY_FUNCTION__, LLVMPrintTypeToString(lean_to_Type(ty)));
+  }
+  LLVMValueRef out = LLVMGetUndef(lean_to_Type(ty));
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "...%s ; out: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(out));
+  }
+  return lean_io_result_mk_ok(Value_to_lean(out));
+}
+
 
 
 extern "C" LEAN_EXPORT lean_object *

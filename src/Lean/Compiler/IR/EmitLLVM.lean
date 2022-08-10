@@ -109,6 +109,9 @@ opaque constString (ctx: @&Ptr Context) (str: @&String): IO (Ptr Value)
 @[extern "lean_llvm_const_pointer_null"]
 opaque constPointerNull (elemTy: @&Ptr LLVMType): IO (Ptr Value)
 
+@[extern "lean_llvm_get_undef"]
+opaque getUndef (elemTy: @&Ptr LLVMType): IO (Ptr Value)
+
 @[extern "lean_llvm_create_builder_in_context"]
 opaque createBuilderInContext (ctx: @&Ptr Context): IO (Ptr Builder)
 
@@ -1350,6 +1353,40 @@ def emitIsShared (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (x : VarId) : M Un
     let shared? ← LLVM.buildNot builder exclusive?
     emitLhsSlotStore builder z shared?
 
+
+def emitBox (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (x : VarId) (xType: IRType): M Unit := do
+  let fnName :=
+    match xType with
+    | IRType.usize  => "lean_box_usize"
+    | IRType.uint32 => "lean_box_uint32"
+    | IRType.uint64 => "lean_box_uint64"
+    | IRType.float  => "lean_box_float"
+    | _             => "lean_box"
+  let ctx ← getLLVMContext
+  let retty ← LLVM.voidPtrType ctx -- TODO (bollu): Lean uses i8 instead of i1 for booleans because C things?
+  let argtys := #[← toLLVMType xType]
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  let zv ← LLVM.buildCall builder fn  #[← emitLhsVal builder x] ""
+  emitLhsSlotStore builder z zv
+
+
+def emitUnbox (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (x : VarId) (retName: String := ""): M Unit := do
+  let ctx ← getLLVMContext
+  let fnName :=
+     match t with
+     | IRType.usize  => "lean_unbox_usize"
+     | IRType.uint32 => "lean_unbox_uint32"
+     | IRType.uint64 => "lean_unbox_uint64"
+     | IRType.float  => "lean_unbox_float"
+     | _             => "lean_unbox";
+  let argtys := #[← LLVM.voidPtrType ctx ]
+  let retty ← toLLVMType t
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  let zval ← LLVM.buildCall builder fn #[← emitLhsVal builder x] retName
+  emitLhsSlotStore builder z zval
+
+
+
 /-
 def emitVDecl (z : VarId) (t : IRType) (v : Expr) : M Unit :=
   match v with
@@ -1380,8 +1417,8 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.fap c ys       => emitFullApp builder z c ys
   | Expr.pap c ys       => emitPartialApp builder z c ys
   | Expr.ap x ys        => throw (Error.unimplemented "emitApp z x ys")
-  | Expr.box t x        => throw (Error.unimplemented "emitBox z x t")
-  | Expr.unbox x        => throw (Error.unimplemented "emitUnbox z t x")
+  | Expr.box t x        => emitBox builder z x t
+  | Expr.unbox x        => emitUnbox builder z t x
   | Expr.isShared x     => emitIsShared builder z x
   | Expr.isTaggedPtr x  => throw (Error.unimplemented "emitIsTaggedPtr z x")
   | Expr.lit v          => let _ ← emitLit builder z t v
@@ -1836,7 +1873,7 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
       -- TODO: should this be global?
       let llvmty ← toLLVMType d.resultType
       let dslot ←  LLVM.getOrAddGlobal (← getLLVMModule) (← toCName n) llvmty
-      LLVM.setInitializer dslot (← LLVM.constPointerNull llvmty)
+      LLVM.setInitializer dslot (← LLVM.getUndef llvmty)
       -- TODO (bollu): this should probably be getOrCreateNamedFunction
       let dInitFn ← match (← LLVM.getNamedFunction (← getLLVMModule) (←  toCInitName n)) with
                     | .some dInitFn =>pure dInitFn
