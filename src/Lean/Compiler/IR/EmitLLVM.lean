@@ -287,6 +287,7 @@ structure Context where
 
 structure State where
   var2val: Std.HashMap VarId (LLVM.Ptr LLVM.Value)
+  jp2bb: Std.HashMap JoinPointId (LLVM.Ptr LLVM.BasicBlock)
   -- arg2val: Std.HashMap Arg (LLVM.Ptr LLVM.Value)
 
 -- def State.createInitStateIO (modName: Name): IO State := do
@@ -317,6 +318,14 @@ instance : Inhabited (M α) where
 def addVartoState (x: VarId) (v: LLVM.Ptr LLVM.Value): M Unit :=
   modify (fun s => { s with var2val := s.var2val.insert x v}) -- add new variable
 
+def addJpTostate (jp: JoinPointId) (bb: LLVM.Ptr LLVM.BasicBlock): M Unit :=
+  modify (fun s => { s with jp2bb := s.jp2bb.insert jp bb })
+
+def emitJp (jp: JoinPointId): M (LLVM.Ptr LLVM.BasicBlock) := do
+  let state ← get
+  match state.jp2bb.find? jp with
+  | .some bb => return bb
+  | .none => throw (Error.compileError s!"unable to find join point {jp}")
 
 /-
 def getEnv : M Environment := Context.env <$> read
@@ -894,7 +903,6 @@ def emitLhsSlotStore (builder: LLVM.Ptr LLVM.Builder) (x: VarId) (v: LLVM.Ptr LL
 
 
 
-
 /-
 def argToCString (x : Arg) : String :=
   match x with
@@ -1453,7 +1461,9 @@ partial def declareVars : FnBody → Bool → M Bool
   | e,                        d => if e.isTerminal then pure d else declareVars e.body d
 -/
 
-partial def declareVars (builder: LLVM.Ptr LLVM.Builder): FnBody → M Unit
+partial def declareVars (builder: LLVM.Ptr LLVM.Builder) (f: FnBody): M Unit := do
+  debugPrint "declareVars"
+  match f with
   | e@(FnBody.vdecl x t _ b) => do
     let ctx ← read
     /-
@@ -1465,8 +1475,10 @@ partial def declareVars (builder: LLVM.Ptr LLVM.Builder): FnBody → M Unit
     declareVar builder x t; declareVars builder b
 
   | FnBody.jdecl _ xs _ b => do
-      throw (Error.unimplemented "declareVars.jdecl")
-      -- do declareParams xs; declareVars b (d || xs.size > 0)
+      for param in xs do
+        declareVar builder param.x param.ty
+      declareVars builder b
+      -- throw (Error.unimplemented "declareVars.jdecl")
   | e => do
       if e.isTerminal then pure () else declareVars builder e.body
 
@@ -1525,6 +1537,32 @@ def emitTailCall (builder: LLVM.Ptr LLVM.Builder) (v : Expr) : M Unit := do
 
 
 /-
+def emitJmp (j : JoinPointId) (xs : Array Arg) : M Unit := do
+  let ps ← getJPParams j
+  unless xs.size == ps.size do throw "invalid goto"
+  xs.size.forM fun i => do
+    let p := ps[i]!
+    let x := xs[i]!
+    emit p.x; emit " = "; emitArg x; emitLn ";"
+  emit "goto "; emit j; emitLn ";"
+-/
+def emitJmp (builder: LLVM.Ptr LLVM.Builder) (jp : JoinPointId) (xs : Array Arg) : M Unit := do
+ let ctx ← read;
+  let ps ← match ctx.jpMap.find? jp with
+  | some ps => pure ps
+  | none    => throw (Error.compileError "unknown join point")
+  unless xs.size == ps.size do throw (Error.compileError "invalid goto")
+  for (p, x)  in ps.zip xs do
+    let xv ← emitArgVal builder x
+    emitLhsSlotStore builder p.x xv
+    -- emit p.x; emit " = "; emitArg x; emitLn ";"
+  -- emit "goto "; emit j; emitLn ";"
+  let _ ← LLVM.buildBr builder (← emitJp jp)
+
+
+
+
+/-
 mutual
 -/
 mutual
@@ -1551,6 +1589,7 @@ partial def emitCase (x : VarId) (xType : IRType) (alts : Array Alt) : M Unit :=
     emitLn "}"
 -/
 partial def emitCase (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (xType : IRType) (alts : Array Alt) : M Unit := do
+    debugPrint "emitCase"
     let tag ← emitTag builder x xType
     let tag ← LLVM.buildSext builder tag (← LLVM.i64Type (← getLLVMContext))  ""
     -- TODO: sign extend tag into 64-bit.
@@ -1574,6 +1613,15 @@ partial def emitCase (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (xType : IRTyp
     -- emitLn "}"
     -- this builder does not have an insertion position after emitting a case
     LLVM.clearInsertionPosition builder
+
+-- contract: emitJP will keep the builder context untouched.
+partial def emitJDecl (builder: LLVM.Ptr LLVM.Builder) (jp: JoinPointId) (ps: Array Param) (b: FnBody): M Unit := do
+  let oldBB ← LLVM.getInsertBlock builder -- TODO: state saving into pattern
+  let jpbb ← builderAppendBasicBlock builder s!"jp_{jp.idx}"
+  addJpTostate jp jpbb
+  LLVM.positionBuilderAtEnd builder jpbb
+  emitBlock builder b
+  LLVM.positionBuilderAtEnd builder oldBB -- reset state
 
 
 
@@ -1609,8 +1657,9 @@ partial def emitBlock (b : FnBody) : M Unit := do
 partial def emitBlock (builder: LLVM.Ptr LLVM.Builder) (b : FnBody) : M Unit := do
   debugPrint "emitBlock"
   match b with
-  | FnBody.jdecl _ _  _ b      =>  throw (Error.unimplemented "join points are unimplemented")
-       --emitBlock b
+  | FnBody.jdecl j xs  v b      =>
+       emitJDecl builder j xs v
+       emitBlock builder b
   | d@(FnBody.vdecl x t v b)   => do
     -- throw (Error.unimplemented "vdecl")
     let ctx ← read
@@ -1627,7 +1676,7 @@ partial def emitBlock (builder: LLVM.Ptr LLVM.Builder) (b : FnBody) : M Unit := 
     emitBlock builder b
   | FnBody.del x b             => throw (Error.unimplemented "del")
   /-
-  emitDel x; emitBlock b
+ emitDel x; emitBlock b
   -/
   | FnBody.setTag x i b        => throw (Error.unimplemented "setTag")
   /-
@@ -1655,18 +1704,15 @@ partial def emitBlock (builder: LLVM.Ptr LLVM.Builder) (b : FnBody) : M Unit := 
       let _ ← LLVM.buildRet builder xv
   | FnBody.case _ x xType alts => -- throw (Error.unimplemented "case")
      emitCase builder x xType alts
-  | FnBody.jmp j xs            => throw (Error.unimplemented "jump")
-  /-
-  emitJmp j xs
-  -/
+  | FnBody.jmp j xs            =>
+     emitJmp builder j xs
   | FnBody.unreachable         => throw (Error.unimplemented "unreachable")
   /-
   emitLn "lean_internal_panic_unreachable();"
   -/
-
 /-
-partial def emitJPs : FnBody → M Unit
-  | FnBody.jdecl j _  v b => do emit j; emitLn ":"; emitFnBody v; emitJPs b
+partial def emitJPs (builder: LLVM.Ptr LLVM.Builder) (body: FnBody): M Unit := do
+  | FnBody.jdecl j _  v b => -- do emit j; emitLn ":"; emitFnBody v; emitJPs b
   | e                     => do unless e.isTerminal do emitJPs e.body
 -/
 
@@ -1682,16 +1728,17 @@ partial def emitFnBody (b : FnBody) : M Unit := do
   emitLn "}"
 -/
 partial def emitFnBody  (builder: LLVM.Ptr LLVM.Builder)  (b : FnBody): M Unit := do
-
+  debugPrint "emitFnBody"
   -- let declared ← declareVars b false
   -- if declared then emitLn ""
   declareVars builder b -- This looks very dangerous to @bollu, because we are literally creating stack slots with nothing in them.
+
+  -- emitJPs builder b
 
   -- emitLn "{"
   emitBlock builder b   -- emitBlock b
   -- LLVM.positionBuilderAtEnd builder bb
 
-  -- TODO (bollu): emitJPs b
   -- emitLn "}"
 
 /-
@@ -1795,7 +1842,7 @@ def emitDeclAux (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builde
       --     emit "lean_object* "; emit x.x; emit " = _args["; emit i; emitLn "];"
       -- emitLn "_start:";
       withReader (fun ctx => { ctx with mainFn := f, mainParams := xs }) (do
-        set { var2val := default : EmitLLVM.State } -- flush varuable map
+        set { var2val := default, jp2bb := default : EmitLLVM.State } -- flush varuable map
         let bb ← LLVM.appendBasicBlockInContext (← getLLVMContext) llvmfn "entry"
         LLVM.positionBuilderAtEnd builder bb
         emitFnArgs ctx builder llvmfn xs
@@ -2280,7 +2327,7 @@ def emitLLVM (env : Environment) (modName : Name) (filepath: String): IO Unit :=
   let llvmctx ← LLVM.createContext
   let module ← LLVM.createModule llvmctx modName.toString -- TODO: pass module name
   let ctx := {env := env, modName := modName, llvmctx := llvmctx, llvmmodule := module}
-  let initState := { var2val := default : EmitLLVM.State}
+  let initState := { var2val := default, jp2bb := default : EmitLLVM.State}
   let out? ← (EmitLLVM.main initState ctx).run
   match out? with
   | .ok _ =>  LLVM.writeBitcodeToFile ctx.llvmmodule filepath
