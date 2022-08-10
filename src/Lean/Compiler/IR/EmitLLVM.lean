@@ -304,6 +304,9 @@ instance : ToString Error where
 
 abbrev M := StateT State (ReaderT Context (ExceptT Error IO))
 
+instance : Inhabited (M α) where
+  default := throw (Error.compileError "inhabitant")
+
 
 def addVartoState (x: VarId) (v: LLVM.Ptr LLVM.Value): M Unit :=
   modify (fun s => { s with var2val := s.var2val.insert x v}) -- add new variable
@@ -328,6 +331,9 @@ def getDecl (n : Name) : M Decl := do
   | some d => pure d
   | none   => IO.eprintln "getDecl failed!"; throw (Error.unknownDeclaration n)
 
+
+def debugPrint (s: String): M Unit :=
+  IO.eprintln $ "[debug:" ++ s ++ "]"
 
 -- vv emitMainFnIfIneeded vv
 def getOrCreateFunctionPrototype (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module)
@@ -564,7 +570,9 @@ def toCType : IRType → String
   | IRType.struct _ _ => panic! "not implemented yet"
   | IRType.union _ _  => panic! "not implemented yet"
 -/
-def toLLVMType (ctx: LLVM.Ptr LLVM.Context): IRType → IO (LLVM.Ptr LLVM.LLVMType)
+def toLLVMType (t: IRType): M (LLVM.Ptr LLVM.LLVMType) := do
+  let ctx ← getLLVMContext
+  match t with
   | IRType.float      => LLVM.doubleTypeInContext ctx
   | IRType.uint8      => LLVM.intTypeInContext ctx 8
   | IRType.uint16     => LLVM.intTypeInContext ctx 16
@@ -726,6 +734,7 @@ def emitFnDeclAux (decl : Decl) (cppBaseName : String) (isExternal : Bool) : M U
 
 def emitFnDeclAux (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module)
   (decl : Decl) (cppBaseName : String) (isExternal : Bool) : M (LLVM.Ptr LLVM.Value) := do
+  debugPrint "emitFnDeclAux"
   IO.println s!"\nvv\nemitFnDeclAux {decl}\n^^"
   -- let types : Array LLVM.LLVMType ← decl.params.mapM (toLLVMType ctx)
   let ps := decl.params
@@ -741,18 +750,18 @@ def emitFnDeclAux (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module)
   -- emit (toCType decl.resultType ++ " " ++ cppBaseName)
   if ps.isEmpty then
       -- bollu, TODO: handle `extern` specially?
-      let retty ← (toLLVMType ctx decl.resultType)
+      let retty ← (toLLVMType decl.resultType)
       LLVM.getOrAddGlobal mod cppBaseName retty
   else
       IO.eprintln s!"creating result type ({decl.resultType})"
-      let retty ← (toLLVMType ctx decl.resultType)
+      let retty ← (toLLVMType decl.resultType)
       IO.eprintln s!"...created!"
       let mut argtys := #[]
       for p in ps do
         -- if it is extern, then we must not add irrelevant args
         if !(isExternC env decl.name) || !p.ty.isIrrelevant then
           IO.eprintln s!"adding argument of type {p.ty}"
-          argtys := argtys.push (← toLLVMType ctx p.ty)
+          argtys := argtys.push (← toLLVMType p.ty)
           IO.eprintln "...added argument!"
       -- QUESTION: why do we care if it is boxed?
       if argtys.size > closureMaxArgs && isBoxedName decl.name then
@@ -859,7 +868,8 @@ def emitFileHeader : M Unit := return () -- this is purely C++ ceremony
 -- vvvemitFnsvvv
 
 
-def emitTailCall (v : Expr) : M Unit :=
+def emitTailCall (v : Expr) : M Unit := do
+  debugPrint "emitTailCall"
   match v with
   | Expr.fap _ ys => do
     let ctx ← read
@@ -929,6 +939,7 @@ def emitArgSlot_ (builder: LLVM.Ptr LLVM.Builder) (x : Arg) : M (LLVM.Ptr LLVM.V
     return slot
 
 def emitArgVal (builder: LLVM.Ptr LLVM.Builder) (x: Arg) (name: String := ""): M (LLVM.Ptr LLVM.Value) := do
+  debugPrint "emitArgVal"
   let xslot ← emitArgSlot_ builder x
   LLVM.buildLoad builder xslot name
 /-
@@ -983,6 +994,7 @@ def emitCtor (z : VarId) (c : CtorInfo) (ys : Array Arg) : M Unit := do
     emitAllocCtor c; emitCtorSetArgs z ys
 -/
 def emitCtor (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (c : CtorInfo) (ys : Array Arg) : M Unit := do
+  debugPrint "emitCtor"
   let slot ← emitLhsSlot_ z;
   addVartoState z slot
 
@@ -1046,15 +1058,18 @@ def emitNumLit (t : IRType) (v : Nat) : M Unit := do
     emit v
 -/
 def emitNumLit (builder: LLVM.Ptr LLVM.Builder) (t : IRType) (v : Nat) : M (LLVM.Ptr LLVM.Value) := do
+  debugPrint "emitNumLit"
   if t.isObj then
     if v < UInt32.size then
+      -- let v ← LLVM.buildSext builder v (← LLVM.i64Type (← getLLVMContext))
       callLeanUnsignedToNatFn builder v ""
       -- emit "lean_unsigned_to_nat("; emit v; emit "u)"
     else
       callLeanCStrToNatFn builder v ""
       -- emit "lean_cstr_to_nat(\""; emit v; emit "\")"
   else
-    LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat v)
+    -- LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat v)
+    LLVM.constInt (← toLLVMType t) (UInt64.ofNat v)
 
 def toHexDigit (c : Nat) : String :=
   String.singleton c.digitChar
@@ -1105,9 +1120,9 @@ def emitSimpleExternalCall
   let mut argTys := #[]
   for (p, y) in ps.zip ys do
     if !p.ty.isIrrelevant then
-      argTys := argTys.push (← toLLVMType (← getLLVMContext) p.ty)
+      argTys := argTys.push (← toLLVMType p.ty)
       args := args.push (← emitArgVal builder y "")
-  let fnty ← LLVM.functionType (← toLLVMType (← getLLVMContext) retty) argTys
+  let fnty ← LLVM.functionType (← toLLVMType retty) argTys
   let fn ← LLVM.getOrAddFunction (← getLLVMModule) f fnty
   LLVM.buildCall builder fn args name
 
@@ -1137,12 +1152,12 @@ This returns a *function pointer.*
 def getOrAddFunIdValue (builder: LLVM.Ptr LLVM.Builder) (f: FunId): M (LLVM.Ptr LLVM.Value) := do
   let decl ← getDecl f
   let fcname ← toCName f
-  let retty ← toLLVMType (← getLLVMContext) decl.resultType
+  let retty ← toLLVMType decl.resultType
   if decl.params.isEmpty then
      let gslot ← LLVM.getOrAddGlobal (← getLLVMModule) fcname retty
      LLVM.buildLoad builder gslot ""
   else
-    let argtys ← decl.params.mapM (fun p => do toLLVMType (← getLLVMContext) p.ty)
+    let argtys ← decl.params.mapM (fun p => do toLLVMType p.ty)
     let fnty ← LLVM.functionType retty argtys
     LLVM.getOrAddFunction (← getLLVMModule) fcname fnty
 
@@ -1160,6 +1175,7 @@ def emitPartialApp (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
 -/
 
 def emitPartialApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
+  debugPrint "emitPartialApp"
   let decl ← getDecl f
   let fv ← getOrAddFunIdValue builder f
   let arity := decl.params.size;
@@ -1187,6 +1203,7 @@ def emitFullApp (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
     emitLn ";"
 -/
 def emitFullApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
+  debugPrint "emitFullApp"
   let zslot ← emitLhsSlot_ z
   let decl ← getDecl f
   match decl with
@@ -1226,7 +1243,8 @@ def emitLit (z : VarId) (t : IRType) (v : LitVal) : M Unit := do
 -/
 -- Note that this returns a *slot*, just like `emitLhsSlot_`.
 def emitLit (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : LitVal) : M (LLVM.Ptr LLVM.Value) := do
-  let zslot ← LLVM.buildAlloca builder (← toLLVMType (← getLLVMContext) t) ""
+  debugPrint "emitLit"
+  let zslot ← LLVM.buildAlloca builder (← toLLVMType t) ""
   addVartoState z zslot
   let zv ← match v with
             | LitVal.num v => emitNumLit builder t v -- emitNumLit t v; emitLn ";"
@@ -1256,6 +1274,7 @@ def callLeanCtorGet (builder: LLVM.Ptr LLVM.Builder) (x i: LLVM.Ptr LLVM.Value) 
 
 
 def emitProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (i : Nat) (x : VarId) : M Unit := do
+  debugPrint "emitProj"
   let xval ← emitLhsVal builder x
   let zval ← callLeanCtorGet builder xval (← constIntUnsigned i) ""
   emitLhsSlotStore builder z zval
@@ -1315,16 +1334,17 @@ def emitSProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (n offse
   emitLhsSlotStore builder z zval
 
 
--- ***int lean_is_exclusive(lean_obj_arg o)***
+-- ***bool lean_is_exclusive(lean_obj_arg o)***
 def callLeanIsExclusive (builder: LLVM.Ptr LLVM.Builder) (closure: LLVM.Ptr LLVM.Value) (retName: String := ""): M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
   let fnName :=  "lean_is_exclusive"
-  let retty ← LLVM.size_tType ctx
+  let retty ← LLVM.i8Type ctx -- TODO (bollu): Lean uses i8 instead of i1 for booleans because C things?
   let argtys := #[ ← LLVM.voidPtrType ctx]
   let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
   LLVM.buildCall builder fn  #[closure] retName
 
 def emitIsShared (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (x : VarId) : M Unit := do
+    debugPrint "emitIsShared"
     let xv ← emitLhsVal builder x
     let exclusive? ← callLeanIsExclusive builder xv
     let shared? ← LLVM.buildNot builder exclusive?
@@ -1349,6 +1369,7 @@ def emitVDecl (z : VarId) (t : IRType) (v : Expr) : M Unit :=
   | Expr.lit v          => emitLit z t v
 -/
 def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Expr) : M Unit := do
+  debugPrint "emitVDecl"
   match v with
   | Expr.ctor c ys      => emitCtor builder z c ys -- throw (Error.unimplemented "emitCtor z c ys")
   | Expr.reset n x      => throw (Error.unimplemented "emitReset z n x")
@@ -1378,7 +1399,7 @@ def declareVar (x : VarId) (t : IRType) : M Unit := do
 -/
 
 def declareVar (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (t : IRType) : M Unit := do
-  let alloca ← LLVM.buildAlloca builder (← toLLVMType (← getLLVMContext) t) "varx"
+  let alloca ← LLVM.buildAlloca builder (← toLLVMType t) "varx"
   addVartoState x alloca
   IO.eprintln s!"### declared {x} ###"
 /-
@@ -1516,6 +1537,7 @@ partial def emitBlock (b : FnBody) : M Unit := do
 -/
 
 partial def emitBlock (builder: LLVM.Ptr LLVM.Builder) (b : FnBody) : M Unit := do
+  debugPrint "emitBlock"
   match b with
   | FnBody.jdecl _ _  _ b      =>  throw (Error.unimplemented "join points are unimplemented")
        --emitBlock b
@@ -1653,7 +1675,7 @@ def emitDeclAux (d : Decl) : M Unit := do
 def emitFnArgs (ctx: LLVM.Ptr LLVM.Context) (builder: LLVM.Ptr LLVM.Builder) (llvmfn: LLVM.Ptr LLVM.Value) (params: Array Param) : M Unit := do
   let n := LLVM.countParams llvmfn
   for i in (List.range n.toNat) do
-    let alloca ← LLVM.buildAlloca builder (← toLLVMType (← getLLVMContext) params[i]!.ty) ("arg_" ++ toString i)
+    let alloca ← LLVM.buildAlloca builder (← toLLVMType params[i]!.ty) ("arg_" ++ toString i)
     let arg ← LLVM.getParam llvmfn (UInt64.ofNat i)
     let _ ← LLVM.buildStore builder arg alloca
     addVartoState params[i]!.x alloca
@@ -1674,13 +1696,13 @@ def emitDeclAux (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builde
       --   emit "LEAN_EXPORT "  -- make symbol visible to the interpreter
       --create initializer for closed terms.
       let name := if xs.size > 0 then baseName else "_init_" ++ baseName
-      let retty ← toLLVMType ctx t
+      let retty ← toLLVMType t
       let mut argtys := #[]
       if xs.size > closureMaxArgs && isBoxedName d.name then
         argtys := #[(← LLVM.voidPtrType ctx)]
       else
         for x in xs do
-          argtys := argtys.push (← toLLVMType ctx x.ty)
+          argtys := argtys.push (← toLLVMType x.ty)
       let fnty ← LLVM.functionType retty argtys (isVarArg := false)
       let llvmfn ← LLVM.getOrAddFunction mod name fnty
       -- emit (toCType t); emit " ";
@@ -1812,7 +1834,7 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
     | _ => do
           -- emitCName n; emit " = "; emitCInitName n; emitLn "();"; emitMarkPersistent d n
       -- TODO: should this be global?
-      let llvmty ← toLLVMType (← getLLVMContext) d.resultType
+      let llvmty ← toLLVMType d.resultType
       let dslot ←  LLVM.getOrAddGlobal (← getLLVMModule) (← toCName n) llvmty
       LLVM.setInitializer dslot (← LLVM.constPointerNull llvmty)
       -- TODO (bollu): this should probably be getOrCreateNamedFunction

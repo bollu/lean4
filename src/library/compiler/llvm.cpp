@@ -556,7 +556,6 @@ lean_llvm_build_store(lean_object *builder, lean_object *v, lean_object *slot,
                                     lean_to_Value(slot));
   fprintf(stderr, "...%s ; out: %s\n", __PRETTY_FUNCTION__,
           LLVMPrintValueToString(out));
-  // return lean_io_result_mk_ok(Value_to_lean(out));
   return lean_io_result_mk_ok(lean_box(0));
 }
 
