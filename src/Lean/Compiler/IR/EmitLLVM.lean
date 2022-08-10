@@ -159,7 +159,7 @@ opaque buildInBoundsGEP (builder: @&Ptr Builder) (base: @&Ptr Value) (ixs: @&Arr
 opaque buildPointerCast (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String): IO (Ptr Value)
 
 @[extern "lean_llvm_build_sext"]
-opaque buildSext (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String): IO (Ptr Value)
+opaque buildSext (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String := ""): IO (Ptr Value)
 
 @[extern "lean_llvm_build_switch"]
 opaque buildSwitch (builder: @&Ptr Builder) (val: @&Ptr Value) (elseBB: @&Ptr BasicBlock) (numCasesHint: @&UInt64): IO (Ptr Value)
@@ -1355,18 +1355,23 @@ def emitIsShared (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (x : VarId) : M Un
 
 
 def emitBox (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (x : VarId) (xType: IRType): M Unit := do
-  let fnName :=
+  let ctx ← getLLVMContext
+  let xv ← emitLhsVal builder x
+  let (fnName, argTy, xv) ←
     match xType with
-    | IRType.usize  => "lean_box_usize"
-    | IRType.uint32 => "lean_box_uint32"
-    | IRType.uint64 => "lean_box_uint64"
-    | IRType.float  => "lean_box_float"
-    | _             => "lean_box"
+    | IRType.usize  => pure ("lean_box_usize", ← LLVM.size_tType ctx, xv)
+    | IRType.uint32 => pure ("lean_box_uint32", ← LLVM.i32Type ctx, xv)
+    | IRType.uint64 => pure ("lean_box_uint64", ← LLVM.size_tType ctx, xv)
+    | IRType.float  => pure ("lean_box_float", ← LLVM.size_tType ctx, xv)
+    | _             => do
+         -- sign extend smaller values into i64
+         let xv ← LLVM.buildSext builder xv (← LLVM.size_tType ctx)
+         pure ("lean_box", ← LLVM.size_tType ctx, xv)
   let ctx ← getLLVMContext
   let retty ← LLVM.voidPtrType ctx -- TODO (bollu): Lean uses i8 instead of i1 for booleans because C things?
-  let argtys := #[← toLLVMType xType]
+  let argtys := #[argTy]
   let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
-  let zv ← LLVM.buildCall builder fn  #[← emitLhsVal builder x] ""
+  let zv ← LLVM.buildCall builder fn  #[xv] ""
   emitLhsSlotStore builder z zv
 
 
