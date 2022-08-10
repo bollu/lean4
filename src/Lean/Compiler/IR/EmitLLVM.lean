@@ -88,7 +88,7 @@ opaque voidType (ctx: @&Ptr Context): IO (Ptr LLVMType)
 opaque intTypeInContext (ctx: @&Ptr Context) (width: UInt64): IO (Ptr LLVMType)
 
 @[extern "lean_llvm_float_type_in_context"]
-opaque floatTypeInContext (ctx: @&Ptr Context): IO (Ptr LLVMType)
+opaque floatType (ctx: @&Ptr Context): IO (Ptr LLVMType)
 
 @[extern "lean_llvm_double_type_in_context"]
 opaque doubleTypeInContext (ctx: @&Ptr Context): IO (Ptr LLVMType)
@@ -145,6 +145,10 @@ opaque buildRet (builder: @&Ptr Builder) (val: @&Ptr Value): IO (Ptr Value)
 @[extern "lean_llvm_build_unreachable"]
 opaque buildUnreachable (builder: @&Ptr Builder): IO (Ptr Value)
 
+@[extern "lean_llvm_build_gep"]
+opaque buildGEP (builder: @&Ptr Builder) (base: @&Ptr Value) (ixs: @&Array (Ptr Value)) (name: @&String): IO (Ptr Value)
+
+
 @[extern "lean_llvm_build_inbounds_gep"]
 opaque buildInBoundsGEP (builder: @&Ptr Builder) (base: @&Ptr Value) (ixs: @&Array (Ptr Value)) (name: @&String): IO (Ptr Value)
 
@@ -156,6 +160,15 @@ opaque buildSext (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVM
 
 @[extern "lean_llvm_build_switch"]
 opaque buildSwitch (builder: @&Ptr Builder) (val: @&Ptr Value) (elseBB: @&Ptr BasicBlock) (numCasesHint: @&UInt64): IO (Ptr Value)
+
+@[extern "lean_llvm_build_ptr_to_int"]
+opaque buildPtrToInt (builder: @&Ptr Builder) (ptr: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String := ""): IO (Ptr Value)
+
+@[extern "lean_llvm_build_mul"]
+opaque buildMul (builder: @&Ptr Builder) (x y: @&Ptr Value) (name: @&String): IO (Ptr Value)
+
+@[extern "lean_llvm_build_add"]
+opaque buildAdd (builder: @&Ptr Builder) (x y: @&Ptr Value) (name: @&String): IO (Ptr Value)
 
 @[extern "lean_llvm_add_case"]
 opaque addCase (switch onVal: @&Ptr Value) (destBB: @&Ptr BasicBlock): IO Unit
@@ -206,6 +219,9 @@ def i1Type (ctx: LLVM.Ptr LLVM.Context): IO (LLVM.Ptr LLVM.LLVMType) :=
 
 def i8Type (ctx: LLVM.Ptr LLVM.Context): IO (LLVM.Ptr LLVM.LLVMType) :=
   LLVM.intTypeInContext ctx 8
+
+def i16Type (ctx: LLVM.Ptr LLVM.Context): IO (LLVM.Ptr LLVM.LLVMType) :=
+  LLVM.intTypeInContext ctx 16
 
 def i32Type (ctx: LLVM.Ptr LLVM.Context): IO (LLVM.Ptr LLVM.LLVMType) :=
   LLVM.intTypeInContext ctx 32
@@ -1210,6 +1226,83 @@ def emitLit (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : LitVa
   return zslot
 
 
+
+-- ***void *lean_ctor_get(void *obj, int ix)***
+def callLeanCtorGet (builder: LLVM.Ptr LLVM.Builder) (x i: LLVM.Ptr LLVM.Value) (retName: String): M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  let fnName :=  "lean_ctor_get"
+  let retty ← LLVM.voidPtrType (← getLLVMContext)
+  let argtys := #[ ← LLVM.voidPtrType ctx, ← LLVM.size_tType ctx]
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  LLVM.buildCall builder fn  #[x, i] retName
+
+
+def emitProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (i : Nat) (x : VarId) : M Unit := do
+  let zslot ← emitLhs z
+  let xslot ← emitLhs x
+  let xval ← LLVM.buildLoad builder xslot ""
+  let zval ← callLeanCtorGet builder xval (← constIntUnsigned i) ""
+  LLVM.buildStore builder zval zslot
+
+-- ***usize lean_ctor_get_usize(void *obj, int ix)***
+def callLeanCtorGetUsize (builder: LLVM.Ptr LLVM.Builder) (x i: LLVM.Ptr LLVM.Value) (retName: String): M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  let fnName :=  "lean_ctor_get_usize"
+  let retty ← LLVM.size_tType ctx
+  let argtys := #[ ← LLVM.voidPtrType ctx, ← LLVM.size_tType ctx]
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  LLVM.buildCall builder fn  #[x, i] retName
+
+
+def emitUProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (i : Nat) (x : VarId) : M Unit := do
+  let zslot ← emitLhs z;
+  let xslot ← emitLhs x
+  let xval ← LLVM.buildLoad builder xslot ""
+  let zval ← callLeanCtorGetUsize builder xval (← constIntUnsigned i) ""
+  LLVM.buildStore builder zval zslot
+
+/-
+def emitOffset (n : Nat) (offset : Nat) : M Unit := do
+  if n > 0 then
+    emit "sizeof(void*)*"; emit n;
+    if offset > 0 then emit " + "; emit offset
+  else
+    emit offset
+-/
+-- TODO, bollu: check this code very very properly.
+-- TODO, bollu: this is a GEP calculation?
+-- TODO, bollu: surely it is possible to do this better?
+def emitOffset (builder: LLVM.Ptr LLVM.Builder )(n : Nat) (offset : Nat) : M (LLVM.Ptr LLVM.Value) := do
+   let ctx ← getLLVMContext
+   let basety ← LLVM.pointerType (← LLVM.i8Type ctx)
+   let basev ← LLVM.constPointerNull basety
+   -- https://stackoverflow.com/questions/14608250/how-can-i-find-the-size-of-a-type
+   let gepVoidPtrAt1 ← LLVM.buildGEP builder basev #[(← constIntUnsigned 1)] ""
+   let out ← LLVM.buildPtrToInt builder gepVoidPtrAt1 (← LLVM.size_tType ctx)  "" -- sizeof(void*)
+   let out ← LLVM.buildMul builder out (← constIntUnsigned n) "" -- sizeof(void*)*n
+   LLVM.buildAdd builder out (← constIntUnsigned offset) "" -- sizeof(void*)*n+offset
+
+
+def emitSProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (n offset : Nat) (x : VarId) : M Unit := do
+  let ctx ← getLLVMContext
+  let zslot ← emitLhs z;
+  let (fnName, retty) ←
+    match t with
+    | IRType.float  => pure ("lean_ctor_get_float", ← LLVM.floatType ctx)
+    | IRType.uint8  => pure ("lean_ctor_get_uint8", ← LLVM.i8Type ctx)
+    | IRType.uint16 => pure ("lean_ctor_get_uint16", ←  LLVM.i16Type ctx)
+    | IRType.uint32 => pure ("lean_ctor_get_uint32", ← LLVM.i32Type ctx)
+    | IRType.uint64 => pure ("lean_ctor_get_uint64", ← LLVM.i64Type ctx)
+    | _             => throw (Error.compileError "invalid instruction")
+  let argtys := #[ ← LLVM.voidPtrType ctx, ← LLVM.size_tType ctx]
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  let xslot ← emitLhs x
+  let xval ← LLVM.buildLoad builder xslot ""
+  let offset ← emitOffset builder n offset
+  let zval ← LLVM.buildCall builder fn  #[xval, offset] ""
+  LLVM.buildStore builder zval zslot
+
+
 /-
 def emitVDecl (z : VarId) (t : IRType) (v : Expr) : M Unit :=
   match v with
@@ -1233,7 +1326,7 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.ctor c ys      => emitCtor builder z c ys -- throw (Error.unimplemented "emitCtor z c ys")
   | Expr.reset n x      => throw (Error.unimplemented "emitReset z n x")
   | Expr.reuse x c u ys => throw (Error.unimplemented "emitReuse z x c u ys")
-  | Expr.proj i x       => throw (Error.unimplemented "emitProj z i x")
+  | Expr.proj i x       => emitProj builder z i x
   | Expr.uproj i x      => throw (Error.unimplemented "emitUProj z i x")
   | Expr.sproj n o x    => throw (Error.unimplemented "emitSProj z t n o x")
   | Expr.fap c ys       => emitFullApp builder z c ys
