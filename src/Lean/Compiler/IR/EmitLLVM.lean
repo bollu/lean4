@@ -1211,7 +1211,7 @@ def emitFullApp (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
     emitLn ";"
 -/
 def emitFullApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
-  debugPrint "emitFullApp"
+  debugPrint s!"emitFullApp z:{z} f:{f} ys:?"
   let zslot ← emitLhsSlot_ z
   let decl ← getDecl f
   match decl with
@@ -1466,17 +1466,10 @@ partial def declareVars (builder: LLVM.Ptr LLVM.Builder) (f: FnBody): M Unit := 
   match f with
   | e@(FnBody.vdecl x t _ b) => do
     let ctx ← read
-    /-
-    if isTailCallTo ctx.mainFn e then
-      pure d
-    else
-      declareVar x t; declareVars b true
-    -/
     declareVar builder x t; declareVars builder b
 
   | FnBody.jdecl _ xs _ b => do
-      for param in xs do
-        declareVar builder param.x param.ty
+      for param in xs do declareVar builder param.x param.ty
       declareVars builder b
       -- throw (Error.unimplemented "declareVars.jdecl")
   | e => do
@@ -1620,6 +1613,9 @@ partial def emitJDecl (builder: LLVM.Ptr LLVM.Builder) (jp: JoinPointId) (ps: Ar
   let jpbb ← builderAppendBasicBlock builder s!"jp_{jp.idx}"
   addJpTostate jp jpbb
   LLVM.positionBuilderAtEnd builder jpbb
+  -- TODO(bollu): this is quite subtle. Here, we declare the vars that are inside the body
+  -- of the jp
+  declareVars builder b
   emitBlock builder b
   LLVM.positionBuilderAtEnd builder oldBB -- reset state
 
