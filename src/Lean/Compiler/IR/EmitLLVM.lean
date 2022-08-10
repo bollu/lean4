@@ -125,7 +125,7 @@ opaque positionBuilderAtEnd (builder: @&Ptr Builder) (bb: @& Ptr BasicBlock): IO
 -- opaque buildCall2 (builder: @&Ptr Builder) (fnty: @&Ptr LLVMType) (fn: @&Ptr Value) (args: @&Array (Ptr Value)) (name: @&String): IO (Ptr Value)
 
 @[extern "lean_llvm_build_call"]
-opaque buildCall (builder: @&Ptr Builder) (fn: @&Ptr Value) (args: @&Array (Ptr Value)) (name:  @&String): IO (Ptr Value)
+opaque buildCall (builder: @&Ptr Builder) (fn: @&Ptr Value) (args: @&Array (Ptr Value)) (name:  @&String := ""): IO (Ptr Value)
 
 @[extern "lean_llvm_build_cond_br"]
 opaque buildCondBr (builder: @&Ptr Builder) (if_: @&Ptr Value) (thenbb: @&Ptr BasicBlock) (elsebb: @&Ptr BasicBlock): IO (Ptr Value)
@@ -1193,6 +1193,30 @@ def emitPartialApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : FunId) (ys 
     let yval ← LLVM.buildLoad builder yslot ""
     callLeanClosureSetFn builder zval (← constIntUnsigned i) yval ""
 
+/-
+def emitApp (z : VarId) (f : VarId) (ys : Array Arg) : M Unit :=
+  if ys.size > closureMaxArgs then do
+    emit "{ lean_object* _aargs[] = {"; emitArgs ys; emitLn "};";
+    emitLhs z; emit "lean_apply_m("; emit f; emit ", "; emit ys.size; emitLn ", _aargs); }"
+  else do
+    emitLhs z; emit "lean_apply_"; emit ys.size; emit "("; emit f; emit ", "; emitArgs ys; emitLn ");"
+-/
+def emitApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : VarId) (ys : Array Arg) : M Unit :=
+  if ys.size > closureMaxArgs then do
+    throw (Error.unimplemented "emitApp     ys.size > closureMaxArgs")
+    -- emit "{ lean_object* _aargs[] = {"; emitArgs ys; emitLn "};";
+    -- emitLhs z; emit "lean_apply_m("; emit f; emit ", "; emit ys.size; emitLn ", _aargs); }"
+  else do
+    let ctx ← getLLVMContext
+    let fnName :=  s!"lean_apply_{ys.size}"
+    let retty ← LLVM.voidPtrType (← getLLVMContext)
+    let args := #[← emitLhsVal builder f] ++ (← ys.mapM (emitArgVal builder))
+    -- '1 + ...', '1' for the fn and 'args' for the arguments
+    let argtys := (List.replicate (1 + ys.size) (← LLVM.voidPtrType ctx)).toArray
+    let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+    let zv ← LLVM.buildCall builder fn args
+    emitLhsSlotStore builder z zv
+
 
 /-
 def emitFullApp (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
@@ -1421,7 +1445,7 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.sproj n o x    => throw (Error.unimplemented "emitSProj z t n o x")
   | Expr.fap c ys       => emitFullApp builder z c ys
   | Expr.pap c ys       => emitPartialApp builder z c ys
-  | Expr.ap x ys        => throw (Error.unimplemented "emitApp z x ys")
+  | Expr.ap x ys        => emitApp builder z x ys -- throw (Error.unimplemented "emitApp z x ys")
   | Expr.box t x        => emitBox builder z x t
   | Expr.unbox x        => emitUnbox builder z t x
   | Expr.isShared x     => emitIsShared builder z x
