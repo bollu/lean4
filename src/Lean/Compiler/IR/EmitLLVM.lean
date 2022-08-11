@@ -372,7 +372,7 @@ def getOrCreateLeanBoxFn: M (LLVM.Ptr LLVM.Value) := do
   getOrCreateFunctionPrototype ctx (← getLLVMModule)
     (← LLVM.voidPtrType ctx) "lean_box"  #[(← LLVM.size_tType ctx)]
 
-def callLeanBox (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
+def callLeanBox (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value) (name: String := ""): M (LLVM.Ptr LLVM.Value) := do
   LLVM.buildCall builder (← getOrCreateLeanBoxFn) #[arg] name
 
 -- ***void lean_mark_persistent (void *) ***--
@@ -599,6 +599,29 @@ def callLeanIOResultGetValue (builder: LLVM.Ptr LLVM.Builder) (v: LLVM.Ptr LLVM.
    LLVM.buildCall builder (← getOrCreateLeanIOResultGetValueFn) #[v] name
 
 
+-- TODO(bollu): what does this actually release?
+-- ** void lean_ctor_release (lean_obj_arg o, int i)***
+def callLeanCtorRelease (builder: LLVM.Ptr LLVM.Builder)
+  (closure i: LLVM.Ptr LLVM.Value) (retName: String := ""): M Unit := do
+  let ctx ← getLLVMContext
+  let fnName :=  "lean_ctor_release"
+  let retty ← LLVM.voidType ctx
+  let argtys := #[ ← LLVM.voidPtrType ctx, ← LLVM.size_tType ctx]
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  let _ ← LLVM.buildCall builder fn  #[closure, i] retName
+
+
+-- ** void lean_ctor_set_tag (lean_obj_arg o, int new_tag)***
+def callLeanCtorSetTag (builder: LLVM.Ptr LLVM.Builder)
+  (closure i: LLVM.Ptr LLVM.Value) (retName: String := ""): M Unit := do
+  let ctx ← getLLVMContext
+  let fnName :=  "lean_ctor_set_tag"
+  let retty ← LLVM.voidType ctx
+  let argtys := #[ ← LLVM.voidPtrType ctx, ← LLVM.size_tType ctx]
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  let _ ← LLVM.buildCall builder fn  #[closure, i] retName
+
+
 
 
 /-
@@ -747,6 +770,12 @@ def buildIfThenElse_ (builder: LLVM.Ptr LLVM.Builder)  (name: String) (brval: LL
   | .no => pure ()
   -- merge
   LLVM.positionBuilderAtEnd builder mergebb
+
+-- recall that lean uses `i8` for booleans, not `i1`, so we need to compare with `true`.
+def buildLeanBoolTrue? (builder: LLVM.Ptr LLVM.Builder) (b: LLVM.Ptr LLVM.Value) (name: String := ""): M (LLVM.Ptr LLVM.Value) := do
+   let ctx ← getLLVMContext
+   LLVM.buildICmp builder LLVM.IntPredicate.NE b (← LLVM.constInt8 ctx 0) name
+
 
 -- ^^^^ LLVM UTILS ^^^^
 
@@ -1402,6 +1431,15 @@ def callLeanIsExclusive (builder: LLVM.Ptr LLVM.Builder) (closure: LLVM.Ptr LLVM
   let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
   LLVM.buildCall builder fn  #[closure] retName
 
+-- ***bool lean_is_exclusive(lean_obj_arg o)***
+def callLeanIsScalar (builder: LLVM.Ptr LLVM.Builder) (closure: LLVM.Ptr LLVM.Value) (retName: String := ""): M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  let fnName :=  "lean_is_scalar"
+  let retty ← LLVM.i8Type ctx -- TODO (bollu): Lean uses i8 instead of i1 for booleans because C things?
+  let argtys := #[ ← LLVM.voidPtrType ctx]
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  LLVM.buildCall builder fn  #[closure] retName
+
 def emitIsShared (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (x : VarId) : M Unit := do
     debugPrint "emitIsShared"
     let xv ← emitLhsVal builder x
@@ -1447,6 +1485,69 @@ def emitUnbox (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (x : Var
   emitLhsSlotStore builder z zval
 
 
+/-
+def emitReset (z : VarId) (n : Nat) (x : VarId) : M Unit := do
+  emit "if (lean_is_exclusive("; emit x; emitLn ")) {";
+  n.forM fun i => do
+    emit " lean_ctor_release("; emit x; emit ", "; emit i; emitLn ");"
+  emit " "; emitLhs z; emit x; emitLn ";";
+
+
+  emitLn "} else {";
+  emit " lean_dec_ref("; emit x; emitLn ");";
+  emit " "; emitLhs z; emitLn "lean_box(0);";
+  emitLn "}"
+-/
+def emitReset (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (n : Nat) (x : VarId) : M Unit := do
+  let zv ← emitLhsVal builder z
+  let isExclusive ← callLeanIsExclusive builder zv
+  let isExclusive ← buildLeanBoolTrue? builder isExclusive
+  buildIfThenElse_ builder "isExclusive" isExclusive
+   (fun builder => do
+     let xv ← emitLhsVal builder x
+     n.forM fun i => do
+         callLeanCtorRelease builder xv (← constIntUnsigned i)
+     emitLhsSlotStore builder z xv
+     return ShouldForwardControlFlow.yes
+   )
+   (fun builder => do
+      let xv ← emitLhsVal builder z
+      callLeanDecRef builder xv
+      let box0 ← callLeanBox builder (← constIntUnsigned 0) "box0"
+      emitLhsSlotStore builder z box0
+      return ShouldForwardControlFlow.yes
+   )
+
+/-
+def emitReuse (z : VarId) (x : VarId) (c : CtorInfo) (updtHeader : Bool) (ys : Array Arg) : M Unit := do
+  emit "if (lean_is_scalar("; emit x; emitLn ")) {";
+  emit " "; emitLhs z; emitAllocCtor c;
+  emitLn "} else {";
+  emit " "; emitLhs z; emit x; emitLn ";";
+  if updtHeader then emit " lean_ctor_set_tag("; emit z; emit ", "; emit c.cidx; emitLn ");"
+  emitLn "}";
+  emitCtorSetArgs z ys
+-/
+def emitReuse (builder: LLVM.Ptr LLVM.Builder)
+  (z : VarId) (x : VarId) (c : CtorInfo) (updtHeader : Bool) (ys : Array Arg) : M Unit := do
+  let xv ← emitLhsVal builder x
+  let isScalar ← callLeanIsScalar builder xv
+  let isScalar ← buildLeanBoolTrue? builder isScalar
+  buildIfThenElse_ builder  "isScalar" isScalar
+    (fun builder => do
+      let cv ← emitAllocCtor builder c
+      emitLhsSlotStore builder z cv
+      return ShouldForwardControlFlow.yes
+   )
+   (fun builder => do
+       let xv ← emitLhsVal builder x
+       emitLhsSlotStore builder z xv
+       if updtHeader then
+          let zv ← emitLhsVal builder z
+          callLeanCtorSetTag builder zv (← constIntUnsigned c.cidx)
+       return ShouldForwardControlFlow.yes
+   )
+  emitCtorSetArgs builder z ys
 
 /-
 def emitVDecl (z : VarId) (t : IRType) (v : Expr) : M Unit :=
@@ -1470,8 +1571,8 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   debugPrint "emitVDecl"
   match v with
   | Expr.ctor c ys      => emitCtor builder z c ys -- throw (Error.unimplemented "emitCtor z c ys")
-  | Expr.reset n x      => throw (Error.unimplemented "emitReset z n x")
-  | Expr.reuse x c u ys => throw (Error.unimplemented "emitReuse z x c u ys")
+  | Expr.reset n x      => emitReset builder z n x
+  | Expr.reuse x c u ys => emitReuse builder z x c u ys -- throw (Error.unimplemented "emitReuse z x c u ys")
   | Expr.proj i x       => emitProj builder z i x
   | Expr.uproj i x      => throw (Error.unimplemented "emitUProj z i x")
   | Expr.sproj n o x    => emitSProj builder z t n o x
@@ -1981,13 +2082,12 @@ def emitDecl (d : Decl) : M Unit := do
 -/
 
 def emitDecl (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder: LLVM.Ptr LLVM.Builder) (d : Decl) : M Unit := do
-  IO.eprintln s!"vvv\nemitDecl\n{d}\n^^^\n"
   let d := d.normalizeIds; -- ensure we don't have gaps in the variable indices
   try
     emitDeclAux ctx mod builder d
     return ()
   catch err =>
-    throw (Error.unimplemented s!"{err}\ncompiling:\n{d}")
+    throw (Error.unimplemented s!"emitDecl:\ncompiling:\n{d}\nerr:\n{err}\na")
 
 /-
 def emitFns : M Unit := do
@@ -2066,7 +2166,7 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
       let checkBuiltin? := getBuiltinInitFnNameFor? env d.name |>.isSome
       if checkBuiltin? then
          -- TODO (bollu): what does this condition mean?
-        let cond ← LLVM.buildICmp builder LLVM.IntPredicate.NE builtinParam (← LLVM.constInt8 ctx 0) "builtin_check"
+        let cond ← buildLeanBoolTrue? builder builtinParam "is_builtin_true"
         let _ ← LLVM.buildCondBr builder cond initBB restBB
        else
         let _ ← LLVM.buildBr builder initBB
