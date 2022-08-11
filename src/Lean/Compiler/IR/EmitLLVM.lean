@@ -48,6 +48,7 @@ structure Module where
 structure Builder where
 structure LLVMType where
 structure Value where
+structure MemoryBuffer where
 
 -- A raw pointer to a C object, whose Lean representation
 -- is given by α
@@ -219,6 +220,16 @@ opaque countParams (fn: @&Ptr Function): UInt64 -- will this cause problems..?
 
 @[extern "llvm_get_param"]
 opaque getParam (fn: @&Ptr Function) (ix: UInt64): IO (Ptr Value)
+
+@[extern "lean_llvm_create_memory_buffer_with_contents_of_file"]
+opaque createMemoryBufferWithContentsOfFile (path: @&String): IO (Ptr MemoryBuffer)
+
+@[extern "lean_llvm_parse_bitcode"]
+opaque parseBitcode (context: @&Ptr Context) (membuf: @&Ptr MemoryBuffer): IO (Ptr Module)
+
+@[extern "lean_llvm_link_modules"]
+opaque linkModules (dest: @Ptr Module) (src: @&Ptr Module): IO Unit
+
 
 -- Helper to add a function if it does not exist, and to return the function handle if it does.
 def getOrAddFunction(m: Ptr Module) (name: String) (type: Ptr LLVMType): IO (Ptr Value) :=  do
@@ -2555,9 +2566,19 @@ def main : M Unit := do
   return ()
 end EmitLLVM
 
+
+-- This imitates `Lean/Util/Path.lean`, implementing `Lean.getLibDir`
+open System in
+def getLibLeanRtPath : IO FilePath := do
+  let mut buildDir ← getBuildDir
+  -- use stage1 stdlib with stage0 executable (which should never be distributed outside of the build directory)
+  if Internal.isStage0 () then
+    buildDir := buildDir / ".." / "stage1"
+  return buildDir / "runtime" / "libleanrt.bc"
+
+
 -- | TODO: Use a beter type signature than this.
 -- | TODO: produce bitcode instead of an LLVM string.
-
 @[export lean_ir_emit_llvm]
 def emitLLVM (env : Environment) (modName : Name) (filepath: String): IO Unit := do
   let llvmctx ← LLVM.createContext
@@ -2566,6 +2587,12 @@ def emitLLVM (env : Environment) (modName : Name) (filepath: String): IO Unit :=
   let initState := { var2val := default, jp2bb := default : EmitLLVM.State}
   let out? ← (EmitLLVM.main initState ctx).run
   match out? with
-  | .ok _ =>  LLVM.writeBitcodeToFile ctx.llvmmodule filepath
+  | .ok _ => do
+         let membuf ← LLVM.createMemoryBufferWithContentsOfFile (← getLibLeanRtPath).toString
+         let modruntime ← LLVM.parseBitcode llvmctx membuf
+         LLVM.linkModules (dest := ctx.llvmmodule) (src := modruntime)
+         -- TODO (bollu): run pass pipeline
+         LLVM.writeBitcodeToFile ctx.llvmmodule filepath
+         -- TODO (bollu): produce object code directly.
   | .error err => IO.eprintln ("ERROR: " ++ toString err); return () -- throw (IO.userError <| toString err)
 end Lean.IR

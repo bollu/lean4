@@ -11,8 +11,10 @@ Lean's IR.
 
 #include <lean/lean.h>
 #include <llvm-c/BitWriter.h>
+#include <llvm-c/BitReader.h>
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
+#include <llvm-c/Linker.h>
 
 #include "runtime/array_ref.h"
 #include "runtime/string_ref.h"
@@ -27,6 +29,23 @@ static void donothing_finalize(void *obj) {
 static void donothing_foreach(void *, b_lean_obj_arg) {
   // do nothing since `S` does not contain nested Lean objects
 }
+
+// == LLVM <-> Lean: MemoryBuffer ==
+
+static lean_external_class *g_MemoryBuffer_class = nullptr;
+
+static inline lean_object *MemoryBuffer_to_lean(LLVMMemoryBufferRef s) {
+  if (g_MemoryBuffer_class == nullptr) {
+    g_MemoryBuffer_class =
+        lean_register_external_class(donothing_finalize, donothing_foreach);
+  }
+  return lean_alloc_external(g_MemoryBuffer_class, s);
+}
+
+static inline LLVMMemoryBufferRef lean_to_MemoryBuffer(b_lean_obj_arg s) {
+  return static_cast<LLVMMemoryBufferRef>(lean_get_external_data(s));
+}
+
 
 // == LLVM <-> Lean: ModuleRef ==
 
@@ -966,13 +985,61 @@ lean_llvm_set_tail_call(lean_object *fnval, uint8_t isTail,
   return lean_io_result_mk_ok(lean_box(0));
 }
 
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_create_memory_buffer_with_contents_of_file(lean_object *path,
+                     lean_object * /* w */) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; path: %s \n", __PRETTY_FUNCTION__,
+	    lean_string_cstr(path));
+  }
+  LLVMMemoryBufferRef membuf;
+  char *err_str = NULL;
+  int error = LLVMCreateMemoryBufferWithContentsOfFile(lean_string_cstr(path), &membuf, &err_str);
+    if (LLVM_DEBUG) {
+    fprintf(stderr, "...%s ; error?: %d \n", __PRETTY_FUNCTION__, error);
+  }
 
-/*
-/usr/bin/ld:
-/home/bollu/work/lean-llvm/lean4/build/stage1/lib/lean/libleanshared.so:
-undefined reference to `lean_llvm_array_type' /usr/bin/ld:
-/home/bollu/work/lean-llvm/lean4/build/stage1/lib/lean/libleanshared.so:
-undefined reference to `lean_llvm_const_array' /usr/bin/ld:
-/home/bollu/work/lean-llvm/lean4/build/stage1/lib/lean/libleanshared.so:
-undefined reference to `lean_llvm_string_const'
-*/
+  assert((is_error != 1)&& "failed to link modules");
+  return lean_io_result_mk_ok(MemoryBuffer_to_lean(membuf));
+}
+
+
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_parse_bitcode(lean_object *context, lean_object *membuf,
+                     lean_object * /* w */) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; membuf: %p \n", __PRETTY_FUNCTION__,
+	    membuf);
+  }
+  LLVMModuleRef out_module;
+  char *err_str = NULL;
+  int is_error = LLVMParseBitcodeInContext(lean_to_Context(context),
+					   lean_to_MemoryBuffer(membuf),
+					   &out_module, &err_str);
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "...%s ; error?: %d \n", __PRETTY_FUNCTION__, is_error);
+  }
+
+  assert(!is_error && "failed to link modules");
+  return lean_io_result_mk_ok(Module_to_lean(out_module));
+}
+
+
+
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_link_modules(lean_object *dest_module, lean_object *src_module,
+                     lean_object * /* w */) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; dest_module: %p \n", __PRETTY_FUNCTION__,
+	    dest_module);
+    fprintf(stderr, "...%s ; src_module: %p\n", __PRETTY_FUNCTION__,
+	    src_module);
+  }
+  int is_error = LLVMLinkModules2(lean_to_Module(dest_module), lean_to_Module(src_module));
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "...%s ; error?: %d \n", __PRETTY_FUNCTION__, is_error);
+  }
+
+  assert(!is_error && "failed to link modules");
+  return lean_io_result_mk_ok(lean_box(0));
+}
