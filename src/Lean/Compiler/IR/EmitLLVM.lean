@@ -97,7 +97,7 @@ opaque doubleTypeInContext (ctx: @&Ptr Context): IO (Ptr LLVMType)
 opaque pointerType (elemty: @&Ptr LLVMType): IO (Ptr LLVMType)
 
 @[extern "lean_llvm_array_type"]
-opaque arrayType (elemty: @&Ptr LLVMType): IO (Ptr LLVMType)
+opaque arrayType (elemty: @&Ptr LLVMType) (nelem: @&UInt64): IO (Ptr LLVMType)
 
 @[extern "lean_llvm_const_array"]
 opaque constArray (elemty: @&Ptr LLVMType) (vals: @&Array (Ptr Value)): IO (Ptr LLVMType)
@@ -137,10 +137,10 @@ opaque buildCondBr (builder: @&Ptr Builder) (if_: @&Ptr Value) (thenbb: @&Ptr Ba
 opaque buildBr (builder: @&Ptr Builder) (bb: @&Ptr BasicBlock): IO (Ptr Value)
 
 @[extern "lean_llvm_build_alloca"]
-opaque buildAlloca (builder: @&Ptr Builder) (ty: @&Ptr LLVMType) (name: @&String): IO (Ptr Value)
+opaque buildAlloca (builder: @&Ptr Builder) (ty: @&Ptr LLVMType) (name: @&String := ""): IO (Ptr Value)
 
 @[extern "lean_llvm_build_load"]
-opaque buildLoad (builder: @&Ptr Builder) (val: @&Ptr Value) (name: @&String): IO (Ptr Value)
+opaque buildLoad (builder: @&Ptr Builder) (val: @&Ptr Value) (name: @&String := ""): IO (Ptr Value)
 
 @[extern "lean_llvm_build_store"]
 opaque buildStore (builder: @&Ptr Builder) (val: @&Ptr Value) (store_loc_ptr: @&Ptr Value): IO Unit
@@ -152,11 +152,11 @@ opaque buildRet (builder: @&Ptr Builder) (val: @&Ptr Value): IO (Ptr Value)
 opaque buildUnreachable (builder: @&Ptr Builder): IO (Ptr Value)
 
 @[extern "lean_llvm_build_gep"]
-opaque buildGEP (builder: @&Ptr Builder) (base: @&Ptr Value) (ixs: @&Array (Ptr Value)) (name: @&String): IO (Ptr Value)
+opaque buildGEP (builder: @&Ptr Builder) (base: @&Ptr Value) (ixs: @&Array (Ptr Value)) (name: @&String := ""): IO (Ptr Value)
 
 
 @[extern "lean_llvm_build_inbounds_gep"]
-opaque buildInBoundsGEP (builder: @&Ptr Builder) (base: @&Ptr Value) (ixs: @&Array (Ptr Value)) (name: @&String): IO (Ptr Value)
+opaque buildInBoundsGEP (builder: @&Ptr Builder) (base: @&Ptr Value) (ixs: @&Array (Ptr Value)) (name: @&String := ""): IO (Ptr Value)
 
 @[extern "lean_llvm_build_pointer_cast"]
 opaque buildPointerCast (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String): IO (Ptr Value)
@@ -779,8 +779,9 @@ def emitFnDeclAux (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module)
           argtys := argtys.push (← toLLVMType p.ty)
           IO.eprintln "...added argument!"
       -- QUESTION: why do we care if it is boxed?
+      -- TODO (bollu): simplify this API, this code of `closureMaxArgs` is duplicated in multiple places.
       if argtys.size > closureMaxArgs && isBoxedName decl.name then
-        argtys := #[(← LLVM.voidPtrType ctx)]
+        argtys := #[← LLVM.pointerType (← LLVM.voidPtrType ctx)]
       IO.eprintln "creating function type..."
       let fnty ← LLVM.functionType retty argtys (isVarArg := false)
       IO.eprintln "created function type!"
@@ -1182,11 +1183,23 @@ def emitApp (z : VarId) (f : VarId) (ys : Array Arg) : M Unit :=
   else do
     emitLhs z; emit "lean_apply_"; emit ys.size; emit "("; emit f; emit ", "; emitArgs ys; emitLn ");"
 -/
-def emitApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : VarId) (ys : Array Arg) : M Unit :=
+def emitApp (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (f : VarId) (ys : Array Arg) : M Unit := do
+  let ctx ← getLLVMContext
   if ys.size > closureMaxArgs then do
-    throw (Error.unimplemented "emitApp     ys.size > closureMaxArgs")
-    -- emit "{ lean_object* _aargs[] = {"; emitArgs ys; emitLn "};";
-    -- emitLhs z; emit "lean_apply_m("; emit f; emit ", "; emit ys.size; emitLn ", _aargs); }"
+    let aargs ← LLVM.buildAlloca builder (← LLVM.arrayType (← LLVM.voidPtrType ctx) (UInt64.ofNat ys.size)) "aargs"
+    for i in List.range ys.size do
+      let yv ← emitArgVal builder ys[i]!
+      let aslot ← LLVM.buildInBoundsGEP builder aargs #[← constIntUnsigned 0, ← constIntUnsigned i] s!"param_{i}_slot"
+      LLVM.buildStore builder yv aslot
+    -- lean_apply_m --
+    let fnName :=  s!"lean_apply_m"
+    let retty ← LLVM.voidPtrType (← getLLVMContext)
+    let args := #[← emitLhsVal builder f, ← constIntUnsigned ys.size, aargs]
+    -- '1 + ...', '1' for the fn and 'args' for the arguments
+    let argtys := #[← LLVM.voidPtrType (← getLLVMContext)]
+    let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+    let zv ← LLVM.buildCall builder fn args
+    emitLhsSlotStore builder z zv
   else do
     let ctx ← getLLVMContext
     let fnName :=  s!"lean_apply_{ys.size}"
@@ -1783,13 +1796,23 @@ def emitDeclAux (d : Decl) : M Unit := do
 -/
 
 
-def emitFnArgs (ctx: LLVM.Ptr LLVM.Context) (builder: LLVM.Ptr LLVM.Builder) (llvmfn: LLVM.Ptr LLVM.Value) (params: Array Param) : M Unit := do
-  let n := LLVM.countParams llvmfn
-  for i in (List.range n.toNat) do
-    let alloca ← LLVM.buildAlloca builder (← toLLVMType params[i]!.ty) ("arg_" ++ toString i)
-    let arg ← LLVM.getParam llvmfn (UInt64.ofNat i)
-    let _ ← LLVM.buildStore builder arg alloca
-    addVartoState params[i]!.x alloca
+def emitFnArgs (ctx: LLVM.Ptr LLVM.Context) (builder: LLVM.Ptr LLVM.Builder) (needsPackedArgs?: Bool)  (llvmfn: LLVM.Ptr LLVM.Value) (params: Array Param) : M Unit := do
+  if needsPackedArgs? then do
+      -- throw (Error.unimplemented "unimplemented > closureMaxArgs case")
+      let argsp ← LLVM.getParam llvmfn 0 -- lean_object **args
+      for i in List.range params.size do
+          let argsi ← LLVM.buildGEP builder argsp #[← constIntUnsigned i] s!"packed_arg_{i}_slot"
+          let pv ← LLVM.buildLoad builder argsi
+          let alloca ← LLVM.buildAlloca builder (← LLVM.voidPtrType ctx) s!"arg_{i}"
+          LLVM.buildStore builder pv alloca
+          addVartoState params[i]!.x alloca
+  else
+      let n := LLVM.countParams llvmfn
+      for i in (List.range n.toNat) do
+        let alloca ← LLVM.buildAlloca builder (← toLLVMType params[i]!.ty) s!"arg_{i}"
+        let arg ← LLVM.getParam llvmfn (UInt64.ofNat i)
+        let _ ← LLVM.buildStore builder arg alloca
+        addVartoState params[i]!.x alloca
 
 -- TODO: figure out if we can always return the corresponding function?
 def emitDeclAux (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder: LLVM.Ptr LLVM.Builder) (d : Decl): M Unit := do
@@ -1809,8 +1832,10 @@ def emitDeclAux (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builde
       let name := if xs.size > 0 then baseName else "_init_" ++ baseName
       let retty ← toLLVMType t
       let mut argtys := #[]
-      if xs.size > closureMaxArgs && isBoxedName d.name then
-        argtys := #[(← LLVM.voidPtrType ctx)]
+      let needsPackedArgs? := xs.size > closureMaxArgs && isBoxedName d.name
+      if needsPackedArgs? then
+          -- TODO: why does this not work?
+          argtys := #[← LLVM.pointerType (← LLVM.voidPtrType ctx)]
       else
         for x in xs do
           argtys := argtys.push (← toLLVMType x.ty)
@@ -1831,8 +1856,6 @@ def emitDeclAux (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builde
       -- else
       --   emit ("_init_" ++ baseName ++ "()")
       -- emitLn " {";
-      if xs.size > closureMaxArgs && isBoxedName d.name then
-        throw (Error.unimplemented "unimplemented > closureMaxArgs case")
       --   xs.size.forM fun i => do
       --     let x := xs[i]!
       --     emit "lean_object* "; emit x.x; emit " = _args["; emit i; emitLn "];"
@@ -1841,7 +1864,7 @@ def emitDeclAux (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builde
         set { var2val := default, jp2bb := default : EmitLLVM.State } -- flush varuable map
         let bb ← LLVM.appendBasicBlockInContext (← getLLVMContext) llvmfn "entry"
         LLVM.positionBuilderAtEnd builder bb
-        emitFnArgs ctx builder llvmfn xs
+        emitFnArgs ctx builder needsPackedArgs? llvmfn xs
         emitFnBody builder b);
       -- emitLn "}"
       pure ()

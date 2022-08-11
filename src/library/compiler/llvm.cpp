@@ -409,12 +409,13 @@ lean_llvm_pointer_type(lean_object *base, lean_object * /* w */) {
 }
 
 extern "C" LEAN_EXPORT lean_object *
-lean_llvm_array_type(lean_object *base, lean_object * /* w */) {
+lean_llvm_array_type(lean_object *base, uint64_t nelem, lean_object * /* w */) {
   if (LLVM_DEBUG) {
     fprintf(stderr, "%s ; base: %s\n", __PRETTY_FUNCTION__,
             LLVMPrintTypeToString(lean_to_Type(base)));
+    fprintf(stderr, "...%s ; nelem: %lu", __PRETTY_FUNCTION__, nelem);
   }
-  LLVMTypeRef out = LLVMArrayType(lean_to_Type(base), /*addrspace=*/0);
+  LLVMTypeRef out = LLVMArrayType(lean_to_Type(base), /*nelem=*/nelem);
   fprintf(stderr, "...%s ; out: %s\n", __PRETTY_FUNCTION__,
           LLVMPrintTypeToString(out));
   return lean_io_result_mk_ok(Type_to_lean(out));
