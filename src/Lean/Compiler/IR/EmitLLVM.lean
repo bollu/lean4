@@ -509,12 +509,23 @@ def callLeanIOMkWorld (builder: LLVM.Ptr LLVM.Builder): M (LLVM.Ptr LLVM.Value) 
    LLVM.buildCall builder (← getOrCreateLeanIOMkWorldFn (← getLLVMContext) (← getLLVMModule)) #[] "mk_io_out"
 
 
+-- ***bool lean_io_result_is_err(lean_object *o);***
 def getOrCreateLeanIOResultIsErrorFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
-  -- bool lean_io_result_is_err();
   getOrCreateFunctionPrototype ctx mod (← LLVM.i1Type ctx) "lean_io_result_is_error"  #[(← LLVM.voidPtrType ctx)]
 
 def callLeanIOResultIsError (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
   LLVM.buildCall builder (← getOrCreateLeanIOResultIsErrorFn (← getLLVMContext) (← getLLVMModule)) #[arg] name
+
+/-
+-- ***lean_object *lean_io_result_get_value(lean_object *o)***
+def getOrCreateLeanIOResultGetValueFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
+  getOrCreateFunctionPrototype ctx mod (← LLVM.voidPtrType ctx) "lean_io_result_get_value"  #[(← LLVM.voidPtrType ctx)]
+
+def callLeanIOResultGetValueFn (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
+  LLVM.buildCall builder (← getOrCreateLeanIOResultGetValueFn (← getLLVMContext) (← getLLVMModule)) #[arg] name
+-/
+
+
 
 -- lean_alloc_ctor (unsigned tag, unsigned num_obj, unsigned scalar_sz)
 def getOrCreateLeanAllocCtorFn: M (LLVM.Ptr LLVM.Value) := do
@@ -577,6 +588,16 @@ def callLeanObjTag (builder: LLVM.Ptr LLVM.Builder) (closure: LLVM.Ptr LLVM.Valu
   let argtys := #[ ← LLVM.voidPtrType ctx]
   let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
   LLVM.buildCall builder fn  #[closure] retName
+
+-- ***lean_io_result_get_value**
+def getOrCreateLeanIOResultGetValueFn: M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  getOrCreateFunctionPrototype ctx (← getLLVMModule)
+    (← LLVM.voidPtrType ctx) "lean_io_result_get_value"  #[← LLVM.voidPtrType ctx]
+
+def callLeanIOResultGetValue (builder: LLVM.Ptr LLVM.Builder) (v: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
+   LLVM.buildCall builder (← getOrCreateLeanIOResultGetValueFn) #[v] name
+
 
 
 
@@ -2041,11 +2062,11 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
       let builtinParam ← LLVM.getParam parentFn 0 -- TODO(bollu): what does this argument mean?
       let checkBuiltin? := getBuiltinInitFnNameFor? env d.name |>.isSome
       if checkBuiltin? then
-         let _ ← LLVM.buildBr builder initBB
-      else
          -- TODO (bollu): what does this condition mean?
-         let cond ← LLVM.buildICmp builder LLVM.IntPredicate.NE builtinParam (← LLVM.constInt8 ctx 0)
-         let _ ← LLVM.buildCondBr builder cond initBB restBB
+        let cond ← LLVM.buildICmp builder LLVM.IntPredicate.NE builtinParam (← LLVM.constInt8 ctx 0) "builtin_check"
+        let _ ← LLVM.buildCondBr builder cond initBB restBB
+       else
+        let _ ← LLVM.buildBr builder initBB
 
       -- vv fill in init
       LLVM.positionBuilderAtEnd builder initBB
@@ -2053,11 +2074,12 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
       let world ← callLeanIOMkWorld builder
       let dval ← LLVM.buildCall builder dInitFn #[world]
       -- TODO(bollu): eliminate code duplication
-      let err? ← callLeanIOResultIsError builder dval "is_error"
+      let err? ← callLeanIOResultIsError builder dval s!"{d.name}_is_error"
       buildIfThen_ builder parentFn s!"init_{d.name}_isError" err?
         (fun builder => do
           let _ ← LLVM.buildRet builder dval
           pure ShouldForwardControlFlow.no)
+      let dval ← callLeanIOResultGetValue builder dval s!"{d.name}_res"
       LLVM.buildStore builder dval dslot
       if d.resultType.isObj then
          callLeanMarkPersistentFn builder dval
@@ -2203,15 +2225,6 @@ def getOrCreateCallLeanUnboxUint32Fn: M (LLVM.Ptr LLVM.Value) := do
 
 def callLeanUnboxUint32 (builder: LLVM.Ptr LLVM.Builder) (v: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
    LLVM.buildCall builder (← getOrCreateCallLeanUnboxUint32Fn) #[v] name
-
--- ***lean_io_result_get_value**
-def getOrCreateLeanIOResultGetValueFn: M (LLVM.Ptr LLVM.Value) := do
-  let ctx ← getLLVMContext
-  getOrCreateFunctionPrototype ctx (← getLLVMModule)
-    (← LLVM.voidPtrType ctx) "lean_io_result_get_value"  #[← LLVM.voidPtrType ctx]
-
-def callLeanIOResultGetValue (builder: LLVM.Ptr LLVM.Builder) (v: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
-   LLVM.buildCall builder (← getOrCreateLeanIOResultGetValueFn) #[v] name
 
 
 
