@@ -1331,8 +1331,8 @@ def emitOffset (builder: LLVM.Ptr LLVM.Builder )(n : Nat) (offset : Nat) : M (LL
    let basety ← LLVM.pointerType (← LLVM.i8Type ctx)
    let basev ← LLVM.constPointerNull basety
    -- https://stackoverflow.com/questions/14608250/how-can-i-find-the-size-of-a-type
-   let gepVoidPtrAt1 ← LLVM.buildGEP builder basev #[(← constIntUnsigned 1)] ""
-   let out ← LLVM.buildPtrToInt builder gepVoidPtrAt1 (← LLVM.size_tType ctx)  "" -- sizeof(void*)
+   let gepVoidPtrAt1 ← LLVM.buildGEP builder basev #[(← constIntUnsigned 1)] "gep_void_1"
+   let out ← LLVM.buildPtrToInt builder gepVoidPtrAt1 (← LLVM.size_tType ctx)  "gep_size_void*" -- sizeof(void*)
    let out ← LLVM.buildMul builder out (← constIntUnsigned n) "" -- sizeof(void*)*n
    LLVM.buildAdd builder out (← constIntUnsigned offset) "" -- sizeof(void*)*n+offset
 
@@ -1380,7 +1380,7 @@ def emitBox (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (x : VarId) (xType: IRT
     | IRType.usize  => pure ("lean_box_usize", ← LLVM.size_tType ctx, xv)
     | IRType.uint32 => pure ("lean_box_uint32", ← LLVM.i32Type ctx, xv)
     | IRType.uint64 => pure ("lean_box_uint64", ← LLVM.size_tType ctx, xv)
-    | IRType.float  => pure ("lean_box_float", ← LLVM.size_tType ctx, xv)
+    | IRType.float  => pure ("lean_box_float", ← LLVM.doubleTypeInContext ctx, xv)
     | _             => do
          -- sign extend smaller values into i64
          let xv ← LLVM.buildSext builder xv (← LLVM.size_tType ctx)
@@ -1588,7 +1588,7 @@ def emitSSet (x : VarId) (n : Nat) (offset : Nat) (y : VarId) (t : IRType) : M U
 -/
 def emitSSet (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (n : Nat) (offset : Nat) (y : VarId) (t : IRType) : M Unit := do
   let ctx ← getLLVMContext
-  let (fnName, retty) ←
+  let (fnName, setty) ←
   match t with
   | IRType.float  => pure ("lean_ctor_set_float", ← LLVM.doubleTypeInContext ctx)
   | IRType.uint8  => pure ("lean_ctor_set_uint8", ← LLVM.i8Type ctx)
@@ -1596,7 +1596,8 @@ def emitSSet (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (n : Nat) (offset : Na
   | IRType.uint32 => pure ("lean_ctor_set_uint32", ← LLVM.i32Type ctx)
   | IRType.uint64 => pure ("lean_ctor_set_uint64", ← LLVM.i64Type ctx)
   | _             => throw (Error.compileError "invalid instruction");
-  let argtys := #[ ← LLVM.voidPtrType ctx]
+  let argtys := #[ ← LLVM.voidPtrType ctx, ← LLVM.size_tType ctx, setty]
+  let retty  ← LLVM.voidType ctx
   let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
   let xv ← emitLhsVal builder x
   let offset ← emitOffset builder n offset
