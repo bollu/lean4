@@ -27,6 +27,7 @@ function compile_lean_c_backend {
 
 function compile_lean_llvm_backend {
     rm "*.ll" || true # remove debugging files.
+    rm "*.bc" || true # remove debugging files.
     # print the original C program well-formatted, and LLVM sources for handy debugging.
     lean --c="$f.c" "$f" || fail "Failed to compile $f into C file"
     clang-format -i "$f.c"
@@ -37,15 +38,15 @@ function compile_lean_llvm_backend {
     # TODO: find a sane way to pick this path up, similar to the way leanc hardcodes these paths via flags with --print-cflags
     # Also, this should be in stage0, since we want it to be present in all circumstances.
     echo "using lean: $(which lean); leanc: $(which leanc)"
-    export LIBRUNTIMEBC=$(git rev-parse --show-toplevel)/build/stage1/runtime/libleanrt.bc # TODO: get this information into `leanc`.
+    # export LIBRUNTIMEBC=$(git rev-parse --show-toplevel)/build/stage1/runtime/libleanrt.bc # TODO: get this information into `leanc`.
     set -o xtrace
     # lean --bc="$f.bc" "$f" || fail "Failed to compile $f into bitcode file"
     # opt -S "$f.bc" -o "$f.bc.ll" # generate easy to read ll from bitcode.
     # opt -S -O2 "$f.bc.ll" -o "$f.bc.o2.ll" # generate easy to read ll from bitcode.
     # llvm-link "$f.bc" $LIBRUNTIMEBC -o "$f.linked.bc"
-    lean --bc="$f.bc.linked.bc" "$f" || fail "Failed to compile $f into bitcode file"
-    llc --relocation-model=pic -O1 -march=x86-64 -filetype=obj "$f.linked.bc" -o "$f.o" # TODO: figure out how to pick up triple.
-    leanc -o "$f.out" "$@" "$f.o" || fail "Failed to link object file '$f.o', generated from bitcode file $f.linked.bc"
+    lean --bc="$f.linked.bc" "$f" || fail "Failed to compile $f into bitcode file"
+    # llc --relocation-model=pic -O1 -march=x86-64 -filetype=obj "$f.linked.bc" -o "$f.o" # TODO: figure out how to pick up triple.
+    leanc -o "$f.out" "$@" "$f.linked.bc.o" || fail "Failed to link object file '$f.o', generated from bitcode file $f.linked.bc"
 }
 
 function exec_capture {

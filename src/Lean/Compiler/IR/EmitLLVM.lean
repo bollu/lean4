@@ -24,6 +24,11 @@ def leanMainFn := "_lean_main"
 
 namespace LLVM
 
+namespace CodeGenFileType
+def AssemblyFile : UInt64 := 0
+def ObjectFile : UInt64 := 1
+end CodeGenFileType
+
 namespace IntPredicate
 -- https://llvm.org/doxygen/group__LLVMCCoreTypes.html#ga79d2c730e287cc9cf6410d8b24880ce6
 def EQ : UInt64 := 32
@@ -49,6 +54,8 @@ structure Builder where
 structure LLVMType where
 structure Value where
 structure MemoryBuffer where
+structure Target where
+structure TargetMachine where
 
 -- A raw pointer to a C object, whose Lean representation
 -- is given by α
@@ -229,6 +236,18 @@ opaque parseBitcode (context: @&Ptr Context) (membuf: @&Ptr MemoryBuffer): IO (P
 
 @[extern "lean_llvm_link_modules"]
 opaque linkModules (dest: @Ptr Module) (src: @&Ptr Module): IO Unit
+
+@[extern "lean_llvm_get_default_target_triple"]
+opaque getDefaultTargetTriple: IO String
+
+@[extern "lean_llvm_get_target_from_triple"]
+opaque getTargetFromTriple (triple: @&String): IO (Ptr Target)
+
+@[extern "lean_llvm_create_target_machine"]
+opaque createTargetMachine (target: @&Ptr Target) (tripleStr: @&String) (cpu: @&String) (features: @&String): IO (Ptr TargetMachine)
+
+@[extern "lean_llvm_target_machine_emit_to_file"]
+opaque targetMachineEmitToFile (targetMachine: @&Ptr TargetMachine) (module: @&Ptr Module) (filepath: @&String) (codegenType: @&UInt64): IO Unit
 
 
 -- Helper to add a function if it does not exist, and to return the function handle if it does.
@@ -2590,9 +2609,23 @@ def emitLLVM (env : Environment) (modName : Name) (filepath: String): IO Unit :=
   | .ok _ => do
          let membuf ← LLVM.createMemoryBufferWithContentsOfFile (← getLibLeanRtPath).toString
          let modruntime ← LLVM.parseBitcode llvmctx membuf
+         -- TODO (bollu): mark everything in runtime as internal and alwaysinline
+         -- so we can then remove the
+         -- unused portions after inlining
          LLVM.linkModules (dest := ctx.llvmmodule) (src := modruntime)
          -- TODO (bollu): run pass pipeline
          LLVM.writeBitcodeToFile ctx.llvmmodule filepath
          -- TODO (bollu): produce object code directly.
+         -- https://llvm.org/docs/tutorial/MyFirstLanguageFrontend/LangImpl08.html
+         let tripleStr ← LLVM.getDefaultTargetTriple
+         let target ← LLVM.getTargetFromTriple tripleStr
+         let cpu := "generic"
+         let features := ""
+         let targetmachine ← LLVM.createTargetMachine target tripleStr cpu features
+         -- TheModule->setDataLayout(TargetMachine->createDataLayout());
+         -- TheModule->setTargetTriple(TargetTriple);
+         let codegenType := LLVM.CodeGenFileType.ObjectFile
+         LLVM.targetMachineEmitToFile targetmachine ctx.llvmmodule (filepath ++ ".o") codegenType
+
   | .error err => IO.eprintln ("ERROR: " ++ toString err); return () -- throw (IO.userError <| toString err)
 end Lean.IR

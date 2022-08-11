@@ -15,6 +15,8 @@ Lean's IR.
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 #include <llvm-c/Linker.h>
+#include <llvm-c/Target.h>
+#include <llvm-c/TargetMachine.h>
 
 #include "runtime/array_ref.h"
 #include "runtime/string_ref.h"
@@ -29,6 +31,40 @@ static void donothing_finalize(void *obj) {
 static void donothing_foreach(void *, b_lean_obj_arg) {
   // do nothing since `S` does not contain nested Lean objects
 }
+
+// == LLVM <-> Lean: Target ==
+
+static lean_external_class *g_Target_class = nullptr;
+
+static inline lean_object *Target_to_lean(LLVMTargetRef s) {
+  if (g_Target_class == nullptr) {
+    g_Target_class =
+        lean_register_external_class(donothing_finalize, donothing_foreach);
+  }
+  return lean_alloc_external(g_Target_class, s);
+}
+
+static inline LLVMTargetRef lean_to_Target(b_lean_obj_arg s) {
+  return static_cast<LLVMTargetRef>(lean_get_external_data(s));
+}
+
+
+// == LLVM <-> Lean: TargetMachine ==
+
+static lean_external_class *g_TargetMachine_class = nullptr;
+
+static inline lean_object *TargetMachine_to_lean(LLVMTargetMachineRef s) {
+  if (g_TargetMachine_class == nullptr) {
+    g_TargetMachine_class =
+        lean_register_external_class(donothing_finalize, donothing_foreach);
+  }
+  return lean_alloc_external(g_TargetMachine_class, s);
+}
+
+static inline LLVMTargetMachineRef lean_to_TargetMachine(b_lean_obj_arg s) {
+  return static_cast<LLVMTargetMachineRef>(lean_get_external_data(s));
+}
+
 
 // == LLVM <-> Lean: MemoryBuffer ==
 
@@ -1042,4 +1078,112 @@ lean_llvm_link_modules(lean_object *dest_module, lean_object *src_module,
 
   assert(!is_error && "failed to link modules");
   return lean_io_result_mk_ok(lean_box(0));
+}
+
+// opaque createTargetMachine (target: @&Ptr Target) (tripleStr: @&String) (cpu: @&String) (features: @&String): IO (Ptr TargetMachine)
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_create_target_machine(lean_object *target, lean_object *tripleStr,
+				lean_object *cpuStr, lean_object *featuresStr,
+                     lean_object * /* w */) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; target: %p \n", __PRETTY_FUNCTION__,
+	    lean_to_Target(target));
+    fprintf(stderr, "...%s ; tripleStr: %p\n", __PRETTY_FUNCTION__,
+	    lean_string_cstr(tripleStr));
+    fprintf(stderr, "...%s ; cpuStr: %p\n", __PRETTY_FUNCTION__,
+	    lean_string_cstr(cpuStr));
+    fprintf(stderr, "...%s ; featuresStr: %p\n", __PRETTY_FUNCTION__,
+	    lean_string_cstr(featuresStr));
+  }
+  // TODO (bollu): expose this option
+  const LLVMCodeGenOptLevel optLevel = LLVMCodeGenLevelAggressive;
+  const LLVMRelocMode relocMode = LLVMRelocPIC;
+  const LLVMCodeModel codeModel = LLVMCodeModelDefault;
+  LLVMTargetMachineRef tm =
+    LLVMCreateTargetMachine(lean_to_Target(target),
+			  lean_string_cstr(tripleStr),
+			  lean_string_cstr(cpuStr),
+			  lean_string_cstr(featuresStr),
+			  optLevel,
+			  relocMode,
+			    codeModel);
+  
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "...%s ; out: %p \n", __PRETTY_FUNCTION__, tm);
+  }
+
+  return lean_io_result_mk_ok(TargetMachine_to_lean(tm));
+}
+
+// opaque getTargetFromTriple (triple: @&String): IO (Ptr Target)
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_get_target_from_triple(lean_object *triple,
+                     lean_object * /* w */) {
+    if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; triple: %p \n", __PRETTY_FUNCTION__,
+	    lean_string_cstr(triple));
+    }
+    LLVMTargetRef t;
+    char *errmsg = NULL;
+    int is_error = LLVMGetTargetFromTriple(lean_string_cstr(triple), &t, &errmsg);
+    assert(!is_error && "failed to get target from triple");
+    if (LLVM_DEBUG) {
+      fprintf(stderr, "...%s ; error?: %d \n", __PRETTY_FUNCTION__, is_error);
+      fprintf(stderr, "...%p ; t: %p \n", __PRETTY_FUNCTION__, t);
+    }
+    return lean_io_result_mk_ok(Target_to_lean(t));
+}
+
+// opaque getDefaultTargetTriple: IO String
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_get_default_target_triple(lean_object* /* w */) {
+  char *triple = LLVMGetDefaultTargetTriple();
+    if (LLVM_DEBUG) {
+      fprintf(stderr, "%s; triple: %s \n", __PRETTY_FUNCTION__, triple);
+    }
+    return lean_io_result_mk_ok(lean::mk_string(triple));
+  
+}
+
+
+// opaque targetMachineEmitToFile (targetMachine: @&Ptr TargetMachine) (module: @&Ptr Module) (filepath: @&String) (codegenType: @&UInt64): IO Unit
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_target_machine_emit_to_file(lean_object *target_machine,
+				      lean_object *module,
+				      lean_object *filepath,
+				      uint64_t codegenType,
+				      lean_object* /* w */) {
+  // TODO (bollu): move this to a different function
+  LLVMInitializeAllTargetInfos();
+  LLVMInitializeAllTargets();
+  LLVMInitializeAllTargetMCs();
+  LLVMInitializeAllAsmParsers();
+  LLVMInitializeAllAsmPrinters();
+  
+    if (LLVM_DEBUG) {
+      fprintf(stderr, "%s ; target_machine: %p \n", __PRETTY_FUNCTION__, lean_to_TargetMachine(target_machine));
+      fprintf(stderr, "...%s ; module: %p \n", __PRETTY_FUNCTION__, lean_to_Module(module));
+      fprintf(stderr, "...%s ; filepath: %s \n", __PRETTY_FUNCTION__, lean_string_cstr(filepath));
+      fprintf(stderr, "...%s ; codegenType: %lu \n", __PRETTY_FUNCTION__, codegenType);
+    }
+    char *err_msg = NULL;
+    char *filepath_c_str = strdup(lean_string_cstr(filepath)); // TODO(bollu): do we need the `strdup`?
+    // LLVMTargetMachineEmitToFile(LLVMTargetMachineRef T, LLVMModuleRef M, char *Filename, LLVMCodeGenFileType codegen, char **ErrorMessage)
+    int is_error = LLVMTargetMachineEmitToFile(lean_to_TargetMachine(target_machine),
+				lean_to_Module(module),
+				filepath_c_str,
+				LLVMCodeGenFileType(codegenType),
+				&err_msg);
+
+    if (LLVM_DEBUG) {
+      fprintf(stderr, "...%s ; error?: %d \n", __PRETTY_FUNCTION__, is_error);
+    }
+
+    if (LLVM_DEBUG && is_error) {
+      fprintf(stderr, "...%s ; err_msg: %s \n", __PRETTY_FUNCTION__, err_msg);
+    }
+
+    
+    return lean_io_result_mk_ok(lean_box(0));
+  
 }
