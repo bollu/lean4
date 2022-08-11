@@ -7,3 +7,4 @@ test_flags.sh
 *.lean.linked.bc
 *.lean.c.o2.ll
 *.lean.o
+*.bc.o
