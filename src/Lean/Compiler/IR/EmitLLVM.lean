@@ -1700,6 +1700,7 @@ partial def emitCase (x : VarId) (xType : IRType) (alts : Array Alt) : M Unit :=
     emitLn "}"
 -/
 partial def emitCase (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (xType : IRType) (alts : Array Alt) : M Unit := do
+    let oldBB ← LLVM.getInsertBlock builder
     debugPrint "emitCase"
     let tag ← emitTag builder x xType
     let tag ← LLVM.buildSext builder tag (← LLVM.i64Type (← getLLVMContext))  ""
@@ -1724,7 +1725,9 @@ partial def emitCase (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (xType : IRTyp
     -- emitLn "}"
     -- this builder does not have an insertion position after emitting a case
     LLVM.clearInsertionPosition builder
-
+    -- TODO(bollu): we should never need this code. Any code that wants to access the parent function
+    -- should use the state that is stored in the context, and not use the implicit context of the builder.
+    LLVM.positionBuilderAtEnd builder oldBB -- reset state
 -- contract: emitJP will keep the builder context untouched.
 partial def emitJDecl (builder: LLVM.Ptr LLVM.Builder) (jp: JoinPointId) (ps: Array Param) (b: FnBody): M Unit := do
   let oldBB ← LLVM.getInsertBlock builder -- TODO: state saving into pattern
