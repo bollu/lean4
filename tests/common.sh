@@ -27,7 +27,8 @@ function compile_lean_c_backend {
 
 function compile_lean_llvm_backend {
     rm "*.ll" || true # remove debugging files.
-    rm "*.bc" || true # remove debugging files.
+    rm "*.bc" || true # remove bitcode files
+    rm "*.o" || true # remove object files
     # print the original C program well-formatted, and LLVM sources for handy debugging.
     lean --c="$f.c" "$f" || fail "Failed to compile $f into C file"
     clang-format -i "$f.c"
