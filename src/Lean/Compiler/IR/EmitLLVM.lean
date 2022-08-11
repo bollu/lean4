@@ -1341,7 +1341,7 @@ def emitSProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (n offse
   let ctx ← getLLVMContext
   let (fnName, retty) ←
     match t with
-    | IRType.float  => pure ("lean_ctor_get_float", ← LLVM.floatType ctx)
+    | IRType.float  => pure ("lean_ctor_get_float", ← LLVM.doubleTypeInContext ctx)
     | IRType.uint8  => pure ("lean_ctor_get_uint8", ← LLVM.i8Type ctx)
     | IRType.uint16 => pure ("lean_ctor_get_uint16", ←  LLVM.i16Type ctx)
     | IRType.uint32 => pure ("lean_ctor_get_uint32", ← LLVM.i32Type ctx)
@@ -1436,7 +1436,7 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.reuse x c u ys => throw (Error.unimplemented "emitReuse z x c u ys")
   | Expr.proj i x       => emitProj builder z i x
   | Expr.uproj i x      => throw (Error.unimplemented "emitUProj z i x")
-  | Expr.sproj n o x    => throw (Error.unimplemented "emitSProj z t n o x")
+  | Expr.sproj n o x    => emitSProj builder z t n o x
   | Expr.fap c ys       => emitFullApp builder z c ys
   | Expr.pap c ys       => emitPartialApp builder z c ys
   | Expr.ap x ys        => emitApp builder z x ys -- throw (Error.unimplemented "emitApp z x ys")
@@ -1565,7 +1565,6 @@ def emitJmp (builder: LLVM.Ptr LLVM.Builder) (jp : JoinPointId) (xs : Array Arg)
   -- emit "goto "; emit j; emitLn ";"
   let _ ← LLVM.buildBr builder (← emitJp jp)
 
-
 /-
 def emitUSet (x : VarId) (n : Nat) (y : VarId) : M Unit := do
   emit "lean_ctor_set_usize("; emit x; emit ", "; emit n; emit ", "; emit y; emitLn ");"
@@ -1591,7 +1590,7 @@ def emitSSet (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (n : Nat) (offset : Na
   let ctx ← getLLVMContext
   let (fnName, retty) ←
   match t with
-  | IRType.float  => pure ("lean_ctor_set_float", ← LLVM.floatType ctx)
+  | IRType.float  => pure ("lean_ctor_set_float", ← LLVM.doubleTypeInContext ctx)
   | IRType.uint8  => pure ("lean_ctor_set_uint8", ← LLVM.i8Type ctx)
   | IRType.uint16 => pure ("lean_ctor_set_uint16", ← LLVM.i16Type ctx)
   | IRType.uint32 => pure ("lean_ctor_set_uint32", ← LLVM.i32Type ctx)
