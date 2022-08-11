@@ -2192,32 +2192,32 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
       -- build slot for d
       let initBB ← builderAppendBasicBlock builder s!"do_{d.name}_init"
       let restBB ← builderAppendBasicBlock builder s!"post_{d.name}_init"
-      let builtinParam ← LLVM.getParam parentFn 0 -- TODO(bollu): what does this argument mean?
       let checkBuiltin? := getBuiltinInitFnNameFor? env d.name |>.isSome
       if checkBuiltin? then
          -- TODO (bollu): what does this condition mean?
+        let builtinParam ← LLVM.getParam parentFn 0 -- TODO(bollu): what does this argument mean?
         let cond ← buildLeanBoolTrue? builder builtinParam "is_builtin_true"
         let _ ← LLVM.buildCondBr builder cond initBB restBB
        else
         let _ ← LLVM.buildBr builder initBB
 
-      -- vv fill in init
+      -- vvfill in initvv
       LLVM.positionBuilderAtEnd builder initBB
       let dInitFn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) (← toLLVMType d.resultType) (← toCName initFn) #[(← LLVM.voidPtrType ctx)]
       let world ← callLeanIOMkWorld builder
-      let dval ← LLVM.buildCall builder dInitFn #[world]
+      let resv ← LLVM.buildCall builder dInitFn #[world]
       -- TODO(bollu): eliminate code duplication
-      let err? ← callLeanIOResultIsError builder dval s!"{d.name}_is_error"
+      let err? ← callLeanIOResultIsError builder resv s!"{d.name}_is_error"
       buildIfThen_ builder parentFn s!"init_{d.name}_isError" err?
         (fun builder => do
-          let _ ← LLVM.buildRet builder dval
+          let _ ← LLVM.buildRet builder resv
           pure ShouldForwardControlFlow.no)
-      let dval ← callLeanIOResultGetValue builder dval s!"{d.name}_res"
+      let dval ← callLeanIOResultGetValue builder resv s!"{d.name}_res"
       LLVM.buildStore builder dval dslot
       if d.resultType.isObj then
          callLeanMarkPersistentFn builder dval
       let _ ← LLVM.buildBr builder restBB
-      -- ^ end filling up of init.
+      -- ^^end filling up of init.^^
       LLVM.positionBuilderAtEnd builder restBB
 
     | _ => do
