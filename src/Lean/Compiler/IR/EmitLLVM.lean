@@ -1566,6 +1566,46 @@ def emitJmp (builder: LLVM.Ptr LLVM.Builder) (jp : JoinPointId) (xs : Array Arg)
   let _ ← LLVM.buildBr builder (← emitJp jp)
 
 
+/-
+def emitUSet (x : VarId) (n : Nat) (y : VarId) : M Unit := do
+  emit "lean_ctor_set_usize("; emit x; emit ", "; emit n; emit ", "; emit y; emitLn ");"
+-/
+/-
+def emitUSet (x : VarId) (n : Nat) (y : VarId) : M Unit := do
+  emit "lean_ctor_set_usize("; emit x; emit ", "; emit n; emit ", "; emit y; emitLn ");"
+-/
+
+
+/-
+def emitSSet (x : VarId) (n : Nat) (offset : Nat) (y : VarId) (t : IRType) : M Unit := do
+  match t with
+  | IRType.float  => emit "lean_ctor_set_float"
+  | IRType.uint8  => emit "lean_ctor_set_uint8"
+  | IRType.uint16 => emit "lean_ctor_set_uint16"
+  | IRType.uint32 => emit "lean_ctor_set_uint32"
+  | IRType.uint64 => emit "lean_ctor_set_uint64"
+  | _             => throw "invalid instruction";
+  emit "("; emit x; emit ", "; emitOffset n offset; emit ", "; emit y; emitLn ");"
+-/
+def emitSSet (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (n : Nat) (offset : Nat) (y : VarId) (t : IRType) : M Unit := do
+  let ctx ← getLLVMContext
+  let (fnName, retty) ←
+  match t with
+  | IRType.float  => pure ("lean_ctor_set_float", ← LLVM.floatType ctx)
+  | IRType.uint8  => pure ("lean_ctor_set_uint8", ← LLVM.i8Type ctx)
+  | IRType.uint16 => pure ("lean_ctor_set_uint16", ← LLVM.i16Type ctx)
+  | IRType.uint32 => pure ("lean_ctor_set_uint32", ← LLVM.i32Type ctx)
+  | IRType.uint64 => pure ("lean_ctor_set_uint64", ← LLVM.i64Type ctx)
+  | _             => throw (Error.compileError "invalid instruction");
+  let argtys := #[ ← LLVM.voidPtrType ctx]
+  let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  let xv ← emitLhsVal builder x
+  let offset ← emitOffset builder n offset
+  let yv ← emitLhsVal builder y
+  let _ ← LLVM.buildCall builder fn  #[xv, offset, yv]
+
+
+
 
 
 /-
@@ -1697,10 +1737,7 @@ partial def emitBlock (builder: LLVM.Ptr LLVM.Builder) (b : FnBody) : M Unit := 
   /-
   emitUSet x i y; emitBlock b
   -/
-  | FnBody.sset x i o y t b    => throw (Error.unimplemented "sset")
-  /-
-  emitSSet x i o y t; emitBlock b
-  -/
+  | FnBody.sset x i o y t b    => emitSSet builder x i o y t; emitBlock builder b
   | FnBody.mdata _ b           =>  throw (Error.unimplemented "mdata")
   /-
   emitBlock b
