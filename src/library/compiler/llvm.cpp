@@ -772,6 +772,25 @@ lean_llvm_build_not(lean_object *builder, lean_object *v, lean_object *name, lea
   return lean_io_result_mk_ok(Value_to_lean(out));
 }
 
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_build_icmp(lean_object *builder, uint64_t predicate, lean_object *x, lean_object *y, lean_object *name, lean_object * /* w */) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; : %p\n", __PRETTY_FUNCTION__, builder);
+    fprintf(stderr, "...%s ; predicate: %lu\n", __PRETTY_FUNCTION__, predicate);
+    fprintf(stderr, "...%s ; lhs: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(x)));
+    fprintf(stderr, "...%s ; rhs: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(y)));
+    fprintf(stderr, "...%s ; name: %s\n", __PRETTY_FUNCTION__, lean_string_cstr(name));
+  }
+  LLVMValueRef out = LLVMBuildICmp(lean_to_Builder(builder),
+				   LLVMIntPredicate(predicate),
+				   lean_to_Value(x),
+				   lean_to_Value(y),
+				   lean_string_cstr(name));
+  
+  fprintf(stderr, "...%s ; out: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(out));
+  return lean_io_result_mk_ok(Value_to_lean(out));
+}
+
 
 
 
