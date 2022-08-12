@@ -179,6 +179,9 @@ opaque buildPointerCast (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&P
 @[extern "lean_llvm_build_sext"]
 opaque buildSext (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String := ""): IO (Ptr Value)
 
+@[extern "lean_llvm_build_sext_or_trunc"]
+opaque buildSextOrTrunc (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String := ""): IO (Ptr Value)
+
 @[extern "lean_llvm_build_switch"]
 opaque buildSwitch (builder: @&Ptr Builder) (val: @&Ptr Value) (elseBB: @&Ptr BasicBlock) (numCasesHint: @&UInt64): IO (Ptr Value)
 
@@ -505,11 +508,11 @@ def callLeanDecRef (builder: LLVM.Ptr LLVM.Builder) (res: LLVM.Ptr LLVM.Value): 
 
 -- ***lean_unsigned_to_nat***
 def getOrCreateLeanUnsignedToNatFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
-  getOrCreateFunctionPrototype ctx mod (← LLVM.voidPtrType ctx) "lean_unsigned_to_nat"  #[← LLVM.i64Type ctx]
+  getOrCreateFunctionPrototype ctx mod (← LLVM.voidPtrType ctx) "lean_unsigned_to_nat"  #[← LLVM.i32Type ctx]
 
 def callLeanUnsignedToNatFn (builder: LLVM.Ptr LLVM.Builder) (n: Nat) (name: String): M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
-  let nv ← LLVM.constIntUnsigned ctx (UInt64.ofNat n)
+  let nv ← LLVM.constInt32 ctx (UInt64.ofNat n)
   LLVM.buildCall builder (← getOrCreateLeanUnsignedToNatFn ctx (← getLLVMModule)) #[nv] name
 
 
@@ -638,10 +641,11 @@ def callLeanClosureSetFn (builder: LLVM.Ptr LLVM.Builder) (closure ix arg: LLVM.
 def callLeanObjTag (builder: LLVM.Ptr LLVM.Builder) (closure: LLVM.Ptr LLVM.Value) (retName: String): M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
   let fnName :=  "lean_obj_tag"
-  let retty ← LLVM.size_tType ctx
+  let retty ← LLVM.i32Type ctx
   let argtys := #[ ← LLVM.voidPtrType ctx]
   let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
-  LLVM.buildCall builder fn  #[closure] retName
+  let out ← LLVM.buildCall builder fn  #[closure] retName
+  LLVM.buildSextOrTrunc builder out (← LLVM.i64Type ctx)
 
 -- ***lean_io_result_get_value**
 def getOrCreateLeanIOResultGetValueFn: M (LLVM.Ptr LLVM.Value) := do
@@ -1093,7 +1097,9 @@ def emitAllocCtor (builder: LLVM.Ptr LLVM.Builder) (c : CtorInfo) : M (LLVM.Ptr 
   let ctx ← getLLVMContext
   -- throw (Error.unimplemented "emitAllocCtor")
   -- TODO(bollu): find the correct size.
-  let scalarSize := 900; -- HACK: do find the correct size.
+  -- TODO(bollu): don't assume void * size is 8
+  let hackSizeofVoidPtr := 8
+  let scalarSize := hackSizeofVoidPtr * c.usize + c.ssize; -- HACK: do find the correct size.
   -- let idx ← LLVM.constIntUnsigned ctx (UInt64.ofNat c.cidx)
   -- let size ← LLVM.constIntUnsigned ctx (UInt64.ofNat c.size)
   -- let scalarSize ← LLVM.constIntUnsigned ctx (UInt64.ofNat scalarSize)
@@ -1442,8 +1448,9 @@ def callLeanCtorGet (builder: LLVM.Ptr LLVM.Builder) (x i: LLVM.Ptr LLVM.Value) 
   let ctx ← getLLVMContext
   let fnName :=  "lean_ctor_get"
   let retty ← LLVM.voidPtrType (← getLLVMContext)
-  let argtys := #[ ← LLVM.voidPtrType ctx, ← LLVM.size_tType ctx]
+  let argtys := #[ ← LLVM.voidPtrType ctx, ← LLVM.i32Type ctx]
   let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
+  let i ← LLVM.buildSextOrTrunc builder i (← LLVM.i32Type ctx)
   LLVM.buildCall builder fn  #[x, i] retName
 
 
@@ -1517,10 +1524,11 @@ def emitSProj (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (n offse
 def callLeanIsExclusive (builder: LLVM.Ptr LLVM.Builder) (closure: LLVM.Ptr LLVM.Value) (retName: String := ""): M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
   let fnName :=  "lean_is_exclusive"
-  let retty ← LLVM.i8Type ctx -- TODO (bollu): Lean uses i8 instead of i1 for booleans because C things?
+  let retty ← LLVM.i1Type ctx -- TODO (bollu): Lean uses i8 instead of i1 for booleans because C things?
   let argtys := #[ ← LLVM.voidPtrType ctx]
   let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
-  LLVM.buildCall builder fn  #[closure] retName
+  let out ← LLVM.buildCall builder fn  #[closure] retName
+  LLVM.buildSextOrTrunc builder out (← LLVM.i8Type ctx)
 
 -- ***bool lean_is_scalar(lean_obj_arg o)***
 def callLeanIsScalar (builder: LLVM.Ptr LLVM.Builder) (closure: LLVM.Ptr LLVM.Value) (retName: String := ""): M (LLVM.Ptr LLVM.Value) := do

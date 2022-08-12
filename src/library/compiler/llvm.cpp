@@ -759,6 +759,29 @@ lean_llvm_build_sext(lean_object *builder, lean_object *val, lean_object *destty
   return lean_io_result_mk_ok(Value_to_lean(out));
 }
 
+extern "C" LEAN_EXPORT lean_object *
+lean_llvm_build_sext_or_trunc(lean_object *builder, lean_object *val, lean_object *destty,
+			     lean_object *name, lean_object * /* w */) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; builder: %p\n", __PRETTY_FUNCTION__, builder);
+    fprintf(stderr, "...%s ; val: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(val)));
+    fprintf(stderr, "...%s ; destty: %s\n", __PRETTY_FUNCTION__, LLVMPrintTypeToString(lean_to_Type(destty)));    
+  }
+  LLVMTypeRef valType = LLVMTypeOf(lean_to_Value(val));
+  LLVMValueRef out;
+  if (LLVMGetIntTypeWidth(valType) == LLVMGetIntTypeWidth(lean_to_Type(destty))) {
+    out = lean_to_Value(val);
+  } else if (LLVMGetIntTypeWidth(valType) < LLVMGetIntTypeWidth(lean_to_Type(destty))) {
+    out = LLVMBuildSExt(lean_to_Builder(builder), lean_to_Value(val), lean_to_Type(destty),
+				   lean_string_cstr(name));
+  } else {
+    out = LLVMBuildTrunc(lean_to_Builder(builder), lean_to_Value(val), lean_to_Type(destty),
+				   lean_string_cstr(name));
+  }
+  fprintf(stderr, "...%s ; out: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(out));
+  return lean_io_result_mk_ok(Value_to_lean(out));
+}
+
 
 extern "C" LEAN_EXPORT lean_object *
 lean_llvm_build_switch(lean_object *builder, lean_object *val, lean_object *elsebb,
