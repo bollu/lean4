@@ -414,7 +414,7 @@ def callLeanBox (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value) (nam
 
 -- ***void lean_mark_persistent (void *) ***--
 def getOrCreateLeanMarkPersistentFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
-  getOrCreateFunctionPrototype ctx mod (← LLVM.i1Type ctx) "lean_mark_persistent"  #[(← LLVM.voidPtrType ctx)]
+  getOrCreateFunctionPrototype ctx mod (← LLVM.voidType ctx) "lean_mark_persistent"  #[(← LLVM.voidPtrType ctx)]
 
 def callLeanMarkPersistentFn (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr LLVM.Value): M Unit := do
   let _ ← LLVM.buildCall builder (← getOrCreateLeanMarkPersistentFn (← getLLVMContext) (← getLLVMModule)) #[arg] ""
@@ -2232,7 +2232,8 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
     -- emitLn "if (lean_io_result_is_error(res)) return res;"
     -- emitLn "lean_dec_ref(res);"
     let world ← callLeanIOMkWorld builder
-    let initf ← getOrCreateFunctionPrototype ctx (← getLLVMModule) (← toLLVMType d.resultType) (← toCName n) #[(← LLVM.voidPtrType ctx)]
+    let initf ← getOrCreateFunctionPrototype ctx (← getLLVMModule) (← toLLVMType d.resultType) (← toCName n)
+                #[← LLVM.i8Type ctx, ← LLVM.voidPtrType ctx]
     let resv ← LLVM.buildCall builder initf #[world]
     let err? ← callLeanIOResultIsError builder resv "is_error"
     buildIfThen_ builder parentFn s!"init_{d.name}_isError" err?
@@ -2260,7 +2261,8 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
 
       -- vvfill in initvv
       LLVM.positionBuilderAtEnd builder initBB
-      let dInitFn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) (← toLLVMType d.resultType) (← toCName initFn) #[(← LLVM.voidPtrType ctx)]
+      let dInitFn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) (← toLLVMType d.resultType) (← toCName initFn)
+        #[← LLVM.i8Type ctx, ← LLVM.voidPtrType ctx]
       let world ← callLeanIOMkWorld builder
       let resv ← LLVM.buildCall builder dInitFn #[world]
       -- TODO(bollu): eliminate code duplication
@@ -2492,12 +2494,11 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
     -/
   let setPanicMesagesFn ← getOrCreateLeanSetPanicMessages ctx mod
   -- | TODO: remove reuse of the same function type across two locations
-  let modInitFnTy ← LLVM.functionType (← LLVM.voidPtrType ctx) #[ (← LLVM.i8Type ctx), (← LLVM.voidPtrType ctx)] (isVarArg := false)
+  let modInitFnTy ← LLVM.functionType (← LLVM.voidPtrType ctx) #[ (← LLVM.i8Type ctx), (← LLVM.voidPtrType ctx)]
   let modInitFn ← LLVM.getOrAddFunction mod (mkModuleInitializationFunctionName modName) modInitFnTy
   let _ ← LLVM.buildCall builder setPanicMesagesFn #[(← LLVM.False ctx )] ""
-  let world ← LLVM.buildCall builder (← getOrCreateLeanIOMkWorldFn ctx mod) #[] "world"
-
-  let resv ← LLVM.buildCall builder modInitFn #[(← LLVM.constInt8 ctx 1 ), world] (modName.toString ++ "init_out")
+  let world ← callLeanIOMkWorld builder
+  let resv ← LLVM.buildCall builder modInitFn #[(← LLVM.constInt8 ctx 1 ), world] (modName.toString ++ "_init_out")
   let _ ← LLVM.buildStore builder resv res
 
   let _ ← LLVM.buildCall builder setPanicMesagesFn #[(← LLVM.True ctx )] ""
@@ -2533,24 +2534,6 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
             let inv ← LLVM.buildLoad builder inslot "inv"
             let _ ← callLeanCtorSet builder nv (← constIntUnsigned 1) inv
             LLVM.buildStore builder nv inslot)
-
-        -- TODO: have yet to do the while loop!
-        -- TODO: have yet to do the while loop!
-        -- TODO: have yet to do the while loop!
-
-        /-
-          emitLns ["in = lean_box(0);",
-                    "int i = argc;",
-                    "while (i > 1) {",
-                    " lean_object* n;",
-                    " i--;",
-                    " n = lean_alloc_ctor(1,2,0); lean_ctor_set(n, 0, lean_mk_string(argv[i])); lean_ctor_set(n, 1, in);",
-                    " in = n;",
-                  "}"]
-          -/
-          /-
-          emitLn ("res = " ++ leanMainFn ++ "(in, lean_io_mk_world());")
-          -/
         let leanMainFnTy ← LLVM.functionType (← LLVM.voidPtrType ctx) #[(← LLVM.voidPtrType ctx), (← LLVM.voidPtrType ctx)]
         let leanMainFn ← LLVM.getOrAddFunction mod leanMainFn leanMainFnTy
         let world ← callLeanIOMkWorld builder
