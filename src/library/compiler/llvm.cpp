@@ -510,6 +510,8 @@ lean_llvm_position_builder_at_end(lean_object *builder, lean_object *bb,
   if (LLVM_DEBUG) {
     fprintf(stderr, "%s ; builder: %p\n", __PRETTY_FUNCTION__, builder);
     fprintf(stderr, ".....%s ; bb: %p\n", __PRETTY_FUNCTION__, bb);
+    fprintf(stderr, ".....%s ; fn: %s\n", __PRETTY_FUNCTION__,
+	    LLVMPrintValueToString(LLVMGetBasicBlockParent(lean_to_BasicBlock(bb))));
   }
   LLVMPositionBuilderAtEnd(lean_to_Builder(builder), lean_to_BasicBlock(bb));
   return lean_io_result_mk_ok(lean_box(0));

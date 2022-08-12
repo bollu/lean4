@@ -772,18 +772,20 @@ def builderAppendBasicBlock (builder: LLVM.Ptr LLVM.Builder) (name: String): M (
 def buildWhile_ (builder: LLVM.Ptr LLVM.Builder) (name: String)
   (condcodegen: LLVM.Ptr LLVM.Builder → M (LLVM.Ptr LLVM.Value))
   (bodycodegen: LLVM.Ptr LLVM.Builder → M Unit): M Unit := do
+  debugPrint "buildWhile_"
   let fn ← builderGetInsertionFn builder
 
   let nameHeader := name ++ "header"
   let nameBody := name ++ "body"
   let nameMerge := name ++ "merge"
 
+  -- cur → header
   let headerbb ← LLVM.appendBasicBlockInContext (← getLLVMContext) fn nameHeader
+  let _ ← LLVM.buildBr builder headerbb
+
   let bodybb ← LLVM.appendBasicBlockInContext (← getLLVMContext) fn nameBody
   let mergebb ← LLVM.appendBasicBlockInContext (← getLLVMContext) fn nameMerge
 
-  -- cur → header
-  let _ ← LLVM.buildBr builder headerbb
   -- header → {body, merge}
   LLVM.positionBuilderAtEnd builder headerbb
   let cond ← condcodegen builder
@@ -2440,6 +2442,7 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
   let xs ← match d with
    | .fdecl (xs := xs) .. => pure xs
    | _ =>  throw (Error.compileError "function declaration expected")
+  debugPrint s!"emitMainFn xs.size {xs.size}"
 
   unless xs.size == 2 || xs.size == 1 do throw (Error.compileError "invalid main function, incorrect arity when generating code")
   let env ← getEnv
@@ -2530,10 +2533,10 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
             let iv_next ← LLVM.buildSub builder iv (← constIntUnsigned 1) "iv.next"
             LLVM.buildStore builder iv_next islot
             let nv ← callLeanAllocCtor builder 1 2 0 "nv"
-            let argv_i_slot ← LLVM.buildGEP builder argvval #[iv] "argv.i.slot"
-            let argv_i_val ← LLVM.buildLoad builder argv_i_slot "argv.i.val"
-            let argv_i_val_str ← callLeanMkString builder argv_i_val "arg.i.val.str"
-            let _ ← callLeanCtorSet builder nv (← constIntUnsigned 0) argv_i_val_str
+            let argv_i_next_slot ← LLVM.buildGEP builder argvval #[iv_next] "argv.i.next.slot"
+            let argv_i_next_val ← LLVM.buildLoad builder argv_i_next_slot "argv.i.next.val"
+            let argv_i_next_val_str ← callLeanMkString builder argv_i_next_val "arg.i.next.val.str"
+            let _ ← callLeanCtorSet builder nv (← constIntUnsigned 0) argv_i_next_val_str
             let inv ← LLVM.buildLoad builder inslot "inv"
             let _ ← callLeanCtorSet builder nv (← constIntUnsigned 1) inv
             LLVM.buildStore builder nv inslot)
@@ -2679,6 +2682,7 @@ def emitLLVM (env : Environment) (modName : Name) (filepath: String): IO Unit :=
          -- so we can then remove the
          -- unused portions after inlining
          LLVM.linkModules (dest := ctx.llvmmodule) (src := modruntime)
+         LLVM.printModuletoFile ctx.llvmmodule "/home/bollu/temp/lean-llvm.linked.ll"
          -- TODO (bollu): run pass pipeline
          LLVM.writeBitcodeToFile ctx.llvmmodule filepath
          -- TODO (bollu): produce object code directly.
