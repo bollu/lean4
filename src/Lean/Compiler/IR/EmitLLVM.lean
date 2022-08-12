@@ -531,7 +531,7 @@ def callLeanMkString
                                          (← getLLVMModule)
                                          (← LLVM.voidPtrType ctx)
                                          "lean_mk_string"
-                                          #[← LLVM.voidPtrType ctx, ← LLVM.i64Type ctx]
+                                          #[← LLVM.voidPtrType ctx]
   LLVM.buildCall builder fn #[strPtr] name
 
 
@@ -1484,8 +1484,10 @@ def emitOffset (builder: LLVM.Ptr LLVM.Builder )(n : Nat) (offset : Nat) : M (LL
    let basety ← LLVM.pointerType (← LLVM.i8Type ctx)
    let basev ← LLVM.constPointerNull basety
    -- https://stackoverflow.com/questions/14608250/how-can-i-find-the-size-of-a-type
-   let gepVoidPtrAt1 ← LLVM.buildGEP builder basev #[(← constIntUnsigned 1)] "gep_void_1"
-   let out ← LLVM.buildPtrToInt builder gepVoidPtrAt1 (← LLVM.size_tType ctx)  "gep_size_void*" -- sizeof(void*)
+   -- let gepVoidPtrAt1 ← LLVM.buildGEP builder basev #[(← constIntUnsigned 1)] "gep_void_1"
+   -- let out ← LLVM.buildPtrToInt builder gepVoidPtrAt1 (← LLVM.size_tType ctx)  "gep_size_void*" -- sizeof(void*)
+   -- TODO(bollu): replace 8 with sizeof(void*)
+   let out ← constIntUnsigned 8
    let out ← LLVM.buildMul builder out (← constIntUnsigned n) "" -- sizeof(void*)*n
    LLVM.buildAdd builder out (← constIntUnsigned offset) "" -- sizeof(void*)*n+offset
 
@@ -2347,6 +2349,7 @@ def emitInitFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
       (fun builder => do
         let _ ← LLVM.buildRet builder res
         pure ShouldForwardControlFlow.no)
+    callLeanDecRef builder res
     -- TODO: call lean_dec_ref. It's fine to not decrement refcounts.
     /-
     let decls := getDecls env
