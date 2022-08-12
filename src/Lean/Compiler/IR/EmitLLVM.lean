@@ -1572,17 +1572,20 @@ def emitBox (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (x : VarId) (xType: IRT
 
 def emitUnbox (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (x : VarId) (retName: String := ""): M Unit := do
   let ctx ← getLLVMContext
-  let fnName :=
+  let (fnName, retty) ←
      match t with
-     | IRType.usize  => "lean_unbox_usize"
-     | IRType.uint32 => "lean_unbox_uint32"
-     | IRType.uint64 => "lean_unbox_uint64"
-     | IRType.float  => "lean_unbox_float"
-     | _             => "lean_unbox";
+     | IRType.usize  => pure ("lean_unbox_usize", ← toLLVMType t)
+     | IRType.uint32 => pure ("lean_unbox_uint32", ← toLLVMType t)
+     | IRType.uint64 => pure ("lean_unbox_uint64", ← toLLVMType t)
+     | IRType.float  => pure ("lean_unbox_float", ← toLLVMType t)
+     | _             => pure ("lean_unbox", ← LLVM.size_tType ctx)
   let argtys := #[← LLVM.voidPtrType ctx ]
-  let retty ← toLLVMType t
+  -- let retty ← toLLVMType t
   let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
   let zval ← LLVM.buildCall builder fn #[← emitLhsVal builder x] retName
+  -- TODO(bollu): note that lean_unbox only returns an i64, but we may need to truncate to
+  -- smaller widths. see `phashmap` for an example of this occurring at calls to `lean_unbox`
+  let zval ← LLVM.buildSextOrTrunc builder zval (← toLLVMType t)
   emitLhsSlotStore builder z zval
 
 
@@ -1650,6 +1653,7 @@ def emitReuse (builder: LLVM.Ptr LLVM.Builder)
    )
   emitCtorSetArgs builder z ys
 
+def shouldEmitResetReuse? : Bool := False
 /-
 def emitVDecl (z : VarId) (t : IRType) (v : Expr) : M Unit :=
   match v with
@@ -1672,8 +1676,10 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   debugPrint "emitVDecl"
   match v with
   | Expr.ctor c ys      => emitCtor builder z c ys -- throw (Error.unimplemented "emitCtor z c ys")
-  | Expr.reset n x      => emitReset builder z n x
-  | Expr.reuse x c u ys => emitReuse builder z x c u ys -- throw (Error.unimplemented "emitReuse z x c u ys")
+  | Expr.reset n x      =>
+     if shouldEmitResetReuse? then emitReset builder z n x else throw (Error.unimplemented "emitReset")
+  | Expr.reuse x c u ys =>
+     if shouldEmitResetReuse? then emitReuse builder z x c u ys else throw (Error.unimplemented "emitReuse")
   | Expr.proj i x       => emitProj builder z i x
   | Expr.uproj i x      => throw (Error.unimplemented "emitUProj z i x")
   | Expr.sproj n o x    => emitSProj builder z t n o x
@@ -1763,7 +1769,7 @@ def emitSet (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (i : Nat) (y : Arg) : M
 
 def emitTailCall (builder: LLVM.Ptr LLVM.Builder) (v : Expr) : M Unit := do
   debugPrint "emitTailCall"
-  match v with
+   match v with
   | Expr.fap _ ys => do
     let ctx ← read
     let ps := ctx.mainParams
@@ -2595,9 +2601,11 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
         let resv ← LLVM.buildLoad builder res "resv"
         let retv ← callLeanUnboxUint32 builder (← callLeanIOResultGetValue builder resv "io_val") "retv"
         let retv ← LLVM.buildSext builder retv (← LLVM.i64Type ctx) "retv_sext"
+        callLeanDecRef builder resv
         let _ ← LLVM.buildRet builder retv
         pure ShouldForwardControlFlow.no
       else do
+        callLeanDecRef builder resv
         let _ ← LLVM.buildRet builder (← LLVM.constInt64 ctx 0)
         pure ShouldForwardControlFlow.no
 

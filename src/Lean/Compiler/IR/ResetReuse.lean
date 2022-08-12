@@ -148,12 +148,14 @@ end ResetReuse
 
 open ResetReuse
 
-def Decl.insertResetReuse (d : Decl) : Decl :=
+def Decl.insertResetReuse (d : Decl) : Decl := d
+/-
   match d with
   | .fdecl (body := b) ..=>
     let nextIndex := d.maxIndex + 1
     let bNew      := (R b {}).run' nextIndex
     d.updateBody! bNew
   | other => other
+-/
 
 end Lean.IR
