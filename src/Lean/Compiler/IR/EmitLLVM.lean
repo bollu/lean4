@@ -2594,7 +2594,7 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
         let resv ← LLVM.buildLoad builder res "resv"
         callLeanIOResultShowError builder resv ""
         callLeanDecRef builder resv
-        let _ ← LLVM.buildRet builder (← LLVM.constInt64 ctx 0)
+        let _ ← LLVM.buildRet builder (← LLVM.constInt64 ctx 1)
         pure ShouldForwardControlFlow.no)
   -- at the merge
   let _ ← LLVM.buildUnreachable builder
