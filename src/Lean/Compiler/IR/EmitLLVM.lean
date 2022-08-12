@@ -1522,7 +1522,7 @@ def callLeanIsExclusive (builder: LLVM.Ptr LLVM.Builder) (closure: LLVM.Ptr LLVM
   let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
   LLVM.buildCall builder fn  #[closure] retName
 
--- ***bool lean_is_exclusive(lean_obj_arg o)***
+-- ***bool lean_is_scalar(lean_obj_arg o)***
 def callLeanIsScalar (builder: LLVM.Ptr LLVM.Builder) (closure: LLVM.Ptr LLVM.Value) (retName: String := ""): M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
   let fnName :=  "lean_is_scalar"
@@ -1535,7 +1535,9 @@ def emitIsShared (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (x : VarId) : M Un
     debugPrint "emitIsShared"
     let xv ← emitLhsVal builder x
     let exclusive? ← callLeanIsExclusive builder xv
+    let exclusive? ← buildLeanBoolTrue? builder exclusive?
     let shared? ← LLVM.buildNot builder exclusive?
+    let shared? ← LLVM.buildSext builder shared? (← LLVM.i8Type (← getLLVMContext))
     emitLhsSlotStore builder z shared?
 
 
@@ -1728,8 +1730,7 @@ def emitTag (x : VarId) (xType : IRType) : M Unit := do
 -/
 def emitTag (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (xType : IRType) : M (LLVM.Ptr LLVM.Value) := do
   if xType.isObj then do
-    let xslot ← emitLhsSlot_ x
-    let xval ← LLVM.buildLoad builder xslot ""
+    let xval ← emitLhsVal builder x
     callLeanObjTag builder xval ""
     -- emit "lean_obj_tag("; emit x; emit ")"
   else if xType.isScalar then do
