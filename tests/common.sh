@@ -46,6 +46,7 @@ function compile_lean_llvm_backend {
     # opt -S -O2 "$f.bc.ll" -o "$f.bc.o2.ll" # generate easy to read ll from bitcode.
     # llvm-link "$f.bc" $LIBRUNTIMEBC -o "$f.linked.bc"
     lean --bc="$f.linked.bc" "$f" || fail "Failed to compile $f into bitcode file"
+    opt -S -O2 "$f.linked.bc" -o "$f.linked.bc.o2.ll" # generate easy to read ll from bitcode
     # llc --relocation-model=pic -O1 -march=x86-64 -filetype=obj "$f.linked.bc" -o "$f.o" # TODO: figure out how to pick up triple.
     leanc -o "$f.out" "$@" "$f.linked.bc.o" || fail "Failed to link object file '$f.o', generated from bitcode file $f.linked.bc"
 }

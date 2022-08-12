@@ -305,6 +305,9 @@ def constInt1 (ctx: Ptr Context) (value: UInt64) (signExtend: Bool := false): IO
 def constInt8 (ctx: Ptr Context) (value: UInt64) (signExtend: Bool := false): IO (Ptr Value) :=
   constInt' ctx 8 value signExtend
 
+def constInt32 (ctx: Ptr Context) (value: UInt64) (signExtend: Bool := false): IO (Ptr Value) :=
+  constInt' ctx 32 value signExtend
+
 def constInt64 (ctx: Ptr Context) (value: UInt64) (signExtend: Bool := false): IO (Ptr Value) :=
   constInt' ctx 64 value signExtend
 
@@ -575,11 +578,16 @@ def callLeanIOResultGetValueFn (builder: LLVM.Ptr LLVM.Builder) (arg: LLVM.Ptr L
 -- lean_alloc_ctor (unsigned tag, unsigned num_obj, unsigned scalar_sz)
 def getOrCreateLeanAllocCtorFn: M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
-  let unsigned ← LLVM.size_tType ctx
+  -- let unsigned ← LLVM.size_tType ctx
+  let i32 ← LLVM.i32Type ctx
   getOrCreateFunctionPrototype ctx (← getLLVMModule)
-    (← LLVM.voidPtrType ctx) "lean_alloc_ctor"  #[unsigned, unsigned, unsigned]
+    (← LLVM.voidPtrType ctx) "lean_alloc_ctor"  #[i32, i32, i32]
 
-def callLeanAllocCtor (builder: LLVM.Ptr LLVM.Builder) (tag num_objs scalar_sz: LLVM.Ptr LLVM.Value) (name: String := ""): M (LLVM.Ptr LLVM.Value) := do
+def callLeanAllocCtor (builder: LLVM.Ptr LLVM.Builder) (tag num_objs scalar_sz: Nat) (name: String := ""): M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  let tag ← LLVM.constInt32 ctx (UInt64.ofNat tag)
+  let num_objs ← LLVM.constInt32 ctx (UInt64.ofNat num_objs)
+  let scalar_sz ← LLVM.constInt32 ctx (UInt64.ofNat scalar_sz)
   LLVM.buildCall builder (← getOrCreateLeanAllocCtorFn) #[tag, num_objs, scalar_sz] name
 
 -- void lean_ctor_set(b_lean_obj_arg o, unsigned i, lean_obj_arg v)
@@ -1079,13 +1087,15 @@ def emitAllocCtor (c : CtorInfo) : M Unit := do
   emitCtorScalarSize c.usize c.ssize; emitLn ");"
 -/
 def emitAllocCtor (builder: LLVM.Ptr LLVM.Builder) (c : CtorInfo) : M (LLVM.Ptr LLVM.Value) := do
+  debugPrint s!"emitAllocCtor {c.name}     cidx {c.cidx}     size {c.size}"
   let ctx ← getLLVMContext
   -- throw (Error.unimplemented "emitAllocCtor")
+  -- TODO(bollu): find the correct size.
   let scalarSize := 900; -- HACK: do find the correct size.
-  let idx ← LLVM.constIntUnsigned ctx (UInt64.ofNat c.cidx)
-  let n ← LLVM.constIntUnsigned ctx (UInt64.ofNat c.size)
-  let scalarSize ← LLVM.constIntUnsigned ctx (UInt64.ofNat scalarSize)
-  callLeanAllocCtor builder idx n scalarSize "lean_alloc_ctor_out"
+  -- let idx ← LLVM.constIntUnsigned ctx (UInt64.ofNat c.cidx)
+  -- let size ← LLVM.constIntUnsigned ctx (UInt64.ofNat c.size)
+  -- let scalarSize ← LLVM.constIntUnsigned ctx (UInt64.ofNat scalarSize)
+  callLeanAllocCtor builder c.cidx c.size scalarSize "lean_alloc_ctor_out"
 /-
 def emitCtorSetArgs (z : VarId) (ys : Array Arg) : M Unit :=
   ys.size.forM fun i => do
@@ -2515,7 +2525,7 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
             let iv ← LLVM.buildLoad builder islot "iv"
             let iv_next ← LLVM.buildSub builder iv (← constIntUnsigned 1) "iv.next"
             LLVM.buildStore builder iv_next islot
-            let nv ← callLeanAllocCtor builder (← constIntUnsigned 1) (← constIntUnsigned 2) (← constIntUnsigned 0) "nv"
+            let nv ← callLeanAllocCtor builder 1 2 0 "nv"
             let argv_i_slot ← LLVM.buildGEP builder argvval #[iv] "argv.i.slot"
             let argv_i_val ← LLVM.buildLoad builder argv_i_slot "argv.i.val"
             let argv_i_val_str ← callLeanMkString builder argv_i_val "arg.i.val.str"

@@ -815,6 +815,20 @@ lean_llvm_build_add(lean_object *builder, lean_object *lhs, lean_object *rhs, le
 }
 
 extern "C" LEAN_EXPORT lean_object *
+lean_llvm_build_sub(lean_object *builder, lean_object *lhs, lean_object *rhs, lean_object *name, lean_object * /* w */) {
+  if (LLVM_DEBUG) {
+    fprintf(stderr, "%s ; : %p\n", __PRETTY_FUNCTION__, builder);
+    fprintf(stderr, "...%s ; lhs: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(lhs)));
+    fprintf(stderr, "...%s ; rhs: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(lean_to_Value(rhs)));
+  }
+  LLVMValueRef out = LLVMBuildSub(lean_to_Builder(builder), lean_to_Value(lhs), lean_to_Value(rhs), 
+				       lean_string_cstr(name));
+  
+  fprintf(stderr, "...%s ; out: %s\n", __PRETTY_FUNCTION__, LLVMPrintValueToString(out));
+  return lean_io_result_mk_ok(Value_to_lean(out));
+}
+
+extern "C" LEAN_EXPORT lean_object *
 lean_llvm_build_not(lean_object *builder, lean_object *v, lean_object *name, lean_object * /* w */) {
   if (LLVM_DEBUG) {
     fprintf(stderr, "%s ; : %p\n", __PRETTY_FUNCTION__, builder);
