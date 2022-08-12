@@ -10,3 +10,4 @@
 *.lean.c.o2.ll
 *.lean.o
 *.lean.o2.ll
+*.bc.o2.ll

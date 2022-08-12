@@ -8,3 +8,4 @@ test_flags.sh
 *.lean.c.o2.ll
 *.lean.o
 *.bc.o
+*.bc.o2.ll
