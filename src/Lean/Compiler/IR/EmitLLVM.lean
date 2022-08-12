@@ -33,6 +33,7 @@ namespace IntPredicate
 -- https://llvm.org/doxygen/group__LLVMCCoreTypes.html#ga79d2c730e287cc9cf6410d8b24880ce6
 def EQ : UInt64 := 32
 def NE : UInt64 := EQ + 1
+def UGT : UInt64 := NE + 1
 end IntPredicate
 
 inductive Ty where
@@ -189,6 +190,9 @@ opaque buildMul (builder: @&Ptr Builder) (x y: @&Ptr Value) (name: @&String): IO
 
 @[extern "lean_llvm_build_add"]
 opaque buildAdd (builder: @&Ptr Builder) (x y: @&Ptr Value) (name: @&String): IO (Ptr Value)
+
+@[extern "lean_llvm_build_sub"]
+opaque buildSub (builder: @&Ptr Builder) (x y: @&Ptr Value) (name: @&String := ""): IO (Ptr Value)
 
 @[extern "lean_llvm_build_not"]
 opaque buildNot (builder: @&Ptr Builder) (x: @&Ptr Value) (name: @&String := ""): IO (Ptr Value)
@@ -516,6 +520,17 @@ def callLeanMkStringFromBytesFn
   let ctx ← getLLVMContext
   LLVM.buildCall builder (← getOrCreateMkStringFromBytesFn ctx (← getLLVMModule)) #[strPtr, nBytes] name
 
+-- **lean_mk_string**
+def callLeanMkString
+   (builder: LLVM.Ptr LLVM.Builder) (strPtr: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
+  let ctx ← getLLVMContext
+  let fn ←  getOrCreateFunctionPrototype (← getLLVMContext)
+                                         (← getLLVMModule)
+                                         (← LLVM.voidPtrType ctx)
+                                         "lean_mk_string"
+                                          #[← LLVM.voidPtrType ctx, ← LLVM.i64Type ctx]
+  LLVM.buildCall builder fn #[strPtr] name
+
 
 
 
@@ -564,7 +579,7 @@ def getOrCreateLeanAllocCtorFn: M (LLVM.Ptr LLVM.Value) := do
   getOrCreateFunctionPrototype ctx (← getLLVMModule)
     (← LLVM.voidPtrType ctx) "lean_alloc_ctor"  #[unsigned, unsigned, unsigned]
 
-def callLeanAllocCtor (builder: LLVM.Ptr LLVM.Builder) (tag num_objs scalar_sz: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
+def callLeanAllocCtor (builder: LLVM.Ptr LLVM.Builder) (tag num_objs scalar_sz: LLVM.Ptr LLVM.Value) (name: String := ""): M (LLVM.Ptr LLVM.Value) := do
   LLVM.buildCall builder (← getOrCreateLeanAllocCtorFn) #[tag, num_objs, scalar_sz] name
 
 -- void lean_ctor_set(b_lean_obj_arg o, unsigned i, lean_obj_arg v)
@@ -575,7 +590,8 @@ def getOrCreateLeanCtorSetFn: M (LLVM.Ptr LLVM.Value) := do
   getOrCreateFunctionPrototype ctx (← getLLVMModule)
     (← LLVM.voidType ctx) "lean_ctor_set"  #[voidptr, unsigned, voidptr]
 
-def callLeanCtorSet (builder: LLVM.Ptr LLVM.Builder) (o i v: LLVM.Ptr LLVM.Value) (name: String): M (LLVM.Ptr LLVM.Value) := do
+-- TODO(bollu): remove name from this, since it returns void.
+def callLeanCtorSet (builder: LLVM.Ptr LLVM.Builder) (o i v: LLVM.Ptr LLVM.Value) (name: String := ""): M (LLVM.Ptr LLVM.Value) := do
   LLVM.buildCall builder (← getOrCreateLeanCtorSetFn) #[o, i, v] name
 
 
@@ -745,6 +761,37 @@ def builderAppendBasicBlock (builder: LLVM.Ptr LLVM.Builder) (name: String): M (
   LLVM.appendBasicBlockInContext (← getLLVMContext) fn name
 
 
+def buildWhile_ (builder: LLVM.Ptr LLVM.Builder) (name: String)
+  (condcodegen: LLVM.Ptr LLVM.Builder → M (LLVM.Ptr LLVM.Value))
+  (bodycodegen: LLVM.Ptr LLVM.Builder → M Unit): M Unit := do
+  let fn ← builderGetInsertionFn builder
+
+  let nameHeader := name ++ "header"
+  let nameBody := name ++ "body"
+  let nameMerge := name ++ "merge"
+
+  let headerbb ← LLVM.appendBasicBlockInContext (← getLLVMContext) fn nameHeader
+  let bodybb ← LLVM.appendBasicBlockInContext (← getLLVMContext) fn nameBody
+  let mergebb ← LLVM.appendBasicBlockInContext (← getLLVMContext) fn nameMerge
+
+  -- cur → header
+  let _ ← LLVM.buildBr builder headerbb
+  -- header → {body, merge}
+  LLVM.positionBuilderAtEnd builder headerbb
+  let cond ← condcodegen builder
+  -- LLVM.positionBuilderAtEnd builder headerbb
+  let _ ← LLVM.buildCondBr builder cond bodybb mergebb
+
+  -- body → header
+  LLVM.positionBuilderAtEnd builder bodybb
+  bodycodegen builder
+  -- LLVM.positionBuilderAtEnd builder bodybb
+  let _ ← LLVM.buildBr builder headerbb
+
+  -- merge
+  LLVM.positionBuilderAtEnd builder mergebb
+
+
 -- build an if, and position the builder at the merge basic block after execution.
 -- The '_' denotes that we return Unit on each branch.
 -- TODO: get current function from the builder.
@@ -764,7 +811,7 @@ def buildIfThen_ (builder: LLVM.Ptr LLVM.Builder) (fn: LLVM.Ptr LLVM.Value)  (na
   -- then
   LLVM.positionBuilderAtEnd builder thenbb
   let fwd? ← thencodegen builder
-  LLVM.positionBuilderAtEnd builder thenbb
+  -- LLVM.positionBuilderAtEnd builder thenbb
   match fwd? with
   | .yes => let _ ← LLVM.buildBr builder mergebb
   | .no => pure ()
@@ -787,14 +834,14 @@ def buildIfThenElse_ (builder: LLVM.Ptr LLVM.Builder)  (name: String) (brval: LL
   -- then
   LLVM.positionBuilderAtEnd builder thenbb
   let fwd? ← thencodegen builder
-  LLVM.positionBuilderAtEnd builder thenbb
+  -- LLVM.positionBuilderAtEnd builder thenbb
   match fwd? with
   | .yes => let _ ← LLVM.buildBr builder mergebb
   | .no => pure ()
   -- else
   LLVM.positionBuilderAtEnd builder elsebb
   let fwd? ← elsecodegen builder
-  LLVM.positionBuilderAtEnd builder elsebb
+  -- LLVM.positionBuilderAtEnd builder elsebb
   match fwd? with
   | .yes => let _ ← LLVM.buildBr builder mergebb
   | .no => pure ()
@@ -2398,7 +2445,8 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
   /-
   int main(int argc, char ** argv) {
   -/
-  let mainTy ← LLVM.functionType (← LLVM.i64Type ctx) #[(← LLVM.i64Type ctx), (← LLVM.voidPtrType ctx)] (isVarArg := false)
+  let mainTy ← LLVM.functionType (← LLVM.i64Type ctx)
+      #[(← LLVM.i64Type ctx), (← LLVM.pointerType (← LLVM.voidPtrType ctx))]
   let main ← LLVM.getOrAddFunction mod "main" mainTy
   let entry ← LLVM.appendBasicBlockInContext ctx main "entry"
   LLVM.positionBuilderAtEnd builder entry
@@ -2410,7 +2458,7 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
   /-
   lean_object* in; lean_object* res;";
   -/
-  let in_ ← LLVM.buildAlloca builder (← LLVM.i8PtrType ctx) "in"
+  let inslot ← LLVM.buildAlloca builder (← LLVM.i8PtrType ctx) "in"
   let res ← LLVM.buildAlloca builder (← LLVM.i8PtrType ctx) "res"
   /-
   if usesLeanAPI then
@@ -2453,7 +2501,29 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
       callLeanInitTaskManager builder
       if xs.size == 2 then
         let inv ← callLeanBox builder (← LLVM.constInt (← LLVM.size_tType ctx) 0) "inv"
-        let _ ← LLVM.buildStore builder inv in_
+        let _ ← LLVM.buildStore builder inv inslot
+        let islot ← LLVM.buildAlloca builder  (← LLVM.size_tType ctx) "islot"
+        let argcval ← LLVM.getParam main 0
+        let argvval ← LLVM.getParam main 1
+        LLVM.buildStore builder argcval islot
+        buildWhile_ builder "argv"
+          (condcodegen := fun builder => do
+            let iv ← LLVM.buildLoad builder islot "iv"
+            let i_gt_1 ← LLVM.buildICmp builder LLVM.IntPredicate.UGT iv (← constIntUnsigned 1) "i_gt_1"
+            return i_gt_1)
+          (bodycodegen := fun builder => do
+            let iv ← LLVM.buildLoad builder islot "iv"
+            let iv_next ← LLVM.buildSub builder iv (← constIntUnsigned 1) "iv.next"
+            LLVM.buildStore builder iv_next islot
+            let nv ← callLeanAllocCtor builder (← constIntUnsigned 1) (← constIntUnsigned 2) (← constIntUnsigned 0) "nv"
+            let argv_i_slot ← LLVM.buildGEP builder argvval #[iv] "argv.i.slot"
+            let argv_i_val ← LLVM.buildLoad builder argv_i_slot "argv.i.val"
+            let argv_i_val_str ← callLeanMkString builder argv_i_val "arg.i.val.str"
+            let _ ← callLeanCtorSet builder nv (← constIntUnsigned 0) argv_i_val_str
+            let inv ← LLVM.buildLoad builder inslot "inv"
+            let _ ← callLeanCtorSet builder nv (← constIntUnsigned 1) inv
+            LLVM.buildStore builder nv inslot)
+
         -- TODO: have yet to do the while loop!
         -- TODO: have yet to do the while loop!
         -- TODO: have yet to do the while loop!
@@ -2474,7 +2544,7 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
         let leanMainFnTy ← LLVM.functionType (← LLVM.voidPtrType ctx) #[(← LLVM.voidPtrType ctx), (← LLVM.voidPtrType ctx)]
         let leanMainFn ← LLVM.getOrAddFunction mod leanMainFn leanMainFnTy
         let world ← callLeanIOMkWorld builder
-        let inv ← LLVM.buildLoad builder in_ "inv"
+        let inv ← LLVM.buildLoad builder inslot "inv"
         let resv ← LLVM.buildCall builder leanMainFn #[inv, world] "resv"
         let _ ← LLVM.buildStore builder resv res
         pure ShouldForwardControlFlow.yes
