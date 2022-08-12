@@ -13,6 +13,7 @@ import Lean.Compiler.IR.EmitUtil
 import Lean.Compiler.IR.NormIds
 import Lean.Compiler.IR.SimpCase
 import Lean.Compiler.IR.Boxing
+import Lean.Compiler.IR.ResetReuse
 
 open Lean.IR.ExplicitBoxing (isBoxedName)
 
@@ -1110,22 +1111,12 @@ def emitCtorSetArgs (z : VarId) (ys : Array Arg) : M Unit :=
     emit "lean_ctor_set("; emit z; emit ", "; emit i; emit ", "; emitArgSlot_ ys[i]!; emitLn ");"
 -/
 def emitCtorSetArgs (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (ys : Array Arg) : M Unit := do
-  IO.eprintln "##-1##"
   ys.size.forM fun i => do
-    -- -- emit "lean_ctor_set("; emit z; emit ", "; emit i; emit ", "; emitArgSlot_ ys[i]!; emitLn ");"
-    IO.println "#######0#######"
-    let zslot ← emitLhsSlot_ z;
-    let zv ← LLVM.buildLoad builder zslot "z"
-    -- IO.eprintln "##1##"
-    let yslot ← emitArgSlot_ builder ys[i]!
-    let yv ← LLVM.buildLoad builder yslot "y"
-    -- IO.eprintln "##2##"
+    let zv ← emitLhsVal builder z
+    let yv ← emitArgVal builder ys[i]!
     let iv ← LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat i)
-    IO.eprintln "######3#######"
     let _ ← callLeanCtorSet builder zv iv yv ""
-    IO.eprintln "######4#######"
-    let _ ← LLVM.buildStore builder zv zslot
-    IO.eprintln "######45#######"
+    emitLhsSlotStore builder z zv
     pure ()
 /-
 def emitCtor (z : VarId) (c : CtorInfo) (ys : Array Arg) : M Unit := do
@@ -1603,8 +1594,8 @@ def emitReset (z : VarId) (n : Nat) (x : VarId) : M Unit := do
   emitLn "}"
 -/
 def emitReset (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (n : Nat) (x : VarId) : M Unit := do
-  let zv ← emitLhsVal builder z
-  let isExclusive ← callLeanIsExclusive builder zv
+  let xv ← emitLhsVal builder x
+  let isExclusive ← callLeanIsExclusive builder xv
   let isExclusive ← buildLeanBoolTrue? builder isExclusive
   buildIfThenElse_ builder "isExclusive" isExclusive
    (fun builder => do
@@ -1615,13 +1606,12 @@ def emitReset (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (n : Nat) (x : VarId)
      return ShouldForwardControlFlow.yes
    )
    (fun builder => do
-      let xv ← emitLhsVal builder z
+      let xv ← emitLhsVal builder x
       callLeanDecRef builder xv
       let box0 ← callLeanBox builder (← constIntUnsigned 0) "box0"
       emitLhsSlotStore builder z box0
       return ShouldForwardControlFlow.yes
    )
-
 /-
 def emitReuse (z : VarId) (x : VarId) (c : CtorInfo) (updtHeader : Bool) (ys : Array Arg) : M Unit := do
   emit "if (lean_is_scalar("; emit x; emitLn ")) {";
@@ -1653,7 +1643,6 @@ def emitReuse (builder: LLVM.Ptr LLVM.Builder)
    )
   emitCtorSetArgs builder z ys
 
-def shouldEmitResetReuse? : Bool := False
 /-
 def emitVDecl (z : VarId) (t : IRType) (v : Expr) : M Unit :=
   match v with
@@ -1677,9 +1666,9 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   match v with
   | Expr.ctor c ys      => emitCtor builder z c ys -- throw (Error.unimplemented "emitCtor z c ys")
   | Expr.reset n x      =>
-     if shouldEmitResetReuse? then emitReset builder z n x else throw (Error.unimplemented "emitReset")
+     if ResetReuse.shouldEmitResetReuse? then emitReset builder z n x else throw (Error.unimplemented "emitReset")
   | Expr.reuse x c u ys =>
-     if shouldEmitResetReuse? then emitReuse builder z x c u ys else throw (Error.unimplemented "emitReuse")
+     if ResetReuse.shouldEmitResetReuse? then emitReuse builder z x c u ys else throw (Error.unimplemented "emitReuse")
   | Expr.proj i x       => emitProj builder z i x
   | Expr.uproj i x      => throw (Error.unimplemented "emitUProj z i x")
   | Expr.sproj n o x    => emitSProj builder z t n o x
