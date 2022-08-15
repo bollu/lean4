@@ -400,6 +400,9 @@ def getDecl (n : Name) : M Decl := do
 def debugPrint (s: String): M Unit :=
   IO.eprintln $ "[debug:" ++ s ++ "]"
 
+def constIntUnsigned (n: Nat): M (LLVM.Ptr LLVM.Value) :=  do
+    LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat n)
+
 -- vv emitMainFnIfIneeded vv
 def getOrCreateFunctionPrototype (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module)
   (retty: LLVM.Ptr LLVM.LLVMType) (name: String) (args: Array (LLVM.Ptr LLVM.LLVMType)): M (LLVM.Ptr LLVM.Value) := do
@@ -869,6 +872,7 @@ def buildLeanBoolTrue? (builder: LLVM.Ptr LLVM.Builder) (b: LLVM.Ptr LLVM.Value)
    LLVM.buildICmp builder LLVM.IntPredicate.NE b (← LLVM.constInt8 ctx 0) name
 
 
+
 -- ^^^^ LLVM UTILS ^^^^
 
 -- vvemitFnDeclsvv
@@ -1133,7 +1137,7 @@ def emitCtor (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (c : CtorInfo) (ys : A
 
   let ctx ← getLLVMContext
   if c.size == 0 && c.usize == 0 && c.ssize == 0 then do
-    let v ← callLeanBox builder (← LLVM.constInt (← LLVM.size_tType ctx) 0) "lean_box_outv"
+    let v ← callLeanBox builder (← constIntUnsigned c.cidx) "lean_box_outv"
     let _ ← LLVM.buildStore builder v slot
   else do
     let v ← emitAllocCtor builder c;
@@ -1295,8 +1299,6 @@ def getOrAddFunIdValue (builder: LLVM.Ptr LLVM.Builder) (f: FunId): M (LLVM.Ptr 
     let fnty ← LLVM.functionType retty argtys
     LLVM.getOrAddFunction (← getLLVMModule) fcname fnty
 
-def constIntUnsigned (n: Nat): M (LLVM.Ptr LLVM.Value) :=  do
-    LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat n)
 
 /-
 def emitPartialApp (z : VarId) (f : FunId) (ys : Array Arg) : M Unit := do
@@ -1530,11 +1532,14 @@ def callLeanIsScalar (builder: LLVM.Ptr LLVM.Builder) (closure: LLVM.Ptr LLVM.Va
   let fn ← getOrCreateFunctionPrototype ctx (← getLLVMModule) retty fnName argtys
   LLVM.buildCall builder fn  #[closure] retName
 
+ -- emitLhs z; emit "!lean_is_exclusive("; emit x; emitLn ");"
+
 def emitIsShared (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (x : VarId) : M Unit := do
     debugPrint "emitIsShared"
     let xv ← emitLhsVal builder x
     let exclusive? ← callLeanIsExclusive builder xv
-    let exclusive? ← buildLeanBoolTrue? builder exclusive?
+    let exclusive? ← LLVM.buildSextOrTrunc builder exclusive? (← LLVM.i1Type (← getLLVMContext))
+    -- let exclusive? ← buildLeanBoolTrue? builder exclusive?
     let shared? ← LLVM.buildNot builder exclusive?
     let shared? ← LLVM.buildSext builder shared? (← LLVM.i8Type (← getLLVMContext))
     emitLhsSlotStore builder z shared?

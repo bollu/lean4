@@ -144,7 +144,7 @@ partial def R : FnBody → M FnBody
       let b ← R b
       pure (instr.setBody b)
 
-def shouldEmitResetReuse? : Bool := True
+def shouldEmitResetReuse? : Bool := False
 
 end ResetReuse
 
