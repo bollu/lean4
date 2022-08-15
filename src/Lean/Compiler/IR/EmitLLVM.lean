@@ -180,6 +180,9 @@ opaque buildPointerCast (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&P
 @[extern "lean_llvm_build_sext"]
 opaque buildSext (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String := ""): IO (Ptr Value)
 
+@[extern "lean_llvm_build_zext"]
+opaque buildZext (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String := ""): IO (Ptr Value)
+
 @[extern "lean_llvm_build_sext_or_trunc"]
 opaque buildSextOrTrunc (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String := ""): IO (Ptr Value)
 
@@ -510,14 +513,13 @@ def callLeanDecRef (builder: LLVM.Ptr LLVM.Builder) (res: LLVM.Ptr LLVM.Value): 
    let _ ← LLVM.buildCall builder (← getOrCreateLeanDecRefFn) #[res] ""
 
 
--- ***lean_unsigned_to_nat***
-def getOrCreateLeanUnsignedToNatFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module): M (LLVM.Ptr LLVM.Value) := do
-  getOrCreateFunctionPrototype ctx mod (← LLVM.voidPtrType ctx) "lean_unsigned_to_nat"  #[← LLVM.i32Type ctx]
 
 def callLeanUnsignedToNatFn (builder: LLVM.Ptr LLVM.Builder) (n: Nat) (name: String): M (LLVM.Ptr LLVM.Value) := do
   let ctx ← getLLVMContext
+  let mod ← getLLVMModule
+  let f ←   getOrCreateFunctionPrototype ctx mod (← LLVM.voidPtrType ctx) "lean_unsigned_to_nat"  #[← LLVM.i32Type ctx]
   let nv ← LLVM.constInt32 ctx (UInt64.ofNat n)
-  LLVM.buildCall builder (← getOrCreateLeanUnsignedToNatFn ctx (← getLLVMModule)) #[nv] name
+  LLVM.buildCall builder f #[nv] name
 
 
 -- **lean_mk_string_from_bytes***
@@ -550,9 +552,7 @@ def getOrCreateLeanCStrToNatFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.
   getOrCreateFunctionPrototype ctx mod (← LLVM.voidPtrType ctx) "lean_cstr_to_nat"  #[← LLVM.voidPtrType ctx]
 
 def callLeanCStrToNatFn (builder: LLVM.Ptr LLVM.Builder) (n: Nat) (name: String): M (LLVM.Ptr LLVM.Value) := do
-  let ctx ← getLLVMContext
-  let nv ← LLVM.constIntUnsigned ctx (UInt64.ofNat n)
-  LLVM.buildCall builder (← getOrCreateLeanUnsignedToNatFn ctx (← getLLVMModule)) #[nv] name
+  callLeanUnsignedToNatFn builder n name
 
 
 -- ***lean_io_mk_world***
@@ -1099,7 +1099,6 @@ def emitAllocCtor (c : CtorInfo) : M Unit := do
 -/
 def emitAllocCtor (builder: LLVM.Ptr LLVM.Builder) (c : CtorInfo) : M (LLVM.Ptr LLVM.Value) := do
   debugPrint s!"emitAllocCtor {c.name}     cidx {c.cidx}     size {c.size}"
-  let ctx ← getLLVMContext
   -- throw (Error.unimplemented "emitAllocCtor")
   -- TODO(bollu): find the correct size.
   -- TODO(bollu): don't assume void * size is 8
@@ -1198,7 +1197,6 @@ def emitNumLit (builder: LLVM.Ptr LLVM.Builder) (t : IRType) (v : Nat) : M (LLVM
   debugPrint "emitNumLit"
   if t.isObj then
     if v < UInt32.size then
-      -- let v ← LLVM.buildSext builder v (← LLVM.i64Type (← getLLVMContext))
       callLeanUnsignedToNatFn builder v ""
       -- emit "lean_unsigned_to_nat("; emit v; emit "u)"
     else
@@ -1740,7 +1738,6 @@ def emitTag (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (xType : IRType) : M (L
   if xType.isObj then do
     let xval ← emitLhsVal builder x
     callLeanObjTag builder xval ""
-    -- emit "lean_obj_tag("; emit x; emit ")"
   else if xType.isScalar then do
     -- TODO (bollu): is it correct to assume that emitLit will do the right thing
     -- if it's not an object?
@@ -1873,6 +1870,14 @@ def emitSetTag (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (i : Nat) : M Unit :
 
 
 
+def ensureHasDefault' (alts : Array Alt) : Array Alt :=
+  if alts.any Alt.isDefault then alts
+  else
+    let last := alts.back;
+    let alts := alts.pop;
+    alts.push (Alt.default last.body)
+
+
 
 /-
 mutual
@@ -1903,18 +1908,19 @@ partial def emitCase (x : VarId) (xType : IRType) (alts : Array Alt) : M Unit :=
 partial def emitCase (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (xType : IRType) (alts : Array Alt) : M Unit := do
     let oldBB ← LLVM.getInsertBlock builder
     debugPrint "emitCase"
+    -- TODO: this needs to be done very carefully. I think I might need to do some sort of shenanigan to convert between 0/-1 to 0/1 ?
     let tag ← emitTag builder x xType
-    let tag ← LLVM.buildSext builder tag (← LLVM.i64Type (← getLLVMContext))  ""
+    let tag ← LLVM.buildZext builder tag (← LLVM.i64Type (← getLLVMContext))  ""
     -- TODO: sign extend tag into 64-bit.
     -- emit "switch ("; emitTag x xType; emitLn ") {";
-    let alts := ensureHasDefault alts;
+    let alts := ensureHasDefault' alts;
     let defaultBB ← builderAppendBasicBlock builder s!"case_{xType}_default"
     let numCasesHint := alts.size
     let switch ← LLVM.buildSwitch builder tag defaultBB (UInt64.ofNat numCasesHint)
     alts.forM fun alt => do
       match alt with
       | Alt.ctor c b  =>
-         let destbb ← builderAppendBasicBlock builder s!"case_{xType}_{c.name}"
+         let destbb ← builderAppendBasicBlock builder s!"case_{xType}_{c.name}_{c.cidx}"
          LLVM.addCase switch (← constIntUnsigned c.cidx) destbb
          LLVM.positionBuilderAtEnd builder destbb
          emitFnBody builder b
