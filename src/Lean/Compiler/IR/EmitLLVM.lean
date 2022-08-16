@@ -89,7 +89,7 @@ opaque addGlobal(m: @&Ptr Module) (name: @&String) (type: @&Ptr LLVMType): IO (P
 opaque getNamedGlobal(m: @&Ptr Module) (name: @&String): IO (Option (Ptr Value))
 
 @[extern "lean_llvm_build_global_string"]
-opaque buildGlobalString(builder: @&Ptr Builder) (value: @&String) (name: @&String): IO (Ptr Value)
+opaque buildGlobalString(builder: @&Ptr Builder) (value: @&String) (name: @&String := ""): IO (Ptr Value)
 
 @[extern "lean_llvm_set_initializer"]
 opaque setInitializer (glbl: @&Ptr Value) (val: @&Ptr Value): IO Unit
@@ -175,7 +175,7 @@ opaque buildGEP (builder: @&Ptr Builder) (base: @&Ptr Value) (ixs: @&Array (Ptr 
 opaque buildInBoundsGEP (builder: @&Ptr Builder) (base: @&Ptr Value) (ixs: @&Array (Ptr Value)) (name: @&String := ""): IO (Ptr Value)
 
 @[extern "lean_llvm_build_pointer_cast"]
-opaque buildPointerCast (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String): IO (Ptr Value)
+opaque buildPointerCast (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String := ""): IO (Ptr Value)
 
 @[extern "lean_llvm_build_sext"]
 opaque buildSext (builder: @&Ptr Builder) (val: @&Ptr Value) (destTy: @&Ptr LLVMType) (name: @&String := ""): IO (Ptr Value)
@@ -552,7 +552,12 @@ def getOrCreateLeanCStrToNatFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.
   getOrCreateFunctionPrototype ctx mod (← LLVM.voidPtrType ctx) "lean_cstr_to_nat"  #[← LLVM.voidPtrType ctx]
 
 def callLeanCStrToNatFn (builder: LLVM.Ptr LLVM.Builder) (n: Nat) (name: String): M (LLVM.Ptr LLVM.Value) := do
-  callLeanUnsignedToNatFn builder n name
+  let ctx ← getLLVMContext
+  let f ← getOrCreateLeanCStrToNatFn ctx (← getLLVMModule)
+  let s ← LLVM.buildGlobalString builder (value := toString n)
+  let s ← LLVM.buildPointerCast builder s (← LLVM.i8PtrType ctx)
+  LLVM.buildCall builder f #[s] name
+
 
 
 -- ***lean_io_mk_world***
