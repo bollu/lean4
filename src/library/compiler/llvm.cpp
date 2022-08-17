@@ -21,7 +21,7 @@ Lean's IR.
 #include "runtime/array_ref.h"
 #include "runtime/string_ref.h"
 
-#define LLVM_DEBUG 1
+#define LLVM_DEBUG 0
 
 static void donothing_finalize(void *obj) {
   (void)obj;
