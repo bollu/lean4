@@ -72,6 +72,22 @@ not a type former.
 
 We try to preserve type information because they unlock new optimizations, and we can type check
 the result produced by each code generator step.
+
+bollu question:
+Original
+--------
+ let x = 2;
+ let xnil : Vec Nat x := .Nil
+ let 2nil : Vec Nat 2 := .Nil
+ let y = rfl : xnil = 2nil
+
+Lambda'd
+--------
+ (fun x =>
+   let xnil : Vec Nat x := .Nil
+   let 2nil : Vec Nat 2 := .Nil
+   let y = rfl : xnil = 2nil) 2
+
 -/
 
 open Meta in
@@ -119,11 +135,14 @@ where
       else if (← isTypeFormer arg) then
         result := mkApp result (← toLCNFType arg)
       else
-        result := mkApp result erasedExpr
+        -- result := mkApp result erasedExpr
+        -- bollu question: should this be anyTypeExpr?
+        result := mkApp result anyTypeExpr
     return result
 
 /--
 Return the LCNF type for the given declaration.
+-- bollu question: create a combinator for caching?
 -/
 def getDeclLCNFType (declName : Name) : CoreM Expr := do
   match lcnfTypeExt.getState (← getEnv) |>.types.find? declName with
@@ -136,6 +155,7 @@ def getDeclLCNFType (declName : Name) : CoreM Expr := do
 
 /--
 Instantiate the LCNF type for the given declaration with the given universe levels.
+-- bollu question: create a combinator for caching?
 -/
 def instantiateLCNFTypeLevelParams (declName : Name) (us : List Level) : CoreM Expr := do
   if us.isEmpty then
@@ -156,6 +176,9 @@ Return true if the LCNF types `a` and `b` are compatible.
 Remark: `a` and `b` can be type formers (e.g., `List`, or `fun (α : Type) => Nat → Nat × α`)
 
 Remark: LCNFs types are eagerly eta reduced.
+
+bollu question:
+  what does it mean to be compatible? That they have a (most general?) unifier?
 -/
 partial def compatibleTypes (a b : Expr) : Bool :=
   if a.isAnyType || b.isAnyType then
@@ -163,21 +186,42 @@ partial def compatibleTypes (a b : Expr) : Bool :=
   else
     let a := a.headBeta
     let b := b.headBeta
-    if a == b then
+    if a == b then -- this is correct because de bruijn [no α renaming necessary]?
       true
     else
       match a, b with
       | .mdata _ a, b => compatibleTypes a b
       | a, .mdata _ b => compatibleTypes a b
+      -- bollu question: how can we have an app after reducing the head for beta reduction?
+      --    the reduction applied only once, correct?
       | .app f a, .app g b => compatibleTypes f g && compatibleTypes a b
+      -- bollu question: why dᵢ for types?
       | .forallE _ d₁ b₁ _, .forallE _ d₂ b₂ _ => compatibleTypes d₁ d₂ && compatibleTypes b₁ b₂
       | .lam _ d₁ b₁ _, .lam _ d₂ b₂ _ => compatibleTypes d₁ d₂ && compatibleTypes b₁ b₂
+     -- bollu question: in what way is the check of `Level.isEquiv` incomplete?
+     -- Return true if `u` and `v` denote the same level.
+     -- Check is currently incomplete.
       | .sort u, .sort v => Level.isEquiv u v
       | .const n us, .const m vs => n == m && List.isEqv us vs Level.isEquiv
       | _, _ => false
+    -- bvar: handled by ==?
+    -- fvar: handled by ==?
+    -- mvar: should be resolved?
+    -- sort: matched.
+    -- const: matched.
+    -- app: handled by β reduction + match.
+    -- lam: matched.
+    -- forallE: matched.
+    -- letE: LCNF does not contain let?
+    -- lit: handled by ==?
+    -- mdata: matched.
+    -- proj: LCNF does not contain proj?
 
+#check Lean.Meta.isTypeFormer
 /--
 Return `true` if `type` is a LCNF type former type.
+bollu question: difference between this and `Lean.Meta.isTypeFormer`?
+   This is more restricted (aka, only works with LCNF types?)
 -/
 def isTypeFormerType (type : Expr) : Bool :=
   match type with

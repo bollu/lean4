@@ -7,6 +7,8 @@ import Lean.Attributes
 
 namespace Lean.Compiler
 
+-- bollu question: Should this file port the pass
+-- in
 inductive SpecializeAttributeKind where
   | specialize | nospecialize
   deriving Inhabited, BEq

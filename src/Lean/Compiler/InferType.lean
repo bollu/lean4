@@ -6,6 +6,12 @@ Authors: Leonardo de Moura
 import Lean.Compiler.LCNFTypes
 import Lean.Compiler.Util
 
+-- bollu question: this file is for type inferring LCNF?
+-- We have both a type checker at `Check.lean` and a type inference algorithm
+-- in `InferType.lean`. do we have an assertion that what is inferred by the
+-- inference algorithm passes the type check?
+-- Do we at some point plan to write all this down formally?
+
 namespace Lean.Compiler
 
 class MonadInferType (m : Type → Type) where

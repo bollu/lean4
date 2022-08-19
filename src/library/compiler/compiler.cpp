@@ -233,6 +233,7 @@ environment compile(environment const & env, options const & opts, names cs) {
            when it is partially applied. Then, we can mark all `match` auxiliary functions as `[strong_inline]` */
         return new_env;
     }
+    // bollu question: do we port everything here?
     std::tie(new_env, ds) = specialize(new_env, ds, cfg);
     lean_assert(lcnf_check_let_decls(new_env, ds));
     trace_compiler(name({"compiler", "specialize"}), ds);
