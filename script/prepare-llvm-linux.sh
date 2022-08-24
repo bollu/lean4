@@ -22,6 +22,8 @@ cp -L llvm/bin/clang stage1/bin/
 cp -L llvm/bin/ld.lld stage1/bin/
 # a static archiver!
 cp -L llvm/bin/llvm-ar stage1/bin/
+# a LLVM configurator for PATH & LD_LIBRARY_PATH setup!
+cp -L llvm/bin/llvm-config stage1/bin/
 # dependencies of the above
 $CP llvm/lib/lib{clang-cpp,LLVM}*.so* stage1/lib/
 $CP $ZLIB/lib/libz.so* stage1/lib/
@@ -42,7 +44,7 @@ for f in $GLIBC/lib/lib{c,dl,m,rt,pthread}-*; do b=$(basename $f); cp $f stage1/
 OPTIONS=()
 echo -n " -DLEAN_STANDALONE=ON"
 echo -n " -DCMAKE_CXX_COMPILER=$PWD/llvm-host/bin/clang++ -DLEAN_CXX_STDLIB='-Wl,-Bstatic -lc++ -lc++abi -Wl,-Bdynamic'"
-echo -n " -DLEAN_EXTRA_CXX_FLAGS='--sysroot $PWD/llvm -idirafter $GLIBC_DEV/include ${EXTRA_FLAGS:-}'"
+echo -n " -DLEAN_EXTRA_CXX_FLAGS='--sysroot $PWD/llvm -idirafter $GLIBC_DEV/include ${EXTRA_FLAGS:-}' -IROOT/include/" # include include/ for llvm-c/
 # use target compiler directly when not cross-compiling
 if [[ -L llvm-host ]]; then
   echo -n " -DCMAKE_C_COMPILER=$PWD/stage1/bin/clang"
