@@ -10,13 +10,13 @@ Lean's IR.
 */
 
 #include <lean/lean.h>
-#include <llvm-c/BitWriter.h>
-#include <llvm-c/BitReader.h>
-#include <llvm-c/Core.h>
-#include <llvm-c/Types.h>
-#include <llvm-c/Linker.h>
-#include <llvm-c/Target.h>
-#include <llvm-c/TargetMachine.h>
+#include "llvm-c/BitWriter.h"
+#include "llvm-c/BitReader.h"
+#include "llvm-c/Core.h"
+#include "llvm-c/Types.h"
+#include "llvm-c/Linker.h"
+#include "llvm-c/Target.h"
+#include "llvm-c/TargetMachine.h"
 
 #include "runtime/array_ref.h"
 #include "runtime/string_ref.h"

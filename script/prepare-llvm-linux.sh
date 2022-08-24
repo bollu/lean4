@@ -15,6 +15,7 @@ else
   ln -s llvm llvm-host
 fi
 mkdir -p stage1/{bin,lib,lib/glibc,include/clang}
+ls -R -1u llvm/
 CP="cp -d"  # preserve symlinks
 # a C compiler!
 cp -L llvm/bin/clang stage1/bin/
@@ -44,6 +45,7 @@ for f in $GLIBC/lib/lib{c,dl,m,rt,pthread}-*; do b=$(basename $f); cp $f stage1/
 OPTIONS=()
 echo -n " -DLEAN_STANDALONE=ON"
 echo -n " -DCMAKE_CXX_COMPILER=$PWD/llvm-host/bin/clang++ -DLEAN_CXX_STDLIB='-Wl,-Bstatic -lc++ -lc++abi -Wl,-Bdynamic'"
+ls -R -1u $PWD/stage1/
 echo -n " -DLEAN_EXTRA_CXX_FLAGS='--sysroot $PWD/llvm -idirafter $GLIBC_DEV/include ${EXTRA_FLAGS:-} -I$PWD/stage1/include/'" # include include/ for llvm-c/
 # use target compiler directly when not cross-compiling
 if [[ -L llvm-host ]]; then
