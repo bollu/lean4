@@ -51,7 +51,7 @@ jobs:
             release: true
             shell: nix-shell --arg pkgsDist "import (fetchTarball \"channel:nixos-19.03\") {{}}" --run "bash -euxo pipefail {0}"
             # llvm-url: https://github.com/leanprover/lean-llvm/releases/download/14.0.0/lean-llvm-x86_64-linux-gnu.tar.zst
-            llvm-url: https://github.com/bollu/lean-llvm/releases/download/14.0.0/lean-llvm-x86_64-linux-gnu.tar.zst
+            llvm-url: https://github.com/bollu/lean-llvm/releases/download/v1.0.0/lean-llvm-x86_64-linux-gnu.zip
             prepare-llvm: ../script/prepare-llvm-linux.sh lean-llvm*
             binary-check: ldd -v
             # foreign code may be linked against more recent glibc
