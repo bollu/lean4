@@ -1207,11 +1207,22 @@ lean_llvm_target_machine_emit_to_file(lean_object *target_machine,
 				      uint64_t codegenType,
 				      lean_object* /* w */) {
   // TODO (bollu): move this to a different function
+  /*
   LLVMInitializeAllTargetInfos();
   LLVMInitializeAllTargets();
   LLVMInitializeAllTargetMCs();
   LLVMInitializeAllAsmParsers();
   LLVMInitializeAllAsmPrinters();
+  */
+
+  // TODO (bollu): figure out a story for cross-compilation.
+  // We currently choose not to invoke LLVMInitializeAllTargetInfos() etc.
+  // since our build system only enables certain backends.
+  // LLVMInitializeNativeTargetInfo();
+  LLVMInitializeNativeTarget();
+  // LLVMInitializeNativeTargetMC();
+  LLVMInitializeNativeAsmParser();
+  LLVMInitializeNativeAsmPrinter();
   
     if (LLVM_DEBUG) {
       fprintf(stderr, "%s ; target_machine: %p \n", __PRETTY_FUNCTION__, lean_to_TargetMachine(target_machine));
