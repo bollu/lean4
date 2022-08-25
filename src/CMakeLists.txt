@@ -281,11 +281,17 @@ include_directories(${CMAKE_BINARY_DIR}/include)
 # libleancpp/Lean as well as libleanrt/Init/Std are cyclically dependent. This works by default on macOS, which also doesn't like
 # the linker flags necessary on other platforms.
 # Furthermore, add LLVM flags into the list of flags we need when linking.
-execute_process(COMMAND llvm-config --ldflags OUTPUT_VARIABLE LLVM_CONFIG_LDFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND llvm-config --libs OUTPUT_VARIABLE LLVM_CONFIG_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+find_program(LLVM_CONFIG "llvm-config")
+if(NOT LLVM_CONFIG)
+    message(FATAL_ERROR "Unable to find 'llvm-config'")
+else()
+    message(STATUS "Found 'llvm-config' as ${LLVM_CONFIG}")
+endif()
+execute_process(COMMAND ${LLVM_CONFIG} --ldflags OUTPUT_VARIABLE LLVM_CONFIG_LDFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${LLVM_CONFIG} --libs OUTPUT_VARIABLE LLVM_CONFIG_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
 # if we build LLVM by source (as @bollu does)<with -DBUILD_SHARED_LIBS=ON, LLVM dynamically loads system libraries
 # such as '-lrt -ldl -lm -lz -ltinfo -lxml2'
-execute_process(COMMAND llvm-config --system-libs OUTPUT_VARIABLE LLVM_CONFIG_SYSTEM_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${LLVM_CONFIG} --system-libs OUTPUT_VARIABLE LLVM_CONFIG_SYSTEM_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   string(APPEND LEANC_STATIC_LINKER_FLAGS " -lleancpp -lInit -lStd -lLean -lleanrt ${LLVM_CONFIG_LDFLAGS} ${LLVM_CONFIG_LIBS} ${LLVM_CONFIG_SYSTEM_LIBS}")
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
@@ -305,9 +311,12 @@ string(APPEND LEANSHARED_LINKER_FLAGS " ${LEAN_CXX_STDLIB}")
 
 # Link LLVM for code generation
 # TODO: hide this behind a flag
+string(APPEND LEANSHARED_LINKER_FLAGS " ${LLVM_CONFIG_LDFLAGS} ${LLVM_CONFIG_LIBS} ${LLVM_CONFIG_SYSTEM_LIBS}")
+string(APPEND LEANC_STATIC_LINKER_FLAGS " ${LLVM_CONFIG_LDFLAGS} ${LLVM_CONFIG_LIBS} ${LLVM_CONFIG_SYSTEM_LIBS}")
 
-string(APPEND LEANSHARED_LINKER_FLAGS " ${LLVM_CONFIG_LDFLAGS} ${LLVM_CONFIG_LIBS}")
-string(APPEND LEANC_STATIC_LINKER_FLAGS " ${LLVM_CONFIG_LDFLAGS} ${LLVM_CONFIG_LIBS}")
+
+execute_process(COMMAND ${LLVM_CONFIG} --cxxflags OUTPUT_VARIABLE LLVM_CONFIG_CXXFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
+# message(FATAL_ERROR "Include flags: ${LLVM_CONFIG_CXXFLAGS}; Link flags: ${LEANC_STATIC_LINKER_FLAGS} ; ${LEANSHARED_LINKER_FLAGS}")
 
 # get rid of unused parts of C++ stdlib
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
