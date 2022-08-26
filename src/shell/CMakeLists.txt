@@ -28,7 +28,7 @@ endif()
 
 add_custom_target(lean ALL
   WORKING_DIRECTORY ${LEAN_SOURCE_DIR}
-  DEPENDS leanshared shell
+  DEPENDS leanshared shell runtime_bc
   COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make lean LEAN_SHELL="$<TARGET_OBJECTS:shell>"
   COMMAND_EXPAND_LISTS)
 
@@ -80,6 +80,15 @@ FOREACH(T ${LEANDOCEXS})
              WORKING_DIRECTORY "${LEAN_SOURCE_DIR}/../doc/examples"
              COMMAND bash -c "${TEST_VARS} ./test_single.sh ${T_NAME}")
   endif()
+ENDFOREACH(T)
+
+# LEAN COMPILER RAMP UP TESTS
+file(GLOB LEANCOMPTESTS "${LEAN_SOURCE_DIR}/../tests/backendramp/*.lean")
+FOREACH(T ${LEANCOMPTESTS})
+  GET_FILENAME_COMPONENT(T_NAME ${T} NAME)
+  add_test(NAME "leanramptest_${T_NAME}"
+           WORKING_DIRECTORY "${LEAN_SOURCE_DIR}/../tests/backendramp/"
+           COMMAND bash -c "${TEST_VARS} ./test_single.sh ${T_NAME}")
 ENDFOREACH(T)
 
 # LEAN COMPILER TESTS

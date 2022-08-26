@@ -1,0 +1,14 @@
+*.produced.out
+*.lean.out
+*.lean.c
+*.cmi
+*.cmx
+*.o
+*.bc
+*.lean.bc
+*.lean.bc.o2.ll
+*.lean.c.o2.ll
+*.lean.linked.bc
+*.lean.c.o2.ll
+*.lean.o
+*.lean.o2.ll

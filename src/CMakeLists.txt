@@ -35,6 +35,8 @@ option(CCACHE             "use ccache"         ON)
 option(SPLIT_STACK        "SPLIT_STACK"        OFF)
 # When OFF we disable LLVM support
 option(LLVM               "LLVM"               OFF)
+# When OFF we disable the LLVM backend
+option(LLVM_BACKEND        "LLVM_BACKEND"      ON)
 
 # When ON we include githash in the version string
 option(USE_GITHASH        "GIT_HASH"           ON)
@@ -158,9 +160,22 @@ if(AUTO_THREAD_FINALIZATION AND NOT MSVC)
 endif()
 
 if(LLVM)
-  if(NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_C_COMPILER_ID STREQUAL "Clang"))
-    message(FATAL_ERROR "LLVM=ON must be used with clang. Set `CMAKE_CXX_COMPILER` and `CMAKE_C_COMPILER` accordingly.")
-  endif()
+    # if(NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_C_COMPILER_ID STREQUAL "Clang"))
+    # message(FATAL_ERROR "LLVM=ON must be used with clang. Set `CMAKE_CXX_COMPILER=Clang` and `CMAKE_C_COMPILER=Clang` accordingly.")
+    # endif()
+  message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+  message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+  include_directories(${LLVM_INCLUDE_DIRS})
+  string(APPEND LEAN_EXTRA_CXX_FLAGS " -D LEAN_LLVM")
+else()
+  #message(WARNING "Disabling LLVM support.  JIT compilation will not be available")
+endif()
+
+if(LLVM_BACKEND)
+    # if(NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_C_COMPILER_ID STREQUAL "Clang"))
+    #     message(FATAL_ERROR "LLVM_BACKEND=ON must be used with clang. Set `CMAKE_CXX_COMPILER=clang++` and `CMAKE_C_COMPILER=clang` accordingly. Found ${CMAKE_CXX_COMPILER_ID}, ${CMAKE_C_COMPILER_ID}")
+    # endif()
   message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
   message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
@@ -265,12 +280,24 @@ include_directories(${CMAKE_BINARY_DIR}/include)
 
 # libleancpp/Lean as well as libleanrt/Init/Std are cyclically dependent. This works by default on macOS, which also doesn't like
 # the linker flags necessary on other platforms.
+# Furthermore, add LLVM flags into the list of flags we need when linking.
+find_program(LLVM_CONFIG "llvm-config")
+if(NOT LLVM_CONFIG)
+    message(FATAL_ERROR "Unable to find 'llvm-config'")
+else()
+    message(STATUS "Found 'llvm-config' as ${LLVM_CONFIG}")
+endif()
+execute_process(COMMAND ${LLVM_CONFIG} --ldflags OUTPUT_VARIABLE LLVM_CONFIG_LDFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${LLVM_CONFIG} --libs OUTPUT_VARIABLE LLVM_CONFIG_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+# if we build LLVM by source (as @bollu does)<with -DBUILD_SHARED_LIBS=ON, LLVM dynamically loads system libraries
+# such as '-lrt -ldl -lm -lz -ltinfo -lxml2'
+execute_process(COMMAND ${LLVM_CONFIG} --system-libs OUTPUT_VARIABLE LLVM_CONFIG_SYSTEM_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  string(APPEND LEANC_STATIC_LINKER_FLAGS " -lleancpp -lInit -lStd -lLean -lleanrt")
+  string(APPEND LEANC_STATIC_LINKER_FLAGS " -lleancpp -lInit -lStd -lLean -lleanrt ${LLVM_CONFIG_LDFLAGS} ${LLVM_CONFIG_LIBS} ${LLVM_CONFIG_SYSTEM_LIBS}")
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
   string(APPEND LEANC_STATIC_LINKER_FLAGS " -lleancpp -lInit -lStd -lLean -lnodefs.js -lleanrt")
 else()
-  string(APPEND LEANC_STATIC_LINKER_FLAGS " -Wl,--start-group -lleancpp -lLean -Wl,--end-group -Wl,--start-group -lInit -lStd -lleanrt -Wl,--end-group")
+  string(APPEND LEANC_STATIC_LINKER_FLAGS " ${LLVM_CONFIG_LDFLAGS} -Wl,--start-group -lleancpp -lLean -Wl,--end-group -Wl,--start-group -lInit -lStd -lleanrt -Wl,--end-group ${LLVM_CONFIG_LIBS} ${LLVM_CONFIG_SYSTEM_LIBS}")
 endif()
 
 set(LEAN_CXX_STDLIB "-lstdc++" CACHE STRING "C++ stdlib linker flags")
@@ -281,6 +308,12 @@ endif()
 
 string(APPEND LEANC_STATIC_LINKER_FLAGS " ${LEAN_CXX_STDLIB}")
 string(APPEND LEANSHARED_LINKER_FLAGS " ${LEAN_CXX_STDLIB}")
+
+# Link LLVM for code generation
+# TODO: hide this behind a flag
+string(APPEND LEANSHARED_LINKER_FLAGS " ${LLVM_CONFIG_LDFLAGS} ${LLVM_CONFIG_LIBS} ${LLVM_CONFIG_SYSTEM_LIBS}")
+string(APPEND LEANC_STATIC_LINKER_FLAGS " ${LLVM_CONFIG_LDFLAGS} ${LLVM_CONFIG_LIBS} ${LLVM_CONFIG_SYSTEM_LIBS}")
+
 
 # get rid of unused parts of C++ stdlib
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")

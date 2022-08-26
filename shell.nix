@@ -9,7 +9,8 @@ in { pkgs ? flakePkgs.nixpkgs, pkgsDist ? pkgs }:
   } (rec {
     buildInputs = with pkgs; [
       cmake gmp ccache
-      llvmPackages.llvm  # llvm-symbolizer for asan/lsan
+      llvmPackages.llvm # llvm-symbolizer for asan/lsan
+      libllvm
     ];
     # https://github.com/NixOS/nixpkgs/issues/60919
     hardeningDisable = [ "all" ];

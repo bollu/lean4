@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 source ../common.sh
 
-compile_lean
+# TODO(bollu): what should this be? C or LLVM?
+compile_lean_c_backend
