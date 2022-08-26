@@ -33,15 +33,15 @@ function compile_lean_llvm_backend {
     # print the original C program well-formatted, and LLVM sources for handy debugging.
     lean --c="$f.c" "$f" || fail "Failed to compile $f into C file"
     clang-format -i "$f.c"
-    [ ${DEBUG_LLVM} -eq 0 ] || clang $(leanc --print-cflags) -S -emit-llvm "$f.c" -o "$f.c.ll" # generate ll.
-    [ ${DEBUG_LLVM} -eq 0 ] || sed -i "s/optnone//g" "$f.c.ll" # remove optnone to actually allow some optimisation.
-    [ ${DEBUG_LLVM} -eq 0 ] ||  opt -S -O2 "$f.c.ll" -o "$f.c.o2.ll" # optimise it a little to be much more readable.
+    [ ${DEBUG_LLVM:-} -eq 0 ] || clang $(leanc --print-cflags) -S -emit-llvm "$f.c" -o "$f.c.ll" # generate ll.
+    [ ${DEBUG_LLVM:-} -eq 0 ] || sed -i "s/optnone//g" "$f.c.ll" # remove optnone to actually allow some optimisation.
+    [ ${DEBUG_LLVM:-} -eq 0 ] ||  opt -S -O2 "$f.c.ll" -o "$f.c.o2.ll" # optimise it a little to be much more readable.
 
     echo "using lean: $(which lean); leanc: $(which leanc)"
     # export LIBRUNTIMEBC=$(git rev-parse --show-toplevel)/build/stage1/runtime/libleanrt.bc # TODO: get this information into `leanc`.
     lean --bc="$f.linked.bc" "$f" || fail "Failed to compile $f into bitcode file"
-	[ ${DEBUG_LLVM} -eq 0 ] || opt -S "$f.linked.bc" -o "$f.linked.bc.ll" # generate easy to read ll from bitcode
-	[ ${DEBUG_LLVM} -eq 0 ] || opt -S -O2 "$f.linked.bc" -o "$f.linked.bc.o2.ll" # generate easy to read ll from bitcode
+	[ ${DEBUG_LLVM:-} -eq 0 ] || opt -S "$f.linked.bc" -o "$f.linked.bc.ll" # generate easy to read ll from bitcode
+	[ ${DEBUG_LLVM:-} -eq 0 ] || opt -S -O2 "$f.linked.bc" -o "$f.linked.bc.o2.ll" # generate easy to read ll from bitcode
     leanc -o "$f.out" "$@" "$f.linked.bc.o" || fail "Failed to link object file '$f.o', generated from bitcode file $f.linked.bc"
     set +o xtrace
 }
