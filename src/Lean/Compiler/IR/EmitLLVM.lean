@@ -105,7 +105,7 @@ def constIntUnsigned (n: Nat): M (LLVM.Ptr LLVM.Value) :=  do
     LLVM.constIntUnsigned (← getLLVMContext) (UInt64.ofNat n)
 
 -- vv emitMainFnIfIneeded vv
-def getOrCreateFunctionPrototype (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module)
+def getOrCreateFunctionPrototype (_ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module)
   (retty: LLVM.Ptr LLVM.LLVMType) (name: String) (args: Array (LLVM.Ptr LLVM.LLVMType)): M (LLVM.Ptr LLVM.Value) := do
   -- void lean_initialize();
   LLVM.getOrAddFunction mod name $
@@ -516,7 +516,7 @@ def buildWhile_ (builder: LLVM.Ptr LLVM.Builder) (name: String)
 -- build an if, and position the builder at the merge basic block after execution.
 -- The '_' denotes that we return Unit on each branch.
 -- TODO: get current function from the builder.
-def buildIfThen_ (builder: LLVM.Ptr LLVM.Builder) (fn: LLVM.Ptr LLVM.Value)  (name: String) (brval: LLVM.Ptr LLVM.Value)
+def buildIfThen_ (builder: LLVM.Ptr LLVM.Builder) (name: String) (brval: LLVM.Ptr LLVM.Value)
   (thencodegen: LLVM.Ptr LLVM.Builder → M ShouldForwardControlFlow): M Unit := do
   let fn ← builderGetInsertionFn builder
   -- LLVM.positionBuilderAtEnd builder
@@ -836,8 +836,6 @@ def emitCtor (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (c : CtorInfo) (ys : A
   debugPrint "emitCtor"
   let slot ← emitLhsSlot_ z;
   addVartoState z slot
-
-  let ctx ← getLLVMContext
   if c.size == 0 && c.usize == 0 && c.ssize == 0 then do
     let v ← callLeanBox builder (← constIntUnsigned c.cidx) "lean_box_outv"
     let _ ← LLVM.buildStore builder v slot
@@ -975,8 +973,8 @@ def emitExternCall (builder: LLVM.Ptr LLVM.Builder)
   (name: String): M (LLVM.Ptr LLVM.Value) :=
   match getExternEntryFor extData `c with
   | some (ExternEntry.standard _ extFn) => emitSimpleExternalCall builder extFn ps ys retty name
-  | some (ExternEntry.inline "llvm" pat)     => throw (Error.unimplemented "unimplemented codegen of inline LLVM")
-  | some (ExternEntry.inline _ pat)     => throw (Error.compileError "cannot codegen non-LLVM inline code")
+  | some (ExternEntry.inline "llvm" _pat)     => throw (Error.unimplemented "unimplemented codegen of inline LLVM")
+  | some (ExternEntry.inline _ _pat)     => throw (Error.compileError "cannot codegen non-LLVM inline code")
   | some (ExternEntry.foreign _ extFn)  => emitSimpleExternalCall builder extFn ps ys retty name
   | _ => throw (Error.compileError s!"failed to emit extern application '{f}'")
 
@@ -1185,7 +1183,7 @@ def emitOffset (builder: LLVM.Ptr LLVM.Builder )(n : Nat) (offset : Nat) : M (LL
   debugPrint "emitOffset"
    let ctx ← getLLVMContext
    let basety ← LLVM.pointerType (← LLVM.i8Type ctx)
-   let basev ← LLVM.constPointerNull basety
+   let _basev ← LLVM.constPointerNull basety
    -- https://stackoverflow.com/questions/14608250/how-can-i-find-the-size-of-a-type
    -- let gepVoidPtrAt1 ← LLVM.buildGEP builder basev #[(← constIntUnsigned 1)] "gep_void_1"
    -- let out ← LLVM.buildPtrToInt builder gepVoidPtrAt1 (← LLVM.size_tType ctx)  "gep_size_void*" -- sizeof(void*)
@@ -1376,7 +1374,7 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.reuse x c u ys =>
      if ResetReuse.shouldEmitResetReuse? then emitReuse builder z x c u ys else throw (Error.unimplemented "emitReuse")
   | Expr.proj i x       => emitProj builder z i x
-  | Expr.uproj i x      => throw (Error.unimplemented "emitUProj z i x")
+  | Expr.uproj _i _x      => throw (Error.unimplemented "emitUProj z i x")
   | Expr.sproj n o x    => emitSProj builder z t n o x
   | Expr.fap c ys       => emitFullApp builder z c ys
   | Expr.pap c ys       => emitPartialApp builder z c ys
@@ -1384,7 +1382,7 @@ def emitVDecl (builder: LLVM.Ptr LLVM.Builder) (z : VarId) (t : IRType) (v : Exp
   | Expr.box t x        => emitBox builder z x t
   | Expr.unbox x        => emitUnbox builder z t x
   | Expr.isShared x     => emitIsShared builder z x
-  | Expr.isTaggedPtr x  => throw (Error.unimplemented "emitIsTaggedPtr z x")
+  | Expr.isTaggedPtr _x  => throw (Error.unimplemented "emitIsTaggedPtr z x")
   | Expr.lit v          => let _ ← emitLit builder z t v
 
 -- ^^^ emitVDecl ^^^
@@ -1418,9 +1416,8 @@ partial def declareVars : FnBody → Bool → M Bool
 partial def declareVars (builder: LLVM.Ptr LLVM.Builder) (f: FnBody): M Unit := do
   debugPrint "declareVars"
   match f with
-  | e@(FnBody.vdecl x t _ b) => do
-    let ctx ← read
-    declareVar builder x t; declareVars builder b
+  | FnBody.vdecl x t _ b => do
+      declareVar builder x t; declareVars builder b
 
   | FnBody.jdecl _ xs _ b => do
       for param in xs do declareVar builder param.x param.ty
@@ -1639,7 +1636,7 @@ partial def emitCase (builder: LLVM.Ptr LLVM.Builder) (x : VarId) (xType : IRTyp
     -- should use the state that is stored in the context, and not use the implicit context of the builder.
     LLVM.positionBuilderAtEnd builder oldBB -- reset state
 -- contract: emitJP will keep the builder context untouched.
-partial def emitJDecl (builder: LLVM.Ptr LLVM.Builder) (jp: JoinPointId) (ps: Array Param) (b: FnBody): M Unit := do
+partial def emitJDecl (builder: LLVM.Ptr LLVM.Builder) (jp: JoinPointId) (_ps: Array Param) (b: FnBody): M Unit := do
   let oldBB ← LLVM.getInsertBlock builder -- TODO: state saving into pattern
   let jpbb ← builderAppendBasicBlock builder s!"jp_{jp.idx}"
   addJpTostate jp jpbb
@@ -1707,12 +1704,12 @@ partial def emitBlock (builder: LLVM.Ptr LLVM.Builder) (b : FnBody) : M Unit := 
 
   | FnBody.set x i y b         =>
      emitSet builder x i y; emitBlock builder b
-  | FnBody.uset x i y b        => throw (Error.unimplemented "uset")
+  | FnBody.uset _x _i _y _b        => throw (Error.unimplemented "uset")
   /-
   emitUSet x i y; emitBlock b
   -/
   | FnBody.sset x i o y t b    => emitSSet builder x i o y t; emitBlock builder b
-  | FnBody.mdata _ b           =>  throw (Error.unimplemented "mdata")
+  | FnBody.mdata _ _b           =>  throw (Error.unimplemented "mdata")
   /-
   emitBlock b
   -/
@@ -1958,7 +1955,7 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
                 #[← LLVM.i8Type ctx, ← LLVM.voidPtrType ctx]
     let resv ← LLVM.buildCall builder initf #[world]
     let err? ← callLeanIOResultIsError builder resv "is_error"
-    buildIfThen_ builder parentFn s!"init_{d.name}_isError" err?
+    buildIfThen_ builder s!"init_{d.name}_isError" err?
       (fun builder => do
         let _ ← LLVM.buildRet builder resv
         pure ShouldForwardControlFlow.no)
@@ -1989,7 +1986,7 @@ def emitDeclInit (builder: LLVM.Ptr LLVM.Builder) (parentFn: LLVM.Ptr LLVM.Value
       let resv ← LLVM.buildCall builder dInitFn #[world]
       -- TODO(bollu): eliminate code duplication
       let err? ← callLeanIOResultIsError builder resv s!"{d.name}_is_error"
-      buildIfThen_ builder parentFn s!"init_{d.name}_isError" err?
+      buildIfThen_ builder s!"init_{d.name}_isError" err?
         (fun builder => do
           let _ ← LLVM.buildRet builder resv
           pure ShouldForwardControlFlow.no)
@@ -2044,7 +2041,7 @@ def emitInitFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
   let ginit?slot ← LLVM.getOrAddGlobal mod (modName.mangle ++ "_G_initialized") (← LLVM.i1Type ctx)
   LLVM.setInitializer ginit?slot (← LLVM.False ctx)
   let ginit?v ← LLVM.buildLoad builder ginit?slot "init_v"
-  buildIfThen_ builder initFn "isGInitialized" ginit?v
+  buildIfThen_ builder "isGInitialized" ginit?v
     (fun builder => do
       let box0 ← callLeanBox builder (← LLVM.constIntUnsigned ctx 0) "box0"
       let out ← callLeanIOResultMKOk builder box0 "retval"
@@ -2065,7 +2062,7 @@ def emitInitFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
     let world ← callLeanIOMkWorld builder
     let res ← LLVM.buildCall builder importInitFn #[builtin, world] ("res_" ++ import.module.mangle)
     let err? ← callLeanIOResultIsError builder res ("res_is_error_"  ++ import.module.mangle)
-    buildIfThen_ builder initFn ("IsError" ++ import.module.mangle) err?
+    buildIfThen_ builder ("IsError" ++ import.module.mangle) err?
       (fun builder => do
         let _ ← LLVM.buildRet builder res
         pure ShouldForwardControlFlow.no)
@@ -2230,7 +2227,7 @@ def emitMainFn (ctx: LLVM.Ptr LLVM.Context) (mod: LLVM.Ptr LLVM.Module) (builder
 
   let resv ← LLVM.buildLoad builder res "resv"
   let res_is_ok ← callLeanIOResultIsOk builder resv "res_is_ok"
-  buildIfThen_ builder main "resIsOkBranches"  res_is_ok
+  buildIfThen_ builder "resIsOkBranches"  res_is_ok
     (fun builder => do -- then clause of the builder)
       callLeanDecRef builder resv
       callLeanInitTaskManager builder
