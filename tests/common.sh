@@ -26,30 +26,24 @@ function compile_lean_c_backend {
 }
 
 function compile_lean_llvm_backend {
+    set -o xtrace
     rm "*.ll" || true # remove debugging files.
     rm "*.bc" || true # remove bitcode files
     rm "*.o" || true # remove object files
     # print the original C program well-formatted, and LLVM sources for handy debugging.
     lean --c="$f.c" "$f" || fail "Failed to compile $f into C file"
     clang-format -i "$f.c"
-    clang $(leanc --print-cflags) -S -emit-llvm "$f.c" -o "$f.c.ll" # generate ll.
-    sed -i "s/optnone//g" "$f.c.ll" # remove optnone to actually allow some optimisation.
-    opt -S -O2 "$f.c.ll" -o "$f.c.o2.ll" # optimise it a little to be much more readable.
+    [ ${DEBUG_LLVM} -eq 0 ] || clang $(leanc --print-cflags) -S -emit-llvm "$f.c" -o "$f.c.ll" # generate ll.
+    [ ${DEBUG_LLVM} -eq 0 ] || sed -i "s/optnone//g" "$f.c.ll" # remove optnone to actually allow some optimisation.
+    [ ${DEBUG_LLVM} -eq 0 ] ||  opt -S -O2 "$f.c.ll" -o "$f.c.o2.ll" # optimise it a little to be much more readable.
 
-    # TODO: find a sane way to pick this path up, similar to the way leanc hardcodes these paths via flags with --print-cflags
-    # Also, this should be in stage0, since we want it to be present in all circumstances.
     echo "using lean: $(which lean); leanc: $(which leanc)"
     # export LIBRUNTIMEBC=$(git rev-parse --show-toplevel)/build/stage1/runtime/libleanrt.bc # TODO: get this information into `leanc`.
-    set -o xtrace
-    # lean --bc="$f.bc" "$f" || fail "Failed to compile $f into bitcode file"
-    # opt -S "$f.bc" -o "$f.bc.ll" # generate easy to read ll from bitcode.
-    # opt -S -O2 "$f.bc.ll" -o "$f.bc.o2.ll" # generate easy to read ll from bitcode.
-    # llvm-link "$f.bc" $LIBRUNTIMEBC -o "$f.linked.bc"
     lean --bc="$f.linked.bc" "$f" || fail "Failed to compile $f into bitcode file"
-    opt -S "$f.linked.bc" -o "$f.linked.bc.ll" # generate easy to read ll from bitcode
-    opt -S -O2 "$f.linked.bc" -o "$f.linked.bc.o2.ll" # generate easy to read ll from bitcode
-    # llc --relocation-model=pic -O1 -march=x86-64 -filetype=obj "$f.linked.bc" -o "$f.o" # TODO: figure out how to pick up triple.
+	[ ${DEBUG_LLVM} -eq 0 ] || opt -S "$f.linked.bc" -o "$f.linked.bc.ll" # generate easy to read ll from bitcode
+	[ ${DEBUG_LLVM} -eq 0 ] || opt -S -O2 "$f.linked.bc" -o "$f.linked.bc.o2.ll" # generate easy to read ll from bitcode
     leanc -o "$f.out" "$@" "$f.linked.bc.o" || fail "Failed to link object file '$f.o', generated from bitcode file $f.linked.bc"
+    set +o xtrace
 }
 
 function exec_capture {
