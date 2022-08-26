@@ -173,9 +173,9 @@ else()
 endif()
 
 if(LLVM_BACKEND)
-  if(NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_C_COMPILER_ID STREQUAL "Clang"))
-      message(FATAL_ERROR "LLVM_BACKEND=ON must be used with clang. Set `CMAKE_CXX_COMPILER=clang++` and `CMAKE_C_COMPILER=clang` accordingly. Found ${CMAKE_CXX_COMPILER_ID}, ${CMAKE_C_COMPILER_ID}")
-  endif()
+    # if(NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_C_COMPILER_ID STREQUAL "Clang"))
+    #     message(FATAL_ERROR "LLVM_BACKEND=ON must be used with clang. Set `CMAKE_CXX_COMPILER=clang++` and `CMAKE_C_COMPILER=clang` accordingly. Found ${CMAKE_CXX_COMPILER_ID}, ${CMAKE_C_COMPILER_ID}")
+    # endif()
   message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
   message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
