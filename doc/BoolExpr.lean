@@ -1,4 +1,3 @@
-import Std
 open Std
 open Lean
 
