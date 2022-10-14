@@ -12,6 +12,9 @@ import Lean.Compiler.LCNF.ReduceJpArity
 import Lean.Compiler.LCNF.JoinPoints
 import Lean.Compiler.LCNF.Specialize
 import Lean.Compiler.LCNF.PhaseExt
+import Lean.Compiler.LCNF.ToMono
+import Lean.Compiler.LCNF.LambdaLifting
+import Lean.Compiler.LCNF.FloatLetIn
 
 namespace Lean.Compiler.LCNF
 
@@ -24,20 +27,44 @@ def init : Pass where
     return decls
   phase := .base
 
+-- Helper pass used for debugging purposes
+def trace (phase := Phase.base) : Pass where
+  name  := `trace
+  run   := pure
+  phase := phase
+
+def saveBase : Pass :=
+  .mkPerDeclaration `saveBase (fun decl => do (← normalizeFVarIds decl).saveBase; return decl) .base
+
+def saveMono : Pass :=
+  .mkPerDeclaration `saveMono (fun decl => do (← normalizeFVarIds decl).saveMono; return decl) .mono
+
 def builtinPassManager : PassManager := {
   passes := #[
     init,
     pullInstances,
     cse,
     simp,
+    floatLetIn,
     findJoinPoints,
     pullFunDecls,
     reduceJpArity,
     simp { etaPoly := true, inlinePartial := true, implementedBy := true } (occurrence := 1),
+    eagerLambdaLifting,
     specialize,
     simp (occurrence := 2),
     cse,
-    saveBase -- End of base phase
+    saveBase, -- End of base phase
+    toMono,
+    simp (occurrence := 3) (phase := .mono),
+    reduceJpArity (phase := .mono),
+    extendJoinPointContext,
+    floatLetIn (phase := .mono) (occurrence := 1),
+    simp (occurrence := 4) (phase := .mono),
+    lambdaLifting,
+    simp (occurrence := 5) (phase := .mono),
+    -- TODO: reduce function arity
+    saveMono  -- End of mono phase
   ]
 }
 
@@ -50,7 +77,6 @@ def runImportedDecls (importedDeclNames : Array (Array Name)) : CoreM PassManage
 
 builtin_initialize passManagerExt : PersistentEnvExtension Name (Name × PassManager) (List Name × PassManager) ←
   registerPersistentEnvExtension {
-    name := `cpass
     mkInitial := return ([], builtinPassManager)
     addImportedFn := fun ns => return ([], ← ImportM.runCoreM <| runImportedDecls ns)
     addEntryFn := fun (installerDeclNames, _) (installerDeclName, managerNew) => (installerDeclName :: installerDeclNames, managerNew)
@@ -79,5 +105,10 @@ builtin_initialize
       discard <| addPass declName
     applicationTime := .afterCompilation
   }
+
+builtin_initialize
+  registerTraceClass `Compiler.saveBase (inherited := true)
+  registerTraceClass `Compiler.saveMono (inherited := true)
+  registerTraceClass `Compiler.trace (inherited := true)
 
 end Lean.Compiler.LCNF

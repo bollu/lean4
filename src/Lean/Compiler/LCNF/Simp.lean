@@ -22,7 +22,7 @@ open Simp
 
 def Decl.simp? (decl : Decl) : SimpM (Option Decl) := do
   updateFunDeclInfo decl.value
-  trace[Compiler.simp.inline.info] "{decl.name}:{Format.nest 2 (← (← get).funDeclInfoMap.format)}"
+  traceM `Compiler.simp.inline.info do return m!"{decl.name}:{Format.nest 2 (← (← get).funDeclInfoMap.format)}"
   traceM `Compiler.simp.step do ppDecl decl
   let value ← simp decl.value
   let s ← get
@@ -40,24 +40,41 @@ def Decl.simp? (decl : Decl) : SimpM (Option Decl) := do
 partial def Decl.simp (decl : Decl) (config : Config) : CompilerM Decl := do
   let mut config := config
   if (← isTemplateLike decl) then
+    let mut inlineDefs := config.inlineDefs
+    /-
+    At the base phase, we don't inline definitions occurring in instances.
+    Reason: we eagerly lambda lift local functions occurring at instances before saving their code at the end of the base
+    phase. The goal is to make them cheap to inline in actual code. By inlining definitions we would be just generating extra
+    work for the lambda lifter.
+
+    There is an exception: inlineable instances. This is important for auxiliary instances such as
+    ```
+    @[alwaysInline]
+    instance : Monad TermElabM := let i := inferInstanceAs (Monad TermElabM); { pure := i.pure, bind := i.bind }
+    ```
+    by keeping `inlineDefs := true`, we can pre-compute the `pure` and `bind` methods for `TermElabM`.
+    -/
+    if (← inBasePhase <&&> Meta.isInstance decl.name) then
+      unless decl.inlineable do
+        inlineDefs := false
     /-
     We do not eta-expand or inline partial applications in template like code.
     Recall we don't want to generate code for them.
     Remark: by eta-expanding partial applications in instances, we also make the simplifier
     work harder when inlining instance projections.
     -/
-    config := { config with etaPoly := false, inlinePartial := false }
+    config := { config with etaPoly := false, inlinePartial := false, inlineDefs }
   go decl config
 where
   go (decl : Decl) (config : Config) : CompilerM Decl := do
-    if let some decl ← decl.simp? |>.run { config, declName := decl.name } |>.run' {} then
+    if let some decl ← decl.simp? |>.run { config, declName := decl.name } |>.run' {} |>.run {} then
       -- TODO: bound number of steps?
       go decl config
     else
       return decl
 
-def simp (config : Config := {}) (occurrence : Nat := 0) : Pass :=
-  .mkPerDeclaration `simp (Decl.simp · config) .base (occurrence := occurrence)
+def simp (config : Config := {}) (occurrence : Nat := 0) (phase := Phase.base) : Pass :=
+  .mkPerDeclaration `simp (Decl.simp · config) phase (occurrence := occurrence)
 
 builtin_initialize
   registerTraceClass `Compiler.simp (inherited := true)

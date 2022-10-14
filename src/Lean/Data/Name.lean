@@ -31,13 +31,13 @@ def updatePrefix : Name → Name → Name
   | str _ s,   newP => Name.mkStr newP s
   | num _ s,   newP => Name.mkNum newP s
 
-def components' : Name → List Name
+def componentsRev : Name → List Name
   | anonymous => []
-  | str n s   => Name.mkStr anonymous s :: components' n
-  | num n v   => Name.mkNum anonymous v :: components' n
+  | str n s   => Name.mkStr anonymous s :: componentsRev n
+  | num n v   => Name.mkNum anonymous v :: componentsRev n
 
 def components (n : Name) : List Name :=
-  n.components'.reverse
+  n.componentsRev.reverse
 
 def eqStr : Name → String → Bool
   | str anonymous s, s' => s == s'
@@ -100,8 +100,11 @@ def quickLt (n₁ n₂ : Name) : Bool :=
 @[inline] protected def hasLtQuick : LT Name :=
   ⟨fun a b => Name.quickLt a b = true⟩
 
-@[inline] instance : DecidableRel (@LT.lt Name Name.hasLtQuick) :=
-  inferInstanceAs (DecidableRel (fun a b => Name.quickLt a b = true))
+@[inline] def Name.decLt : DecidableRel (@LT.lt Name Name.hasLtQuick) :=
+  inferInstanceAs (DecidableRel fun a b => Name.quickLt a b = true)
+
+instance : DecidableRel (@LT.lt Name Name.hasLtQuick) :=
+  Name.decLt
 
 /-- The frontend does not allow user declarations to start with `_` in any of its parts.
    We use name parts starting with `_` internally to create auxiliary names (e.g., `_private`). -/
@@ -109,6 +112,17 @@ def isInternal : Name → Bool
   | str p s => s.get 0 == '_' || isInternal p
   | num p _ => isInternal p
   | _       => false
+
+/--
+Checks whether the name is an implementation-detail hypothesis name.
+
+Implementation-detail hypothesis names start with a double underscore.
+-/
+def isImplementationDetail : Name → Bool
+  | str anonymous s => s.startsWith "__"
+  | num p _ => p.isImplementationDetail
+  | str p _ => p.isImplementationDetail
+  | anonymous => false
 
 def isAtomic : Name → Bool
   | anonymous       => true

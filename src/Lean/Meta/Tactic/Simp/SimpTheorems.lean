@@ -356,9 +356,9 @@ def mkSimpAttr (attrName : Name) (attrDescr : String) (ext : SimpExtension)
       modifyEnv fun env => ext.modifyState env fun _ => s
   }
 
-def mkSimpExt (extName : Name) : IO SimpExtension :=
+def mkSimpExt (name : Name := by exact decl_name%) : IO SimpExtension :=
   registerSimpleScopedEnvExtension {
-    name     := extName
+    name     := name
     initial  := {}
     addEntry := fun d e =>
       match e with
@@ -372,9 +372,8 @@ abbrev SimpExtensionMap := HashMap Name SimpExtension
 builtin_initialize simpExtensionMapRef : IO.Ref SimpExtensionMap ← IO.mkRef {}
 
 def registerSimpAttr (attrName : Name) (attrDescr : String)
-    (ref : Name := by exact decl_name%)
-    (extName : Name := attrName.appendAfter "Ext") : IO SimpExtension := do
-  let ext ← mkSimpExt extName
+    (ref : Name := by exact decl_name%) : IO SimpExtension := do
+  let ext ← mkSimpExt ref
   mkSimpAttr attrName attrDescr ext ref -- Remark: it will fail if it is not performed during initialization
   simpExtensionMapRef.modify fun map => map.insert attrName ext
   return ext
@@ -452,13 +451,13 @@ def SimpTheoremsArray.isErased (thmsArray : SimpTheoremsArray) (thmId : Origin) 
 def SimpTheoremsArray.isDeclToUnfold (thmsArray : SimpTheoremsArray) (declName : Name) : Bool :=
   thmsArray.any fun thms => thms.isDeclToUnfold declName
 
-macro (name := _root_.Lean.Parser.Command.registerSimpAttr) doc:docComment
+macro (name := _root_.Lean.Parser.Command.registerSimpAttr) doc:(docComment)?
   "register_simp_attr" id:ident : command => do
   let str := id.getId.toString
   let idParser := mkIdentFrom id (`Parser.Attr ++ id.getId)
-  let descr := quote (removeLeadingSpaces doc.getDocString)
-  `($doc:docComment initialize ext : SimpExtension ← registerSimpAttr $(quote id.getId) $descr $(quote id.getId)
-    $doc:docComment syntax (name := $idParser:ident) $(quote str):str (Parser.Tactic.simpPre <|> Parser.Tactic.simpPost)? (prio)? : attr)
+  let descr := quote (removeLeadingSpaces (doc.map (·.getDocString) |>.getD s!"simp set for {id.getId.toString}"))
+  `($[$doc:docComment]? initialize ext : SimpExtension ← registerSimpAttr $(quote id.getId) $descr $(quote id.getId)
+    $[$doc:docComment]? syntax (name := $idParser:ident) $(quote str):str (Parser.Tactic.simpPre <|> Parser.Tactic.simpPost)? (prio)? : attr)
 
 end Meta
 

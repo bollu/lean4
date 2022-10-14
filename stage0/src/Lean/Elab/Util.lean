@@ -91,8 +91,8 @@ private unsafe def evalSyntaxConstantUnsafe (env : Environment) (opts : Options)
 @[implementedBy evalSyntaxConstantUnsafe]
 opaque evalSyntaxConstant (env : Environment) (opts : Options) (constName : Name) : ExceptT String Id Syntax := throw ""
 
-unsafe def mkElabAttribute (γ) (attrDeclName attrBuiltinName attrName : Name) (parserNamespace : Name) (typeName : Name) (kind : String)
-    : IO (KeyedDeclsAttribute γ) :=
+unsafe def mkElabAttribute (γ) (attrBuiltinName attrName : Name) (parserNamespace : Name) (typeName : Name) (kind : String)
+    (attrDeclName : Name := by exact decl_name%) : IO (KeyedDeclsAttribute γ) :=
   KeyedDeclsAttribute.init {
     builtinName   := attrBuiltinName
     name          := attrName
@@ -118,13 +118,13 @@ unsafe def mkElabAttribute (γ) (attrDeclName attrBuiltinName attrName : Name) (
           declareBuiltin (declName ++ `declRange) (mkAppN (mkConst ``addBuiltinDeclarationRanges) #[toExpr declName, toExpr declRanges])
   } attrDeclName
 
-unsafe def mkMacroAttributeUnsafe : IO (KeyedDeclsAttribute Macro) :=
-  mkElabAttribute Macro `Lean.Elab.macroAttribute `builtinMacro `macro Name.anonymous `Lean.Macro "macro"
+unsafe def mkMacroAttributeUnsafe (ref : Name) : IO (KeyedDeclsAttribute Macro) :=
+  mkElabAttribute Macro `builtinMacro `macro Name.anonymous `Lean.Macro "macro" ref
 
 @[implementedBy mkMacroAttributeUnsafe]
-opaque mkMacroAttribute : IO (KeyedDeclsAttribute Macro)
+opaque mkMacroAttribute (ref : Name) : IO (KeyedDeclsAttribute Macro)
 
-builtin_initialize macroAttribute : KeyedDeclsAttribute Macro ← mkMacroAttribute
+builtin_initialize macroAttribute : KeyedDeclsAttribute Macro ← mkMacroAttribute decl_name%
 
 /--
 Try to expand macro at syntax tree root and return macro declaration name and new syntax if successful.
@@ -145,13 +145,14 @@ class MonadMacroAdapter (m : Type → Type) where
   getNextMacroScope                  : m MacroScope
   setNextMacroScope                  : MacroScope → m Unit
 
+@[alwaysInline]
 instance (m n) [MonadLift m n] [MonadMacroAdapter m] : MonadMacroAdapter n := {
   getCurrMacroScope := liftM (MonadMacroAdapter.getCurrMacroScope : m _)
   getNextMacroScope := liftM (MonadMacroAdapter.getNextMacroScope : m _)
   setNextMacroScope := fun s => liftM (MonadMacroAdapter.setNextMacroScope s : m _)
 }
 
-def liftMacroM {α} {m : Type → Type} [Monad m] [MonadMacroAdapter m] [MonadEnv m] [MonadRecDepth m] [MonadError m] [MonadResolveName m] [MonadTrace m] [MonadOptions m] [AddMessageContext m] [MonadLiftT IO m] (x : MacroM α) : m α := do
+def liftMacroM [Monad m] [MonadMacroAdapter m] [MonadEnv m] [MonadRecDepth m] [MonadError m] [MonadResolveName m] [MonadTrace m] [MonadOptions m] [AddMessageContext m] [MonadLiftT IO m] (x : MacroM α) : m α := do
   let env  ← getEnv
   let currNamespace ← getCurrNamespace
   let openDecls ← getOpenDecls

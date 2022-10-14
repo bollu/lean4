@@ -17,10 +17,9 @@ def admitGoal (mvarId : MVarId) : MetaM Unit :=
 def goalsToMessageData (goals : List MVarId) : MessageData :=
   MessageData.joinSep (goals.map MessageData.ofGoal) m!"\n\n"
 
-def Term.reportUnsolvedGoals (goals : List MVarId) : TermElabM Unit :=
-  withPPShowLetValues <| withPPInaccessibleNames do
-    logError <| MessageData.tagged `Tactic.unsolvedGoals <| m!"unsolved goals\n{goalsToMessageData goals}"
-    goals.forM fun mvarId => admitGoal mvarId
+def Term.reportUnsolvedGoals (goals : List MVarId) : TermElabM Unit := do
+  logError <| MessageData.tagged `Tactic.unsolvedGoals <| m!"unsolved goals\n{goalsToMessageData goals}"
+  goals.forM fun mvarId => admitGoal mvarId
 
 namespace Tactic
 
@@ -41,9 +40,16 @@ structure SavedState where
 abbrev TacticM := ReaderT Context $ StateRefT State TermElabM
 abbrev Tactic  := Syntax → TacticM Unit
 
--- Make the compiler generate specialized `pure`/`bind` so we do not have to optimize through the
--- whole monad stack at every use site. May eventually be covered by `deriving`.
-instance : Monad TacticM := let i := inferInstanceAs (Monad TacticM); { pure := i.pure, bind := i.bind }
+/-
+Make the compiler generate specialized `pure`/`bind` so we do not have to optimize through the
+whole monad stack at every use site. May eventually be covered by `deriving`.
+
+See comment at `Monad TermElabM`
+-/
+@[alwaysInline]
+instance : Monad TacticM :=
+  let i := inferInstanceAs (Monad TacticM);
+  { pure := i.pure, bind := i.bind }
 
 def getGoals : TacticM (List MVarId) :=
   return (← get).goals
@@ -97,7 +103,7 @@ protected def getCurrMacroScope : TacticM MacroScope := do pure (← readThe Cor
 protected def getMainModule     : TacticM Name       := do pure (← getEnv).mainModule
 
 unsafe def mkTacticAttribute : IO (KeyedDeclsAttribute Tactic) :=
-  mkElabAttribute Tactic `Lean.Elab.Tactic.tacticElabAttribute `builtinTactic `tactic `Lean.Parser.Tactic `Lean.Elab.Tactic.Tactic "tactic"
+  mkElabAttribute Tactic `builtinTactic `tactic `Lean.Parser.Tactic `Lean.Elab.Tactic.Tactic "tactic" `Lean.Elab.Tactic.tacticElabAttribute
 
 @[builtinInit mkTacticAttribute] opaque tacticElabAttribute : KeyedDeclsAttribute Tactic
 

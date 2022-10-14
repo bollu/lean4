@@ -1000,7 +1000,7 @@ private def resolveLValAux (e : Expr) (eType : Expr) (lval : LVal) : TermElabM L
     let searchCtx : Unit → TermElabM LValResolution := fun _ => do
       let fullName := Name.mkStr structName fieldName
       for localDecl in (← getLCtx) do
-        if localDecl.binderInfo == BinderInfo.auxDecl then
+        if localDecl.isAuxDecl then
           if let some localDeclFullName := (← read).auxDeclToFullName.find? localDecl.fvarId then
             if fullName == (privateToUserName? localDeclFullName).getD localDeclFullName then
               /- LVal notation is being used to make a "local" recursive call. -/
@@ -1272,7 +1272,7 @@ private partial def elabAppFn (f : Syntax) (lvals : List LVal) (namedArgs : Arra
         LVal.fieldName comp (toString comp.getId) none e
       elabAppFn e (newLVals ++ lvals) namedArgs args expectedType? explicit ellipsis overloaded acc
     let elabFieldIdx (e idxStx : Syntax) := do
-      let idx := idxStx.isFieldIdx?.get!
+      let some idx := idxStx.isFieldIdx? | throwError "invalid field index"
       elabAppFn e (LVal.fieldIdx idxStx idx :: lvals) namedArgs args expectedType? explicit ellipsis overloaded acc
     match f with
     | `($(e).$idx:fieldIdx) => elabFieldIdx e idx
@@ -1295,8 +1295,9 @@ private partial def elabAppFn (f : Syntax) (lvals : List LVal) (namedArgs : Arra
     | `(.$id:ident) =>
         addCompletionInfo <| CompletionInfo.dotId f id.getId (← getLCtx) expectedType?
         let fConst ← mkConst (← resolveDotName id expectedType?)
-        let fConst ← addTermInfo f fConst
         let s ← observing do
+          -- Use (force := true) because we want to record the result of .ident resolution even in patterns
+          let fConst ← addTermInfo f fConst expectedType? (force := true)
           let e ← elabAppLVals fConst lvals namedArgs args expectedType? explicit ellipsis
           if overloaded then ensureHasType expectedType? e else return e
         return acc.push s

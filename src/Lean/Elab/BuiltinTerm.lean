@@ -55,7 +55,8 @@ private def elabOptLevel (stx : Syntax) : TermElabM Level :=
     elabPipeCompletion stx expectedType?
 
 @[builtinTermElab «hole»] def elabHole : TermElab := fun stx expectedType? => do
-  let mvar ← mkFreshExprMVar expectedType?
+  let kind := if (← read).inPattern || !(← read).holesAsSyntheticOpaque then MetavarKind.natural else MetavarKind.syntheticOpaque
+  let mvar ← mkFreshExprMVar expectedType? kind
   registerMVarErrorHoleInfo mvar.mvarId! stx
   pure mvar
 
@@ -267,6 +268,26 @@ private def mkSilentAnnotationIfHole (e : Expr) : TermElabM Expr := do
   match stx[1].isStrLit? with
   | none     => throwIllFormedSyntax
   | some msg => elabTermEnsuringType stx[2] expectedType? (errorMsgHeader? := msg)
+
+@[builtinTermElab clear] def elabClear : TermElab := fun stx expectedType? => do
+  let some (.fvar fvarId) ← isLocalIdent? stx[1]
+    | throwErrorAt stx[1] "not in scope"
+  let body := stx[3]
+  let canClear ← id do
+    if let some expectedType := expectedType? then
+      if ← dependsOn expectedType fvarId then
+        return false
+    for ldecl in ← getLCtx do
+      if ldecl.fvarId != fvarId then
+        if ← localDeclDependsOn ldecl fvarId then
+          return false
+    return true
+  if canClear then
+    let lctx := (← getLCtx).erase fvarId
+    let localInsts := (← getLocalInstances).filter (·.fvar.fvarId! != fvarId)
+    withLCtx lctx localInsts do elabTerm body expectedType?
+  else
+    elabTerm body expectedType?
 
 @[builtinTermElab «open»] def elabOpen : TermElab := fun stx expectedType? => do
   let `(open $decl in $e) := stx | throwUnsupportedSyntax

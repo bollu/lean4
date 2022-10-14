@@ -96,6 +96,10 @@ def isReturnOf (c : Code) (fvarId : FVarId) : SimpM Bool := do
   | .return fvarId' => return (← normFVar fvarId') == fvarId
   | _ => return false
 
+def elimVar? (value : Expr) : SimpM (Option FVarId) := do
+  let .fvar fvarId := value | return none
+  return fvarId
+
 mutual
 /--
 If the value of the given let-declaration is an application that can be inlined,
@@ -124,6 +128,7 @@ partial def inlineApp? (letDecl : LetDecl) (k : Code) : SimpM (Option Code) := d
     markSimplified
     simp (.fun funDecl k)
   else
+    let expectedType ← inferType (mkAppN info.f info.args[:info.arity])
     let code ← betaReduce info.params info.value info.args[:info.arity]
     if k.isReturnOf fvarId && numArgs == info.arity then
       /- Easy case, the continuation `k` is just returning the result of the application. -/
@@ -149,7 +154,7 @@ partial def inlineApp? (letDecl : LetDecl) (k : Code) : SimpM (Option Code) := d
       --  return none
       else
         markSimplified
-        let jpParam ← mkAuxParam (← inferType (mkAppN info.f info.args[:info.arity]))
+        let jpParam ← mkAuxParam expectedType
         let jpValue ← if numArgs > info.arity then
           let decl ← mkAuxLetDecl (mkAppN (.fvar jpParam.fvarId) info.args[info.arity:])
           addFVarSubst fvarId decl.fvarId
@@ -210,6 +215,7 @@ partial def simp (code : Code) : SimpM Code := withIncRecDepth do
   | .let decl k =>
     let mut decl ← normLetDecl decl
     if let some value ← simpValue? decl.value then
+      markSimplified
       decl ← decl.updateValue value
     if let some decls ← ConstantFold.foldConstants decl then
       markSimplified
@@ -217,9 +223,9 @@ partial def simp (code : Code) : SimpM Code := withIncRecDepth do
       attachCodeDecls decls k
     else if let some funDecl ← etaPolyApp? decl then
       simp (.fun funDecl k)
-    else if decl.value.isFVar then
+    else if let some fvarId ← elimVar? decl.value then
       /- Eliminate `let _x_i := _x_j;` -/
-      addFVarSubst decl.fvarId decl.value.fvarId!
+      addFVarSubst decl.fvarId fvarId
       eraseLetDecl decl
       simp k
     else if let some code ← inlineApp? decl k then
@@ -300,11 +306,17 @@ partial def simp (code : Code) : SimpM Code := withIncRecDepth do
         let discr ← normFVar c.discr
         let resultType ← normExpr c.resultType
         markUsedFVar discr
-        let alts ← c.alts.mapMonoM fun alt =>
+        let alts ← c.alts.mapMonoM fun alt => do
           match alt with
           | .alt ctorName ps k =>
-            withDiscrCtor discr ctorName ps do
-              return alt.updateCode (← simp k)
+            if !(k matches .unreach ..) && (← ps.anyM fun p => isInductiveWithNoCtors p.type) then
+              let type ← k.inferType
+              eraseCode k
+              markSimplified
+              return alt.updateCode (.unreach type)
+            else
+              withDiscrCtor discr ctorName ps do
+                return alt.updateCode (← simp k)
           | .default k => return alt.updateCode (← simp k)
         let alts ← addDefaultAlt alts
         if alts.size == 1 && alts[0]! matches .default .. then

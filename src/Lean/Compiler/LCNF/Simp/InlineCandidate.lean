@@ -40,16 +40,38 @@ def inlineCandidate? (e : Expr) : SimpM (Option InlineCandidateInfo) := do
   let numArgs := e.getAppNumArgs
   let f := e.getAppFn
   if let .const declName us ← findExpr f then
-    if declName == (← read).declName then return none -- TODO: remove after we start storing phase1 code in .olean files
-    let inlineIfReduce := hasInlineIfReduceAttribute (← getEnv) declName
-    unless mustInline || hasInlineAttribute (← getEnv) declName || inlineIfReduce do return none
-    -- TODO: check whether function is recursive or not.
-    -- We can skip the test and store function inline so far.
+    unless (← read).config.inlineDefs do
+      return none
     let some decl ← getDecl? declName | return none
+    let shouldInline : SimpM Bool := do
+      if !decl.inlineIfReduceAttr && decl.recursive then return false
+      if mustInline then return true
+      /-
+      We don't inline instances tagged with `[inline]/[alwaysInline]/[inlineIfReduce]` at the base phase
+      We assume that at the base phase these annotations are for the instance methods that have been lambda lifted.
+      -/
+      if (← inBasePhase <&&> Meta.isInstance decl.name) then
+        unless decl.name == ``instDecidableEqBool do
+          /-
+          TODO: remove this hack after we refactor `Decidable` as suggested by Gabriel.
+          Recall that the current `Decidable` class is special case since it is an inductive datatype which is not a
+          structure like all other type classes. This is bad since it prevents us from treating all classes in a uniform
+          way. After we change `Decidable` to a structure as suggested by Gabriel, we should only accept type classes
+          that are structures. Moreover, we should reject instances that have only one exit point producing an explicit structure.
+          -/
+          return false
+      if decl.alwaysInlineAttr then return true
+      -- TODO: check inlining quota
+      if decl.inlineAttr || decl.inlineIfReduceAttr then return true
+      unless decl.noinlineAttr do
+        if (← isSmall decl.value) then return true
+      return false
+    unless (← shouldInline) do return none
+    /- check arity -/
     let arity := decl.getArity
     let inlinePartial := (← read).config.inlinePartial
     if !mustInline && !inlinePartial && numArgs < arity then return none
-    if inlineIfReduce then
+    if decl.inlineIfReduceAttr then
       let some paramIdx := decl.isCasesOnParam? | return none
       unless paramIdx < numArgs do return none
       let arg ← findExpr (e.getArg! paramIdx)
@@ -61,7 +83,7 @@ def inlineCandidate? (e : Expr) : SimpM (Option InlineCandidateInfo) := do
       isLocal   := false
       f         := e.getAppFn
       args      := e.getAppArgs
-      ifReduce  := inlineIfReduce
+      ifReduce  := decl.inlineIfReduceAttr
       recursive := decl.recursive
       params, value
     }
@@ -81,3 +103,6 @@ def inlineCandidate? (e : Expr) : SimpM (Option InlineCandidateInfo) := do
     }
   else
     return none
+
+builtin_initialize
+  registerTraceClass `Compiler.simp.inline

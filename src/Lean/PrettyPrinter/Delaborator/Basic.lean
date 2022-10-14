@@ -4,7 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Sebastian Ullrich
 -/
 import Lean.Elab.Term
-import Lean.Elab.AuxDiscr
 import Lean.PrettyPrinter.Delaborator.Options
 import Lean.PrettyPrinter.Delaborator.SubExpr
 import Lean.PrettyPrinter.Delaborator.TopDownAnalyze
@@ -171,7 +170,7 @@ def getUnusedName (suggestion : Name) (body : Expr) : DelabM Name := do
   -- Use a nicer binder name than `[anonymous]`. We probably shouldn't do this in all LocalContext use cases, so do it here.
   let suggestion := if suggestion.isAnonymous then `a else suggestion
   -- We use this small hack to convert identifiers created using `mkAuxFunDiscr` to simple names
-  let suggestion := if isAuxFunDiscrName suggestion then `x else suggestion.eraseMacroScopes
+  let suggestion := suggestion.eraseMacroScopes
   let lctx ← getLCtx
   if !lctx.usesUserName suggestion then
     return suggestion
@@ -262,7 +261,7 @@ passed the result of pre-pretty printing the application *without* implicitly pa
 to true or `pp.notation` is set to false, it will not be called at all.",
     valueTypeName := `Lean.PrettyPrinter.Unexpander
     evalKey := fun _ stx => do
-      resolveGlobalConstNoOverloadCore (← Attribute.Builtin.getId stx)
+      Elab.resolveGlobalConstNoOverloadWithInfo (← Attribute.Builtin.getIdent stx)
   } `Lean.PrettyPrinter.Delaborator.appUnexpanderAttribute
 @[builtinInit mkAppUnexpanderAttribute] opaque appUnexpanderAttribute : KeyedDeclsAttribute Unexpander
 

@@ -141,9 +141,17 @@
     tags: [fast, suite]
   run_config:
     <<: *time
-    cmd: ./rbmap.library.lean.out 2000000
+    cmd: ./rbmap_library.lean.out 2000000
   build_config:
-    cmd: ./compile.sh rbmap.library.lean
+    cmd: ./compile.sh rbmap_library.lean
+- attributes:
+    description: rbmap_fbip
+    tags: [fast, suite]
+  run_config:
+    <<: *time
+    cmd: ./rbmap_fbip.lean.out 2000000
+  build_config:
+    cmd: ./compile.sh rbmap_fbip.lean
 - attributes:
     description: unionfind
     tags: [fast, suite]
@@ -152,3 +160,9 @@
     cmd: ./unionfind.lean.out 3000000
   build_config:
     cmd: ./compile.sh unionfind.lean
+- attributes:
+    description: workspaceSymbols
+    tags: [fast, suite]
+  run_config:
+    <<: *time
+    cmd: lean workspaceSymbols.lean
