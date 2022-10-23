@@ -156,15 +156,15 @@ if(AUTO_THREAD_FINALIZATION AND NOT MSVC)
   string(APPEND LEAN_EXTRA_CXX_FLAGS " -D LEAN_AUTO_THREAD_FINALIZATION")
 endif()
 
-if(LLVM)
-  message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-  message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
-
-  include_directories(${LLVM_INCLUDE_DIRS})
-  string(APPEND LEAN_EXTRA_CXX_FLAGS " -D LEAN_LLVM")
-else()
-  message(WARNING "Disabling LLVM support")
-endif()
+###no-llvm-config: if(LLVM)
+###no-llvm-config:   message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+###no-llvm-config:   message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+###no-llvm-config: 
+###no-llvm-config:   include_directories(${LLVM_INCLUDE_DIRS})
+###no-llvm-config:   string(APPEND LEAN_EXTRA_CXX_FLAGS " -D LEAN_LLVM")
+###no-llvm-config: else()
+###no-llvm-config:   message(WARNING "Disabling LLVM support")
+###no-llvm-config: endif()
 
 # Set Module Path
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
@@ -324,14 +324,35 @@ string(APPEND LEANSHARED_LINKER_FLAGS " ${LEAN_CXX_STDLIB}")
 # setup LLVM using the cmake configuration:
 # https://llvm.org/docs/CMake.html
 # https://github.com/llvm-mirror/llvm/blob/2c4ca6832fa6b306ee6a7010bfb80a3f2596f824/cmake/modules/LLVMConfig.cmake.in
+
+
 if(LLVM)
+  # The cmake policy CMP0074 allows us `prepare-llvm-linux.sh` script to 
+  # point to the target llvm install directory with -DLLVM_ROOT=/path/to/llvm/root.
+  # This policy can be removed once we have 'CMake >= 3.12'
+  cmake_policy(SET CMP0074 NEW)
   find_package(LLVM REQUIRED CONFIG)
   message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
   message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
   llvm_map_components_to_libnames(LLVM_LIBS support core irreader aarch64 x86 webassembly linker support)
   set(APPEND LEAN_EXTRA_CXX_FLAGS  " -I${LLVM_INCLUDE_DIRS} ${LLVM_DEFINITIONS}")
-  string(APPEND LEANSHARED_LINKER_FLAGS " -L${LLVM_LIBRARY_DIRS} ${LLVM_LIBS}")
-  message("TODO: change to debug | leanshared linker flags: '${LEANSHARED_LINKER_FLAGS}' | lean extra cxx flags '${LEAN_EXTRA_CXX_FLAGS}'")
+  include_directories(${LLVM_INCLUDE_DIRS})
+  string(APPEND LEAN_EXTRA_CXX_FLAGS " -D LEAN_LLVM")
+
+  # LLVM_LIBS = LLVMSupport;LLVMCore;LLVMIRReader;LLVMaarch64;LLVMx86;LLVMwebassembly;LLVMLinker;LLVMSupport
+  # LLVM_LIBS_TO_LDFLAGS = -lLLVMSupport -lLLVMCore -lLLVMReader ... 
+  set(LLVM_LIBS_TO_LDFLAGS "")
+  foreach(LIB ${LLVM_LIBS})
+      set(LLVM_LIBS_TO_LDFLAGS "${LLVM_LIBS_TO_LDFLAGS} -l${LIB}")
+  endforeach()
+  string(APPEND LEANSHARED_LINKER_FLAGS " -L${LLVM_LIBRARY_DIRS} ${LLVM_LIBS_TO_LDFLAGS}")
+  message("TODO: change to debug | llvm_libs: '${LLVM_LIBS} | llvm_libs_to_lflags: '${LLVM_LIBS_TO_LDFLAGS}' | 'leanshared_linker_flags: '${LEANSHARED_LINKER_FLAGS}' | lean_extra_cxx_flags '${LEAN_EXTRA_CXX_FLAGS}'")
+  # https://layle.me/using-llvm-with-cmake/
+  # add_library(LLVM INTERFACE)
+  # target_include_directories(LLVM SYSTEM INTERFACE ${LLVM_INCLUDE_DIRS})
+  # target_link_libraries(LLVM INTERFACE ${LLVM_LIBS})
+else()
+  message(WARNING "Disabling LLVM support")
 endif()
 
 
