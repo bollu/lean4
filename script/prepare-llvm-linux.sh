@@ -47,7 +47,7 @@ $CP -r llvm/include/*-*-* llvm-host/include/
 $CP $GLIBC/lib/libc_nonshared.a stage1/lib/glibc
 for f in $GLIBC/lib/lib{c,dl,m,rt,pthread}-*; do b=$(basename $f); cp $f stage1/lib/glibc/${b%-*}.so; done
 OPTIONS=()
-echo -n " -DLLVM_CONFIG=$PWD/llvm-host/bin/llvm-config" # manually point to `llvm-config` location
+# echo -n " -DLLVM_CONFIG=$PWD/llvm-host/bin/llvm-config" # manually point to `llvm-config` location
 echo -n " -DCMAKE_FIND_DEBUG_MODE=ON -DLLVM_ROOT=$PWD/llvm/" # manually point to target `llvm` location
 echo -n " -DLEAN_STANDALONE=ON"
 echo -n " -DCMAKE_CXX_COMPILER=$PWD/llvm-host/bin/clang++ -DLEAN_CXX_STDLIB='-Wl,-Bstatic -lc++ -lc++abi -Wl,-Bdynamic'"
