@@ -261,34 +261,34 @@ include_directories(${CMAKE_BINARY_DIR}/include)
 
 
 # test `llvm-config`
-if(LLVM)
-    if(NOT LLVM_CONFIG) # look for `llvm-config` if not supplied
-        message(STATUS "'-DLLVM_CONFIG=<path/to/llvm-config>' not passed as CMake flag, finding `llvm-config` via CMake...")
-        find_program(LLVM_CONFIG "llvm-config")
-        if(NOT LLVM_CONFIG) # check that it was found
-            message(FATAL_ERROR "Unable to find 'llvm-config'")
-        endif()
-    endif()
-    # check that we have 'llvm-config' version.
-    execute_process(COMMAND ${LLVM_CONFIG} --version COMMAND_ERROR_IS_FATAL ANY)
-    message(STATUS "Found 'llvm-config' as ${LLVM_CONFIG}")
-endif()
+###no-llvm-config: if(LLVM)
+###no-llvm-config:     if(NOT LLVM_CONFIG) # look for `llvm-config` if not supplied
+###no-llvm-config:         message(STATUS "'-DLLVM_CONFIG=<path/to/llvm-config>' not passed as CMake flag, finding `llvm-config` via CMake...")
+###no-llvm-config:         find_program(LLVM_CONFIG "llvm-config")
+###no-llvm-config:         if(NOT LLVM_CONFIG) # check that it was found
+###no-llvm-config:             message(FATAL_ERROR "Unable to find 'llvm-config'")
+###no-llvm-config:         endif()
+###no-llvm-config:     endif()
+###no-llvm-config:     # check that we have 'llvm-config' version.
+###no-llvm-config:     execute_process(COMMAND ${LLVM_CONFIG} --version COMMAND_ERROR_IS_FATAL ANY)
+###no-llvm-config:     message(STATUS "Found 'llvm-config' as ${LLVM_CONFIG}")
+###no-llvm-config: endif()
 
 
 
 # libleancpp/Lean as well as libleanrt/Init are cyclically dependent. This works by default on macOS, which also doesn't like
 # the linker flags necessary on other platforms.
 # Furthermore, add LLVM flags into the list of flags we need when linking.
-execute_process(COMMAND ${LLVM_CONFIG}  --ldflags OUTPUT_VARIABLE LLVM_CONFIG_LDFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND ${LLVM_CONFIG}  --libs OUTPUT_VARIABLE LLVM_CONFIG_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND ${LLVM_CONFIG}  --libdir OUTPUT_VARIABLE LLVM_CONFIG_LIBDIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND ${LLVM_CONFIG}  --includedir OUTPUT_VARIABLE LLVM_CONFIG_INCLUDEDIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND ${LLVM_CONFIG}  --cxxflags OUTPUT_VARIABLE LLVM_CONFIG_CXXFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-# if we build LLVM by source (as @bollu does)<with -DBUILD_SHARED_LIBS=ON, LLVM dynamically loads system libraries
-# such as '-lrt -ldl -lm -lz -ltinfo -lxml2'
-execute_process(COMMAND ${LLVM_CONFIG}  --system-libs OUTPUT_VARIABLE LLVM_CONFIG_SYSTEM_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-message("TODO: change to debug | llvm-config: libdir '${LLVM_CONFIG_LIBDIR}' | ldflags '${LLVM_CONFIG_LDFLAGS}' | libs '${LLVM_CONFIG_LIBS}' | system libs '${LLVM_CONFIG_SYSTEM_LIBS}' | cxxflags: ${LLVM_CONFIG_CXXFLAGS} | includedir: ${LLVM_CONFIG_INCLUDEDIR}")
+###no-llvm-config: execute_process(COMMAND ${LLVM_CONFIG}  --ldflags OUTPUT_VARIABLE LLVM_CONFIG_LDFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
+###no-llvm-config: execute_process(COMMAND ${LLVM_CONFIG}  --libs OUTPUT_VARIABLE LLVM_CONFIG_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+###no-llvm-config: execute_process(COMMAND ${LLVM_CONFIG}  --libdir OUTPUT_VARIABLE LLVM_CONFIG_LIBDIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+###no-llvm-config: execute_process(COMMAND ${LLVM_CONFIG}  --includedir OUTPUT_VARIABLE LLVM_CONFIG_INCLUDEDIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+###no-llvm-config: execute_process(COMMAND ${LLVM_CONFIG}  --cxxflags OUTPUT_VARIABLE LLVM_CONFIG_CXXFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
+###no-llvm-config: # if we build LLVM by source (as @bollu does)<with -DBUILD_SHARED_LIBS=ON, LLVM dynamically loads system libraries
+###no-llvm-config: # such as '-lrt -ldl -lm -lz -ltinfo -lxml2'
+###no-llvm-config: execute_process(COMMAND ${LLVM_CONFIG}  --system-libs OUTPUT_VARIABLE LLVM_CONFIG_SYSTEM_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+###no-llvm-config: 
+###no-llvm-config: message("TODO: change to debug | llvm-config: libdir '${LLVM_CONFIG_LIBDIR}' | ldflags '${LLVM_CONFIG_LDFLAGS}' | libs '${LLVM_CONFIG_LIBS}' | system libs '${LLVM_CONFIG_SYSTEM_LIBS}' | cxxflags: ${LLVM_CONFIG_CXXFLAGS} | includedir: ${LLVM_CONFIG_INCLUDEDIR}")
 
 # when using shared libraries, set the `rpath` to help the dynamic loader
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
@@ -315,11 +315,25 @@ string(APPEND LEANC_STATIC_LINKER_FLAGS " ${LEAN_CXX_STDLIB}")
 string(APPEND LEANSHARED_LINKER_FLAGS " ${LEAN_CXX_STDLIB}")
 
 # Link LLVM for code generation
+###no-llvm-config: if(LLVM)
+###no-llvm-config:     string(APPEND LEANSHARED_LINKER_FLAGS " -L${LLVM_CONFIG_LIBDIR} ${LLVM_CONFIG_LDFLAGS} ${LLVM_CONFIG_LIBS} ${LLVM_CONFIG_SYSTEM_LIBS}")
+###no-llvm-config:     set(APPEND LEAN_EXTRA_CXX_FLAGS  " -I${LLVM_CONFIG_INCLUDEDIR} ${LLVM_CONFIG_CXXFLAGS}")
+###no-llvm-config:     message("TODO: change to debug | leanshared linker flags: '${LEANSHARED_LINKER_FLAGS}' | lean extra cxx flags '${LEAN_EXTRA_CXX_FLAGS}'")
+###no-llvm-config: endif()
+
+# setup LLVM using the cmake configuration:
+# https://llvm.org/docs/CMake.html
+# https://github.com/llvm-mirror/llvm/blob/2c4ca6832fa6b306ee6a7010bfb80a3f2596f824/cmake/modules/LLVMConfig.cmake.in
 if(LLVM)
-    string(APPEND LEANSHARED_LINKER_FLAGS " -L${LLVM_CONFIG_LIBDIR} ${LLVM_CONFIG_LDFLAGS} ${LLVM_CONFIG_LIBS} ${LLVM_CONFIG_SYSTEM_LIBS}")
-    set(APPEND LEAN_EXTRA_CXX_FLAGS  " -I${LLVM_CONFIG_INCLUDEDIR} ${LLVM_CONFIG_CXXFLAGS}")
-    message("TODO: change to debug | leanshared linker flags: '${LEANSHARED_LINKER_FLAGS}' | lean extra cxx flags '${LEAN_EXTRA_CXXL_FLAGS}'")
+  find_package(LLVM REQUIRED CONFIG)
+  message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+  message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+  llvm_map_components_to_libnames(LLVM_LIBS support core irreader aarch64 x86 webassembly linker support)
+  set(APPEND LEAN_EXTRA_CXX_FLAGS  " -I${LLVM_INCLUDE_DIRS} ${LLVM_DEFINITIONS}")
+  string(APPEND LEANSHARED_LINKER_FLAGS " -L${LLVM_LIBRARY_DIRS} ${LLVM_LIBS}")
+  message("TODO: change to debug | leanshared linker flags: '${LEANSHARED_LINKER_FLAGS}' | lean extra cxx flags '${LEAN_EXTRA_CXX_FLAGS}'")
 endif()
+
 
 # get rid of unused parts of C++ stdlib
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
