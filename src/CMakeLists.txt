@@ -334,8 +334,10 @@ if(LLVM)
   find_package(LLVM REQUIRED CONFIG)
   message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
   message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
-  # llvm_map_components_to_libnames(LLVM_LIBS support core irreader remarks mc aarch64asmparser aarch64codegen aarch64desc aarch64disassembler aarch64info aarch64utils x86asmparser x86codegen x86desc x86disassembler x86info x86targetmca  webassemblyasmparser webassemblycodegen webassemblydesc webassemblydisassembler webassemblyinfo webassemblyutils  linker support)
-  llvm_map_components_to_libnames(LLVM_LIBS all) # give up: use sound over-approximation.
+  llvm_map_components_to_libnames(LLVM_LIBS support core irreader codegen remarks mc
+      aarch64asmparser aarch64codegen aarch64desc aarch64disassembler aarch64info aarch64utils
+      x86asmparser x86codegen x86desc x86disassembler x86info x86targetmca 
+      webassemblyasmparser webassemblycodegen webassemblydesc webassemblydisassembler webassemblyinfo webassemblyutils)
   set(APPEND LEAN_EXTRA_CXX_FLAGS  " -I${LLVM_INCLUDE_DIRS} ${LLVM_DEFINITIONS}")
   include_directories(${LLVM_INCLUDE_DIRS})
   string(APPEND LEAN_EXTRA_CXX_FLAGS " -D LEAN_LLVM")
@@ -347,11 +349,8 @@ if(LLVM)
       set(LLVM_LIBS_TO_LDFLAGS "${LLVM_LIBS_TO_LDFLAGS} -l${LIB}")
   endforeach()
   string(APPEND LEANSHARED_LINKER_FLAGS " -L${LLVM_LIBRARY_DIRS} ${LLVM_LIBS_TO_LDFLAGS}")
-  message("TODO: change to debug | llvm_libs: '${LLVM_LIBS} | llvm_libs_to_lflags: '${LLVM_LIBS_TO_LDFLAGS}' | 'leanshared_linker_flags: '${LEANSHARED_LINKER_FLAGS}' | lean_extra_cxx_flags '${LEAN_EXTRA_CXX_FLAGS}'")
-  # https://layle.me/using-llvm-with-cmake/
-  # add_library(LLVM INTERFACE)
-  # target_include_directories(LLVM SYSTEM INTERFACE ${LLVM_INCLUDE_DIRS})
-  # target_link_libraries(LLVM INTERFACE ${LLVM_LIBS})
+  string(APPEND LEAN_EXTRA_LINKER_FLAGS " -L${LLVM_LIBRARY_DIRS} ${LLVM_LIBS_TO_LDFLAGS}")
+  message(STATUS "TODO: change to debug | llvm_libs: '${LLVM_LIBS}' | llvm_libs_to_ldflags: '${LLVM_LIBS_TO_LDFLAGS}' | 'leanshared_linker_flags: '${LEANSHARED_LINKER_FLAGS}' | lean_extra_cxx_flags '${LEAN_EXTRA_CXX_FLAGS}'")
 else()
   message(WARNING "Disabling LLVM support")
 endif()
