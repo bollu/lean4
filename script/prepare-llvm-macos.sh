@@ -30,12 +30,16 @@ $CP llvm/lib/lib{clang-cpp,LLVM}.dylib stage1/lib/
 #find stage1 -type f -exec strip --strip-unneeded '{}' \; 2> /dev/null
 # lean.h dependencies
 $CP llvm/lib/clang/*/include/{std*,__std*,limits}.h stage1/include/clang
+# LLVM backend includes
+$CP -r llvm/include/* stage1/include/
 # runtime
 (cd llvm; $CP --parents lib/clang/*/lib/*/libclang_rt.osx.a ../stage1)
 # libSystem stub, includes libc
 cp $SDK/usr/lib/libSystem.tbd stage1/lib/libc
 # use for linking, use system libs for running
 gcp llvm/lib/lib{c++,c++abi,unwind}.dylib stage1/lib/libc
+# echo -n " -DLLVM_CONFIG=$PWD/llvm/bin/llvm-config" # manually point to `llvm-config` location
+echo -n " -DCMAKE_FIND_DEBUG_MODE=ON -DLLVM_ROOT=$PWD/llvm/" # manually point to target `llvm` location
 echo -n " -DLEAN_STANDALONE=ON"
 # do not change C++ compiler; libc++ etc. being system libraries means there's no danger of conflicts,
 # and the custom clang++ outputs a myriad of warnings when consuming the SDK

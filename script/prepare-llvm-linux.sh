@@ -28,6 +28,8 @@ $CP $ZLIB/lib/libz.so* stage1/lib/
 find stage1 -type f -exec strip --strip-unneeded '{}' \; 2> /dev/null
 # lean.h dependencies
 $CP llvm/lib/clang/*/include/{std*,__std*,limits}.h stage1/include/clang
+# LLVM backend includes
+$CP -r llvm/include/* stage1/include/
 # ELF dependencies, must be put there for `--sysroot`
 $CP $GLIBC/lib/*crt* llvm/lib/
 $CP $GLIBC/lib/*crt* stage1/lib/
@@ -45,6 +47,8 @@ $CP -r llvm/include/*-*-* llvm-host/include/
 $CP $GLIBC/lib/libc_nonshared.a stage1/lib/glibc
 for f in $GLIBC/lib/lib{c,dl,m,rt,pthread}-*; do b=$(basename $f); cp $f stage1/lib/glibc/${b%-*}.so; done
 OPTIONS=()
+# echo -n " -DLLVM_CONFIG=$PWD/llvm-host/bin/llvm-config" # manually point to `llvm-config` location
+echo -n " -DCMAKE_FIND_DEBUG_MODE=ON -DLLVM_ROOT=$PWD/llvm/" # manually point to target `llvm` location
 echo -n " -DLEAN_STANDALONE=ON"
 echo -n " -DCMAKE_CXX_COMPILER=$PWD/llvm-host/bin/clang++ -DLEAN_CXX_STDLIB='-Wl,-Bstatic -lc++ -lc++abi -Wl,-Bdynamic'"
 echo -n " -DLEAN_EXTRA_CXX_FLAGS='--sysroot $PWD/llvm -idirafter $GLIBC_DEV/include ${EXTRA_FLAGS:-}'"
