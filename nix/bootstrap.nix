@@ -1,5 +1,5 @@
 { debug ? false, stage0debug ? false, extraCMakeFlags ? [],
-  stdenv, lib, cmake, gmp, gnumake, bash, buildLeanPackage, writeShellScriptBin, runCommand, symlinkJoin, lndir, perl, gnused, darwin, llvmPackages,
+  stdenv, lib, cmake, gmp, valgrind, gnumake, bash, buildLeanPackage, writeShellScriptBin, runCommand, symlinkJoin, lndir, perl, gnused, darwin, llvmPackages,
   ... } @ args:
 with builtins;
 rec {
@@ -140,18 +140,18 @@ rec {
       test = buildCMake {
         name = "lean-test-${desc}";
         realSrc = lib.sourceByRegex ../. [ "src.*" "tests.*" ];
-        buildInputs = [ gmp perl ];
+        buildInputs = [ gmp perl llvmPackages.llvm valgrind];
         preConfigure = ''
           cd src
         '';
-        extraCMakeFlags = [ "-DLLVM=OFF" ];
+        extraCMakeFlags = [ "-DLLVM=ON" ];
         postConfigure = ''
           patchShebangs ../../tests
           rm -r bin lib include share
           ln -sf ${lean-all}/* .
         '';
         buildPhase = ''
-          ctest --output-on-failure -E 'leancomptest_(doc_example|foreign)|laketest|leanpkgtest' -j$NIX_BUILD_CORES
+          ctest --output-on-failure -R leancomptest_expr -E 'leancomptest_(doc_example|foreign)|laketest|leanpkgtest' -j$NIX_BUILD_CORES
         '';
         installPhase = ''
           touch $out

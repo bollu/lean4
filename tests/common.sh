@@ -43,7 +43,7 @@ function compile_lean_llvm_backend {
       opt -S -O2 "$f.c.ll" -o "$f.c.o2.ll" # optimise it a little to be much more readable.
     fi
 
-    lean --bc="$f.linked.bc" "$f" || fail "Failed to compile $f into bitcode file"
+    valgrind --tool=memcheck --leak-check=full lean --bc="$f.linked.bc" "$f" || fail "Failed to compile $f into bitcode file"
     if [[ -v DEBUG_LLVM ]]; then
       echo "using lean: $(which lean); leanc: $(which leanc)"
       opt -S "$f.linked.bc" -o "$f.linked.bc.ll" # generate easy to read ll from bitcode
