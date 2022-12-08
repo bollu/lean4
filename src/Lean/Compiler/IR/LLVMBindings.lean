@@ -161,8 +161,8 @@ opaque buildBr (builder : Builder ctx) (bb : BasicBlock ctx) : BaseIO (Value ctx
 @[extern "lean_llvm_build_alloca"]
 opaque buildAlloca (builder : Builder ctx) (ty : LLVMType ctx) (name : @&String := "") : BaseIO (Value ctx)
 
-@[extern "lean_llvm_build_load"]
-opaque buildLoad (builder : Builder ctx) (val : Value ctx) (name : @&String := "") : BaseIO (Value ctx)
+@[extern "lean_llvm_build_load2"]
+opaque buildLoad2 (builder : Builder ctx) (ty: LLVMType ctx) (val : Value ctx) (name : @&String := "") : BaseIO (Value ctx)
 
 @[extern "lean_llvm_build_store"]
 opaque buildStore (builder : Builder ctx) (val : Value ctx) (store_loc_ptr : Value ctx) : BaseIO Unit

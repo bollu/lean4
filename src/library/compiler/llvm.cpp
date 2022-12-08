@@ -557,15 +557,15 @@ extern "C" LEAN_EXPORT lean_object *lean_llvm_build_store(size_t ctx,
 #endif  // LEAN_LLVM
 }
 
-extern "C" LEAN_EXPORT lean_object *lean_llvm_build_load(size_t ctx,
-    size_t builder, size_t slot, lean_object *name, lean_object * /* w */) {
+extern "C" LEAN_EXPORT lean_object *lean_llvm_build_load2(size_t ctx,
+    size_t builder, size_t ty, size_t slot, lean_object *name, lean_object * /* w */) {
 #ifndef LEAN_LLVM
     lean_always_assert(
         false && ("Please build a version of Lean4 with -DLLVM=ON to invoke "
                   "the LLVM backend function."));
 #else
-    LLVMValueRef out = LLVMBuildLoad(
-        lean_to_Builder(builder), lean_to_Value(slot), lean_string_cstr(name));
+    LLVMValueRef out = LLVMBuildLoad2(
+        lean_to_Builder(builder), lean_to_Type(ty), lean_to_Value(slot), lean_string_cstr(name));
     return lean_io_result_mk_ok(lean_box_usize(Value_to_lean(out)));
 #endif  // LEAN_LLVM
 }
