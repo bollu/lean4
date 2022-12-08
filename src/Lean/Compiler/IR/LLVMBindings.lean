@@ -146,8 +146,8 @@ opaque appendBasicBlockInContext (ctx : Context) (fn :  Value ctx) (name :  @&St
 @[extern "lean_llvm_position_builder_at_end"]
 opaque positionBuilderAtEnd (builder : Builder ctx) (bb :  BasicBlock ctx) : BaseIO Unit
 
-@[extern "lean_llvm_build_call"]
-opaque buildCall (builder : Builder ctx) (fn : Value ctx) (args : @&Array (Value ctx)) (name :  @&String := "") : BaseIO (Value ctx)
+@[extern "lean_llvm_build_call2"]
+opaque buildCall2 (builder : Builder ctx) (ty: LLVMType ctx) (fn : Value ctx) (args : @&Array (Value ctx)) (name :  @&String := "") : BaseIO (Value ctx)
 
 @[extern "lean_llvm_set_tail_call"]
 opaque setTailCall (fn : Value ctx) (istail : Bool) : BaseIO Unit
@@ -173,11 +173,11 @@ opaque buildRet (builder : Builder ctx) (val : Value ctx) : BaseIO (Value ctx)
 @[extern "lean_llvm_build_unreachable"]
 opaque buildUnreachable (builder : Builder ctx) : BaseIO (Value ctx)
 
-@[extern "lean_llvm_build_gep"]
-opaque buildGEP (builder : Builder ctx) (base : Value ctx) (ixs : @&Array (Value ctx)) (name : @&String := "") : BaseIO (Value ctx)
+@[extern "lean_llvm_build_gep2"]
+opaque buildGEP2 (builder : Builder ctx) (ty: LLVMType ctx) (base : Value ctx) (ixs : @&Array (Value ctx)) (name : @&String := "") : BaseIO (Value ctx)
 
-@[extern "lean_llvm_build_inbounds_gep"]
-opaque buildInBoundsGEP (builder : Builder ctx) (base : Value ctx) (ixs : @&Array (Value ctx)) (name : @&String := "") : BaseIO (Value ctx)
+@[extern "lean_llvm_build_inbounds_gep2"]
+opaque buildInBoundsGEP2 (builder : Builder ctx) (ty: LLVMType ctx) (base : Value ctx) (ixs : @&Array (Value ctx)) (name : @&String := "") : BaseIO (Value ctx)
 
 @[extern "lean_llvm_build_pointer_cast"]
 opaque buildPointerCast (builder : Builder ctx) (val : Value ctx) (destTy : LLVMType ctx) (name : @&String := "") : BaseIO (Value ctx)

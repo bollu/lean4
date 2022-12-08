@@ -496,24 +496,6 @@ extern "C" LEAN_EXPORT lean_object *lean_llvm_build_call2(
 #endif  // LEAN_LLVM
 }
 
-extern "C" LEAN_EXPORT lean_object *lean_llvm_build_call(
-    size_t ctc, size_t builder, size_t fnval, lean_object *args, lean_object *name,
-    lean_object * /* w */) {
-#ifndef LEAN_LLVM
-    lean_always_assert(
-        false && ("Please build a version of Lean4 with -DLLVM=ON to invoke "
-                  "the LLVM backend function."));
-#else
-    lean::array_ref<lean_object *> arr(args, true);
-    LLVMValueRef *arrArgVals = array_ref_to_ArrayLLVMValue(arr);
-    LLVMValueRef out =
-        LLVMBuildCall(lean_to_Builder(builder), lean_to_Value(fnval),
-                      arrArgVals, arr.size(), lean_string_cstr(name));
-    free(arrArgVals);
-    return lean_io_result_mk_ok(lean_box_usize(Value_to_lean(out)));
-#endif  // LEAN_LLVM
-}
-
 extern "C" LEAN_EXPORT lean_object *lean_llvm_build_cond_br(
     size_t ctx,
     size_t builder, size_t if_, size_t thenbb, size_t elsebb,
@@ -620,8 +602,8 @@ extern "C" LEAN_EXPORT lean_object *lean_llvm_build_unreachable(size_t ctx,
 #endif  // LEAN_LLVM
 }
 
-extern "C" LEAN_EXPORT lean_object *lean_llvm_build_inbounds_gep(size_t ctx,
-    size_t builder, size_t pointer, lean_object *indices, lean_object *name,
+extern "C" LEAN_EXPORT lean_object *lean_llvm_build_inbounds_gep2(size_t ctx,
+    size_t builder, size_t ty, size_t pointer, lean_object *indices, lean_object *name,
     lean_object * /* w */) {
 #ifndef LEAN_LLVM
     lean_always_assert(
@@ -632,15 +614,16 @@ extern "C" LEAN_EXPORT lean_object *lean_llvm_build_inbounds_gep(size_t ctx,
     LLVMValueRef *indices_carr = array_ref_to_ArrayLLVMValue(indices_array_ref);
     lean::string_ref name_ref(name, true);
 
-    LLVMValueRef out = LLVMBuildInBoundsGEP(
-        lean_to_Builder(builder), lean_to_Value(pointer), indices_carr,
+    LLVMValueRef out = LLVMBuildInBoundsGEP2(
+        lean_to_Builder(builder), lean_to_Type(ty), lean_to_Value(pointer), indices_carr,
         indices_array_ref.size(), name_ref.data());
     free(indices_carr);
     return lean_io_result_mk_ok(lean_box_usize(Value_to_lean(out)));
 #endif  // LEAN_LLVM
 }
 
-extern "C" LEAN_EXPORT lean_object *lean_llvm_build_gep(size_t ctx, size_t builder,
+extern "C" LEAN_EXPORT lean_object *lean_llvm_build_gep2(size_t ctx, size_t builder,
+                                                        size_t ty,
                                                         size_t pointer,
                                                         lean_object *indices,
                                                         lean_object *name,
@@ -655,7 +638,7 @@ extern "C" LEAN_EXPORT lean_object *lean_llvm_build_gep(size_t ctx, size_t build
     lean::string_ref name_ref(name, true);
 
     LLVMValueRef out =
-        LLVMBuildGEP(lean_to_Builder(builder), lean_to_Value(pointer),
+        LLVMBuildGEP2(lean_to_Builder(builder), lean_to_Type(ty), lean_to_Value(pointer),
                      indices_carr, indices_array_ref.size(), name_ref.data());
     free(indices_carr);
     return lean_io_result_mk_ok(lean_box_usize(Value_to_lean(out)));
