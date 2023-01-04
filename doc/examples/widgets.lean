@@ -106,7 +106,7 @@ more information for us, in the form of a `snap : Snapshot`. With this in hand, 
 -/
 
 open Server RequestM in
-@[serverRpcMethod]
+@[server_rpc_method]
 def getType (params : GetTypeParams) : RequestM (RequestTask CodeWithInfos) :=
   withWaitFindSnapAtPos params.pos fun snap => do
     runTermElabM snap do
@@ -126,9 +126,10 @@ as seen in the goal view. We will use it to implement our custom `#check` displa
 ⚠️ WARNING: Like the other widget APIs, the infoview JS API is **unstable** and subject to breaking changes.
 
 The code below demonstrates useful parts of the API. To make RPC method calls, we use the `RpcContext`.
-The `useAsync` helper packs the results of a call into a `status` enum, the returned `val`ue in case
-the call was successful, and otherwise an `err`or. Based on the `status` we either display
-an `InteractiveCode`, or `mapRpcError` the error in order to turn it into a readable message.
+The `useAsync` helper packs the results of a call into an `AsyncState` structure which indicates
+whether the call has resolved successfully, has returned an error, or is still in-flight. Based
+on this we either display an `InteractiveCode` with the type, `mapRpcError` the error in order
+to turn it into a readable message, or show a `Loading..` message, respectively.
 -/
 
 @[widget]
@@ -143,18 +144,15 @@ export default function(props) {
   const rs = React.useContext(RpcContext)
   const [name, setName] = React.useState('getType')
 
-  const [status, val, err] = useAsync(() =>
+  const st = useAsync(() =>
     rs.call('getType', { name, pos: props.pos }), [name, rs, props.pos])
 
-  const type = status === 'fulfilled' ? val && e(InteractiveCode, {fmt: val})
-    : status === 'rejected' ? e('p', null, mapRpcError(err).message)
-      : e('p', null, 'Loading..')
-
+  const type = st.state === 'resolved' ? st.value && e(InteractiveCode, {fmt: st.value})
+    : st.state === 'rejected' ? e('p', null, mapRpcError(st.error).message)
+    : e('p', null, 'Loading..')
   const onChange = (event) => { setName(event.target.value) }
   return e('div', null,
-    e('input', { value: name, onChange }),
-    ' : ',
-    type)
+    e('input', { value: name, onChange }), ' : ', type)
 }
 "
 
@@ -183,4 +181,36 @@ the infoview we need to:
 
 In the RubiksCube sample, we provide a working `rollup.js` build configuration in
 [rollup.config.js](https://github.com/leanprover/lean4-samples/blob/main/RubiksCube/widget/rollup.config.js).
+
+## Inserting text
+
+We can also instruct the editor to insert text, copy text to the clipboard, or
+reveal a certain location in the document.
+To do this, use the `React.useContext(EditorContext)` React context.
+This will return an `EditorConnection` whose `api` field contains a number of methods to
+interact with the text editor.
+
+You can see the full API for this [here](https://github.com/leanprover/vscode-lean4/blob/master/lean4-infoview-api/src/infoviewApi.ts#L52)
 -/
+
+@[widget]
+def insertTextWidget : UserWidgetDefinition where
+  name := "textInserter"
+  javascript := "
+import * as React from 'react';
+const e = React.createElement;
+import { EditorContext } from '@leanprover/infoview';
+
+export default function(props) {
+  const editorConnection = React.useContext(EditorContext)
+  function onClick() {
+    editorConnection.api.insertText('-- hello!!!', 'above')
+  }
+
+  return e('div', null, e('button', { value: name, onClick }, 'insert'))
+}
+"
+
+/-! Finally, we can try this out: -/
+
+#widget insertTextWidget .null
