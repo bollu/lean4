@@ -431,7 +431,14 @@ else()
 endif()
 configure_file("${LEAN_SOURCE_DIR}/config.h.in" "${LEAN_BINARY_DIR}/include/lean/config.h")
 install(DIRECTORY ${LEAN_BINARY_DIR}/include/ DESTINATION include)
-configure_file(${LEAN_SOURCE_DIR}/lean.mk.in ${LEAN_BINARY_DIR}/share/lean/lean.mk)
+
+# Build the compiler using the bootstraped C sources for stage0, and use
+# the LLVM build for stage1 and further.
+if (LLVM AND (${STAGE} LESS_EQUAL 1))
+  configure_file(${LEAN_SOURCE_DIR}/lean.c.mk.in ${LEAN_BINARY_DIR}/share/lean/lean.mk)
+else()
+  configure_file(${LEAN_SOURCE_DIR}/lean.llvm.mk.in ${LEAN_BINARY_DIR}/share/lean/lean.mk)
+endif()
 install(DIRECTORY ${LEAN_BINARY_DIR}/share/ DESTINATION share)
 
 include_directories(${LEAN_SOURCE_DIR})

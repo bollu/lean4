@@ -34,7 +34,7 @@ add_custom_target(lean ALL
 
 # if we have LLVM enabled, then build `libruntime.bc` which has the LLVM bitcode
 # of Lean runtime to be built.
-if (LLVM)
+if (LLVM AND ${STAGE} EQUAL 0)
    add_dependencies(lean runtime_bc)
 endif()
 
