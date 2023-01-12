@@ -152,7 +152,7 @@ def Expr.Data.hasLevelMVar (c : Expr.Data) : Bool :=
 def Expr.Data.hasLevelParam (c : Expr.Data) : Bool :=
   ((c.shiftRight 43).land 1) == 1
 
-@[extern c inline "(uint64_t)#1"]
+@[extern "lean_expr_binderinfo_to_uint64"]
 def BinderInfo.toUInt64 : BinderInfo → UInt64
   | .default        => 0
   | .implicit       => 1

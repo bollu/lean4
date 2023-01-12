@@ -1927,6 +1927,10 @@ static inline size_t lean_data_hashmap_mk_idx(lean_object* sz, uint64_t hash) {
     return (size_t)(hash & (lean_unbox(sz) - 1));
 }
 
+static inline uint64_t lean_expr_binderinfo_to_uint64(uint8_t binderinfo) {
+  return (uint64_t)binderinfo;
+}
+
 #ifdef __cplusplus
 }
 #endif
