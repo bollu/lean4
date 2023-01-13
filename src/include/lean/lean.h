@@ -1931,6 +1931,10 @@ static inline uint64_t lean_expr_binderinfo_to_uint64(uint8_t binderinfo) {
   return (uint64_t)binderinfo;
 }
 
+static inline uint64_t lean_expr_data(lean_object *expr) {
+    return lean_ctor_get_uint64(expr, lean_ctor_num_objs(expr)*sizeof(void*));
+}
+
 #ifdef __cplusplus
 }
 #endif
