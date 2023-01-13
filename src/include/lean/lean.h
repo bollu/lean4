@@ -1927,6 +1927,10 @@ static inline size_t lean_data_hashmap_mk_idx(lean_object* sz, uint64_t hash) {
     return (size_t)(hash & (lean_unbox(sz) - 1));
 }
 
+static inline size_t lean_data_hashset_mk_idx(lean_object* sz, uint64_t hash) {
+    return (size_t)(hash & (lean_unbox(sz) - 1));
+}
+
 static inline uint64_t lean_expr_binderinfo_to_uint64(uint8_t binderinfo) {
   return (uint64_t)binderinfo;
 }
@@ -1977,6 +1981,10 @@ static lean_object *lean_init_meta_version_get_special_desc() {
 
 static uint8_t lean_init_meta_internal_is_stage0() {
     return LEAN_IS_STAGE0;
+}
+
+static inline lean_object *lean_nat_pred(lean_object *n) {
+    return lean_nat_sub(n, lean_box(1));
 }
 
 #ifdef __cplusplus
