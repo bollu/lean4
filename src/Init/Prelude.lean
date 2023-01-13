@@ -1592,7 +1592,7 @@ The predecessor function on natural numbers.
 This definition is overridden in the compiler to use `n - 1` instead.
 The definition provided here is the logical model.
 -/
-@[extern c "lean_nat_pred"]
+@[extern "lean_nat_pred"]
 def Nat.pred : (@& Nat) → Nat
   | 0      => 0
   | succ a => a

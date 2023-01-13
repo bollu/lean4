@@ -11,28 +11,28 @@ import Init.Data.Option.BasicAux
 
 namespace Lean
 
-@[extern c "lean_init_meta_version_get_major"]
+@[extern "lean_init_meta_version_get_major"]
 private opaque version.getMajor (u : Unit) : Nat
 def version.major : Nat := version.getMajor ()
 
-@[extern c "lean_init_meta_version_get_minor"]
+@[extern "lean_init_meta_version_get_minor"]
 private opaque version.getMinor (u : Unit) : Nat
 def version.minor : Nat := version.getMinor ()
 
-@[extern c "lean_init_meta_version_get_patch"]
+@[extern "lean_init_meta_version_get_patch"]
 private opaque version.getPatch (u : Unit) : Nat
 def version.patch : Nat := version.getPatch ()
 
-@[extern c "lean_get_githash"]
+@[extern "lean_get_githash"]
 opaque getGithash (u : Unit) : String
 def githash : String := getGithash ()
 
-@[extern c "lean_init_meta_version_is_release"]
+@[extern "lean_init_meta_version_is_release"]
 opaque version.getIsRelease (u : Unit) : Bool
 def version.isRelease : Bool := version.getIsRelease ()
 
 /-- Additional version description like "nightly-2018-03-11" -/
-@[extern c "lean_init_meta_version_get_special_desc"]
+@[extern "lean_init_meta_version_get_special_desc"]
 opaque version.getSpecialDesc (u : Unit) : String
 def version.specialDesc : String := version.getSpecialDesc ()
 
@@ -61,7 +61,7 @@ def toolchain :=
   else
     ""
 
-@[extern c "lean_init_meta_internal_is_stage0"]
+@[extern "lean_init_meta_internal_is_stage0"]
 opaque Internal.isStage0 (u : Unit) : Bool
 
 /-- Valid identifier names -/
