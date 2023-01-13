@@ -1935,6 +1935,19 @@ static inline uint64_t lean_expr_data(lean_object *expr) {
     return lean_ctor_get_uint64(expr, lean_ctor_num_objs(expr)*sizeof(void*));
 }
 
+static inline lean_object* lean_expr_checker_get_max_ctor_fields() {
+    return lean_box(LEAN_MAX_CTOR_FIELDS);
+}
+
+static inline lean_object* lean_expr_checker_get_max_ctor_scalars_size() {
+    return lean_box(LEAN_MAX_CTOR_SCALARS_SIZE);
+}
+
+static inline lean_object* lean_expr_checker_get_usize_size() {
+    return lean_box(sizeof(size_t));
+}
+
+
 #ifdef __cplusplus
 }
 #endif

@@ -8,15 +8,15 @@ import Lean.Compiler.IR.Format
 
 namespace Lean.IR.Checker
 
-@[extern c inline "lean_box(LEAN_MAX_CTOR_FIELDS)"]
+@[extern c "lean_expr_checker_get_max_ctor_fields"]
 opaque getMaxCtorFields : Unit → Nat
 def maxCtorFields := getMaxCtorFields ()
 
-@[extern c inline "lean_box(LEAN_MAX_CTOR_SCALARS_SIZE)"]
+@[extern c "lean_expr_checker_get_max_ctor_scalars_size"]
 opaque getMaxCtorScalarsSize : Unit → Nat
 def maxCtorScalarsSize := getMaxCtorScalarsSize ()
 
-@[extern c inline "lean_box(sizeof(size_t))"]
+@[extern c "lean_expr_checker_get_usize_size"]
 opaque getUSizeSize : Unit → Nat
 def usizeSize := getUSizeSize ()
 
