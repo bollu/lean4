@@ -1947,6 +1947,13 @@ static inline lean_object* lean_expr_checker_get_usize_size() {
     return lean_box(sizeof(size_t));
 }
 
+static uint8_t lean_init_core_strict_or(uint8_t b1, uint8_t b2) {
+    return b1 || b2;
+}
+
+static uint8_t lean_init_core_strict_and(uint8_t b1, uint8_t b2) {
+    return b1 && b2;
+}
 
 #ifdef __cplusplus
 }
