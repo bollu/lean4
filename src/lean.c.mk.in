@@ -61,7 +61,7 @@ $(TEMP_OUT)/%.depend: %.lean | $(OLEAN_OUT)/$(PKG)
 
 $(OLEAN_OUT)/%.olean: %.lean $(TEMP_OUT)/%.depend $(MORE_DEPS)
 ifdef CMAKE_LIKE_OUTPUT
-	@echo "[    ] Building $<"
+	@echo "[    ] PP Building $<"
 endif
 	@mkdir -p $(OLEAN_OUT)/$(*D)
 	$(LEAN) $(LEAN_OPTS) -o "$@" -i "$(OLEAN_OUT)/$*.ilean" --c="$(TEMP_OUT)/$*.c.tmp" $<
@@ -78,12 +78,14 @@ endif
 
 $(TEMP_OUT)/%.o: $(C_OUT)/%.c
 ifdef CMAKE_LIKE_OUTPUT
-	@echo "[    ] Building $<"
+	@echo "[    ] QQ Building $<"
 endif
 	@mkdir -p "$(@D)"
 ifdef PROFILE
+	@echo "[    ] QQ2 Building $<"
 	\time -f "%U %S" $(LEANC) -c -o $@ $< $(LEANC_OPTS) 2>&1 > /dev/null | awk '{ printf "C compilation %fs\n", $$1 + $$2 }' > /dev/stderr
 else
+	@echo "[    ] QQ3 Building $<"
 	$(LEANC) -c -o $@ $< $(LEANC_OPTS)
 endif
 

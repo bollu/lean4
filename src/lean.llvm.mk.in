@@ -41,19 +41,24 @@ SHELL = /usr/bin/env bash -euo pipefail
 .PHONY: all bin lib depends clean
 
 all: $(OBJS)
+	@echo "[    ] building all"
 
 bin: $(BIN_OUT)/$(BIN_NAME)
+	@echo "[    ] building bin"
 
 lib: $(LIB_OUT)/$(STATIC_LIB_NAME)
+	@echo "[    ] building lib"
 
 depends: $(DEPS)
 
 $(OLEAN_OUT)/$(PKG) $(LIB_OUT) $(BIN_OUT):
+	@echo "[    ] building OLEAN OUT"
 	@mkdir -p "$@"
 
 # Make sure the .olean output directory exists so that `lean --deps` knows where this package's
 # .olean files will be located even before any of them are actually built.
 $(TEMP_OUT)/%.depend: %.lean | $(OLEAN_OUT)/$(PKG)
+	@echo "[    ] building DEPEND $<"
 	@mkdir -p "$(TEMP_OUT)/$(*D)"
 # use separate assignment to ensure failure propagation
 # convert path separators and newlines on Windows
@@ -61,18 +66,44 @@ $(TEMP_OUT)/%.depend: %.lean | $(OLEAN_OUT)/$(PKG)
 
 $(OLEAN_OUT)/%.olean: %.lean $(TEMP_OUT)/%.depend $(MORE_DEPS)
 ifdef CMAKE_LIKE_OUTPUT
-	@echo "[    ] Building $<"
+	@echo "[    ] XX Building $<"
 endif
 	@mkdir -p $(OLEAN_OUT)/$(*D)
 	$(LEAN) $(LEAN_OPTS) -o "$@" -i "$(OLEAN_OUT)/$*.ilean" --bc="$(TEMP_OUT)/$*.bc.tmp" $<
-	mv "$(TEMP_OUT)/$*.bc.tmp.o" "$(TEMP_OUT)/$*.o"
+	cp "$(TEMP_OUT)/$*.bc.tmp.o" "$(TEMP_OUT)/$*.o"
+ifdef CMAKE_LIKE_OUTPUT
+	@echo "[    ] DONE XX Building $<"
+endif
 
 $(OLEAN_OUT)/%.ilean: $(OLEAN_OUT)/%.olean
+	@echo "[    ] building ilean"
 	@
 
-ifndef C_ONLY
-$(TEMP_OUT)/%.c: $(OLEAN_OUT)/%.olean
-	@
+# $(TEMP_OUT)/%.o: $(TEMP_OUT)/%.olean
+# 	@echo "[    ] building o"
+# 	mv "$(TEMP_OUT)/$*.bc.tmp.o" "$(TEMP_OUT)/$*.o"
+
+# $(TEMP_OUT)/%.c: $(TEMP_OUT)/%.olean
+# 	@echo "[    ] building c"
+# 	mv "$(TEMP_OUT)/$*.bc.tmp.o" "$(TEMP_OUT)/$*.o"
+
+# ifndef C_ONLY
+# $(TEMP_OUT)/%.c: $(OLEAN_OUT)/%.olean
+# 	@echo "[    ] building C"
+# 	@
+# endif
+
+$(TEMP_OUT)/%.o: $(OLEAN_OUT)/%.olean
+ifdef CMAKE_LIKE_OUTPUT
+	@echo "[    ] YY Building $<"
+endif
+	@mkdir -p "$(@D)"
+ifdef PROFILE
+	@echo "[    ] ZZ1 Building $<"
+	\time -f "%U %S" $(LEANC) -c -o $@ $< $(LEANC_OPTS) 2>&1 > /dev/null | awk '{ printf "C compilation %fs\n", $$1 + $$2 }' > /dev/stderr
+else
+	@echo "[    ] ZZ2 Building $<"
+	$(LEANC) -c -o $@ $< $(LEANC_OPTS)
 endif
 
 # $(TEMP_OUT)/%.o: $(C_OUT)/%.c
