@@ -17,6 +17,7 @@ are to:
 -- https://github.com/llvm/llvm-project/blob/c3e073bcbdc523b0f758d44a89a6333e38bff863/llvm/include/llvm-c/TargetMachine.h#L64
 structure CodegenFileType where
   private mk :: val : UInt64
+deriving DecidableEq, BEq
 
 def CodegenFileType.AssemblyFile : CodegenFileType := { val := 0 }
 def CodegenFileType.ObjectFile : CodegenFileType := { val := 1 }
@@ -24,6 +25,7 @@ def CodegenFileType.ObjectFile : CodegenFileType := { val := 1 }
 -- https://github.com/llvm/llvm-project/blob/c3e073bcbdc523b0f758d44a89a6333e38bff863/llvm/include/llvm-c/Core.h#L290
 structure IntPredicate where
   private mk :: val : UInt64
+deriving DecidableEq, BEq
 
 def IntPredicate.EQ : IntPredicate := { val := 32 }
 def IntPredicate.NE : IntPredicate := { val := IntPredicate.EQ.val + 1 }

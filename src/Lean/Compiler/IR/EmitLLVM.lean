@@ -19,6 +19,103 @@ import Lean.Compiler.IR.LLVMBindings
 
 open Lean.IR.ExplicitBoxing (isBoxedName)
 
+namespace Lean.Compiler.LLVMAst
+
+
+inductive Ty where
+| function (args : Array Ty) (ret : Ty)
+| void
+| int (width : UInt64)
+| opaquePointer (addrspace : UInt64 := 0)
+| float
+| double
+| array (elemty : Ty) (nelem : UInt64)
+deriving Inhabited, BEq
+
+-- TODO: implement
+-- instance : DecidableEq Ty := fun x y => sorry
+
+abbrev BBId := UInt64
+abbrev Reg := UInt64
+
+inductive Instruction where
+| alloca (ty : Ty) (name : String)
+| load2 (ty : Ty) (val : Reg) (name : String)
+| store (val ptr : Reg) (name : String)
+| gep (ty : Ty) (base : Reg) (ixs : Array Reg)
+| inboundsgep (ty : Ty) (base : Reg) (ixs : Array Reg)
+| sext (val : Reg) (destTy : Ty)
+| zext (val : Reg) (destTy : Ty)
+| sext_or_trunc (val : Reg) (destTy : Ty)
+| ptrtoint (ptr : Reg) (destTy : Ty)
+| mul (lhs rhs : Reg) (name : String)
+| add (lhs rhs : Reg) (name : String)
+| sub (lhs rhs : Reg) (name : String)
+| not (arg : Reg) (name : String)
+| icmp (pred : LLVM.IntPredicate) (lhs rhs : Reg) (name : String)
+| phi (args : Array (BBId × Reg))
+deriving Inhabited, BEq
+
+abbrev InsertionPoint := BBId
+
+
+
+inductive Terminator where
+| default
+| unreachable
+| br (bbid : String)
+| condbr (val : Reg) (then_ else_ : BBId)
+| ret (val : Option Reg)
+| switch (val : Reg) (cases : Array BBId) (default : BBId)
+
+abbrev Arg := String × Ty
+structure BasicBlock where
+  name : String
+  instrs : Array Instruction
+  terminator : Terminator
+
+structure FunctionDeclaration where
+  name : String
+  args : Array Arg
+
+structure FunctionDefinition extends FunctionDeclaration where
+  body : Array BasicBlock
+
+structure GlobalDeclaration where
+  name : String
+  ty : Ty
+
+abbrev GlobalId := UInt64
+
+inductive Initializer where
+| zero -- zero initialize.
+| undef -- leave undefiend.
+| string (string : String)
+
+structure GlobalDefinition extends GlobalDeclaration where
+  initializer : Initializer
+
+abbrev FunctionId := UInt64
+
+structure BuilderState where
+  instrs : HashMap Reg Instruction
+  bbs : HashMap BBId BasicBlock
+
+  functionDefs : HashMap FunctionId FunctionDefinition
+  functionDecls : HashMap FunctionId FunctionDeclaration
+
+  globalDefs : HashMap GlobalId GlobalDeclaration
+  globalDecls : HashMap GlobalId GlobalDefinition
+
+  reg : UInt64
+  bbid : UInt64
+
+  insertionpt : Option InsertionPoint
+
+abbrev BuilderT (m : Type → Type) [STWorld β m] (α : Type) := StateRefT BuilderState m α
+
+end Lean.Compiler.LLVMAst
+
 namespace Lean.IR
 
 def leanMainFn := "_lean_main"
