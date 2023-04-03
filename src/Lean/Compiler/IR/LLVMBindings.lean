@@ -78,6 +78,9 @@ instance : Nonempty (Value ctx) := ⟨{ ptr := default }⟩
 @[extern "lean_llvm_initialize_target_info"]
 opaque llvmInitializeTargetInfo : BaseIO (Unit)
 
+def BasicBlock.toValue (bb: BasicBlock ctx) : Value ctx where
+  ptr := bb.ptr
+
 @[extern "lean_llvm_create_context"]
 opaque createContext : BaseIO (Context)
 
@@ -173,7 +176,7 @@ opaque buildAlloca (builder : Builder ctx) (ty : LLVMType ctx) (name : @&String 
 opaque buildLoad2 (builder : Builder ctx) (ty: LLVMType ctx) (val : Value ctx) (name : @&String := "") : BaseIO (Value ctx)
 
 @[extern "lean_llvm_build_store"]
-opaque buildStore (builder : Builder ctx) (val : Value ctx) (store_loc_ptr : Value ctx) : BaseIO Unit
+opaque buildStore (builder : Builder ctx) (val : Value ctx) (store_loc_ptr : Value ctx) : BaseIO (Value ctx)
 
 @[extern "lean_llvm_build_ret"]
 opaque buildRet (builder : Builder ctx) (val : Value ctx) : BaseIO (Value ctx)
@@ -201,6 +204,14 @@ opaque buildSwitch (builder : Builder ctx) (val : Value ctx) (elseBB : BasicBloc
 
 @[extern "lean_llvm_build_ptr_to_int"]
 opaque buildPtrToInt (builder : Builder ctx) (ptr : Value ctx) (destTy : LLVMType ctx) (name : @&String := "") : BaseIO (Value ctx)
+
+@[extern "lean_llvm_build_phi"]
+opaque buildPhi (builder : Builder ctx) (ty : LLVMType ctx) (name : @&String := "") : BaseIO (LLVM.Value llvmctx)
+
+-- add incoming values into a phi node.
+@[extern "lean_llvm_add_incoming"]
+opaque addIncoming (phi: LLVM.Value llvmctx)
+  (vals : @&Array (LLVM.Value llvmctx)) (bbs : @&Array (BasicBlock llvmctx)) : BaseIO Unit
 
 @[extern "lean_llvm_build_mul"]
 opaque buildMul (builder : Builder ctx) (x y : Value ctx) (name : @&String := "") : BaseIO (Value ctx)

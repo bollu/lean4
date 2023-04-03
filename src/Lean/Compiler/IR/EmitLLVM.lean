@@ -41,7 +41,7 @@ abbrev Reg := UInt64
 inductive Instruction where
 | alloca (ty : Ty) (name : String)
 | load2 (ty : Ty) (val : Reg) (name : String)
-| store (val ptr : Reg) (name : String)
+| store (val ptr : Reg)
 | gep (ty : Ty) (base : Reg) (ixs : Array Reg)
 | inboundsgep (ty : Ty) (base : Reg) (ixs : Array Reg)
 | sext (val : Reg) (destTy : Ty)
@@ -53,23 +53,23 @@ inductive Instruction where
 | sub (lhs rhs : Reg) (name : String)
 | not (arg : Reg) (name : String)
 | icmp (pred : LLVM.IntPredicate) (lhs rhs : Reg) (name : String)
-| phi (args : Array (BBId × Reg))
+| phi (ty : Ty) (args : Array (BBId × Reg))
 deriving Inhabited, BEq
 
 abbrev InsertionPoint := BBId
 
-
-
 inductive Terminator where
 | default
 | unreachable
-| br (bbid : String)
+| br (bbid : BBId)
 | condbr (val : Reg) (then_ else_ : BBId)
-| ret (val : Option Reg)
-| switch (val : Reg) (cases : Array BBId) (default : BBId)
+| ret (val : Reg)
+| switch (val : Reg) (cases : Array (Reg × BBId)) (default : BBId)
+
 
 abbrev Arg := String × Ty
 structure BasicBlock where
+  id : BBId
   name : String
   instrs : Array Instruction
   terminator : Terminator
@@ -77,9 +77,10 @@ structure BasicBlock where
 structure FunctionDeclaration where
   name : String
   args : Array Arg
+  retty : Ty
 
 structure FunctionDefinition extends FunctionDeclaration where
-  body : Array BasicBlock
+  body : Array BBId
 
 structure GlobalDeclaration where
   name : String
@@ -113,6 +114,161 @@ structure BuilderState where
   insertionpt : Option InsertionPoint
 
 abbrev BuilderT (m : Type → Type) [STWorld β m] (α : Type) := StateRefT BuilderState m α
+abbrev BuilderM := BuilderT IO
+
+structure InstantiationContext (llvmctx : LLVM.Context) where
+  llvmmodule : LLVM.Module llvmctx
+  llvmbuilder : LLVM.Builder llvmctx
+  registerFile : HashMap Reg (LLVM.Value llvmctx)
+  basicBlocks : HashMap BBId (LLVM.BasicBlock llvmctx)
+  functions : HashMap String (LLVM.Value llvmctx)
+
+abbrev InstantiationM (llvmctx : LLVM.Context) (α : Type) : Type :=
+  ReaderT BuilderState (StateRefT (InstantiationContext llvmctx) IO) α
+
+def getLLVMBuilder : InstantiationM llvmctx (LLVM.Builder llvmctx) :=
+  InstantiationContext.llvmbuilder <$> get
+
+def getBuilderState : InstantiationM llvmctx BuilderState :=
+   read
+
+
+def getModule : InstantiationM llvmctx (LLVM.Module llvmctx) :=
+  InstantiationContext.llvmmodule <$> get
+
+def getRegisterFile : InstantiationM llvmctx (HashMap Reg (LLVM.Value llvmctx)) :=
+  InstantiationContext.registerFile <$> get
+
+def getBasicBlocks : InstantiationM llvmctx (HashMap BBId (LLVM.BasicBlock llvmctx)) :=
+  InstantiationContext.basicBlocks <$> get
+
+def getFunctions : InstantiationM llvmctx (HashMap String (LLVM.Value llvmctx)) :=
+  InstantiationContext.functions <$> get
+
+partial def Ty.instantiate : Ty → InstantiationM llvmctx (LLVM.LLVMType llvmctx)
+| function args ret => do
+  LLVM.functionType (← ret.instantiate) (← args.mapM Ty.instantiate)
+| void => LLVM.voidType llvmctx -- TODO: change function name to `LLVM.voidTypeInContext`
+| int width => LLVM.intTypeInContext llvmctx width
+| opaquePointer addrspace => LLVM.opaquePointerTypeInContext llvmctx addrspace
+| float => LLVM.floatTypeInContext llvmctx
+| double => LLVM.doubleTypeInContext llvmctx
+| array elemty nelem => do LLVM.arrayType (← elemty.instantiate) nelem
+
+def FunctionDeclaration.instantiate (decl : FunctionDeclaration) : InstantiationM llvmctx (LLVM.Value llvmctx) := do
+  let fnty ← (Ty.function (decl.args.map Prod.snd) decl.retty).instantiate
+  let fn ← LLVM.getOrAddFunction (← getModule) decl.name fnty
+  modify (fun s => { s with functions := s.functions.insert decl.name fn })
+  return fn
+
+
+def Reg.instantiate (reg : Reg) : InstantiationM llvmctx (LLVM.Value llvmctx) := do
+  match (← getRegisterFile).find? reg with
+  | .none => throw <| .userError s!"unable to find register '{reg}', this is a miscompilation."
+  | .some v => return v
+
+def BBId.instantiate (bbid : BBId) : InstantiationM llvmctx (LLVM.BasicBlock llvmctx) := do
+  match (← getBasicBlocks).find? bbid with
+  | .none => throw <| .userError s!"unable to find basic block '{bbid}', this is a miscompilation."
+  | .some v => return v
+
+def Instruction.instantiate : Instruction → InstantiationM llvmctx (LLVM.Value llvmctx)
+| alloca ty name => do
+   LLVM.buildAlloca (← getLLVMBuilder) (← ty.instantiate) name
+| load2 ty val name => do
+    LLVM.buildLoad2 (← getLLVMBuilder) (← ty.instantiate) (← val.instantiate) name
+| store val ptr => do
+    LLVM.buildStore (← getLLVMBuilder) (← val.instantiate) (← ptr.instantiate)
+| gep ty base ixs => do
+  LLVM.buildGEP2 (← getLLVMBuilder) (← ty.instantiate) (← base.instantiate) (← ixs.mapM Reg.instantiate)
+| inboundsgep ty base ixs => do
+  LLVM.buildInBoundsGEP2 (← getLLVMBuilder) (← ty.instantiate) (← base.instantiate) (← ixs.mapM Reg.instantiate)
+| sext val destTy => do
+  LLVM.buildSext (← getLLVMBuilder) (← val.instantiate) (← destTy.instantiate)
+| zext val destTy => do
+  LLVM.buildZext (← getLLVMBuilder) (← val.instantiate) (← destTy.instantiate)
+| sext_or_trunc val destTy => do
+  LLVM.buildSextOrTrunc (← getLLVMBuilder) (← val.instantiate) (← destTy.instantiate)
+| ptrtoint ptr destTy => do
+  LLVM.buildPtrToInt (← getLLVMBuilder) (← ptr.instantiate) (← destTy.instantiate)
+| mul lhs rhs name => do
+  LLVM.buildMul (← getLLVMBuilder) (← lhs.instantiate) (← rhs.instantiate) name
+| add lhs rhs name => do
+  LLVM.buildAdd (← getLLVMBuilder) (← lhs.instantiate) (← rhs.instantiate) name
+| sub lhs rhs name => do
+  LLVM.buildSub (← getLLVMBuilder) (← lhs.instantiate) (← rhs.instantiate) name
+| not arg name => do
+  LLVM.buildNot (← getLLVMBuilder) (← arg.instantiate) name
+| icmp pred lhs rhs name => do
+  LLVM.buildICmp (← getLLVMBuilder) pred (← lhs.instantiate) (← rhs.instantiate) name
+| phi ty bbIdAndVals => do
+  let phi ← LLVM.buildPhi (← getLLVMBuilder) (← ty.instantiate)
+  let vals : Array (LLVM.Value llvmctx) ← bbIdAndVals.mapM (Reg.instantiate ∘ Prod.snd)
+  let bbs : Array (LLVM.BasicBlock llvmctx) ← bbIdAndVals.mapM (BBId.instantiate ∘ Prod.fst)
+  LLVM.addIncoming phi vals bbs
+  return phi
+
+def reassureUserString : String := "This is a compiler bug."
+
+def findBasicBlock! (bbid : BBId) : InstantiationM llvmctx (LLVM.BasicBlock llvmctx) := do
+  let some bb := (← getBasicBlocks).find? bbid
+    | throw <| .userError s!"Unable to find LLVM basic block {bbid}. {reassureUserString}"
+  return bb
+
+def findReg! (reg : Reg) : InstantiationM llvmctx (LLVM.Value llvmctx) := do
+  let some v := (← getRegisterFile).find? reg
+    | throw <| .userError s!"UnabuildRetble to find LLVM value {reg}. {reassureUserString}"
+  return v
+
+def Terminator.instantiate : Terminator → InstantiationM llvmctx (LLVM.Value llvmctx)
+| .default => throw <| .userError s!"should not have default when instantiating terminator. {reassureUserString}"
+| .unreachable => do LLVM.buildUnreachable (← getLLVMBuilder)
+| .br bbid => do
+    LLVM.buildBr (← getLLVMBuilder) (← findBasicBlock! bbid)
+| .condbr val then_ else_ => do
+    LLVM.buildCondBr (← getLLVMBuilder) (← findReg! val) (← findBasicBlock! then_) (← findBasicBlock! else_)
+| .ret val => do LLVM.buildRet (← getLLVMBuilder) (← findReg! val)
+| .switch val cases defCase => do
+    let switch ← LLVM.buildSwitch (← getLLVMBuilder) (← findReg! val) (← findBasicBlock! defCase)
+                    (UInt64.ofNat cases.size)
+    cases.forM (fun (val, bb) => do LLVM.addCase switch (← findReg! val) (← findBasicBlock! bb))
+    return switch
+
+def FunctionDefinition.instantiate (defn : FunctionDefinition) : InstantiationM llvmctx Unit := do
+  let some llvmfn := (← getFunctions).find? defn.name
+    | throw <| .userError s!"Unable to find LLVM function declaration for {defn.name}. {reassureUserString}"
+
+  let mut llvmbbs : Array (BasicBlock × LLVM.BasicBlock llvmctx) :=
+    Array.mkEmpty defn.body.size
+  -- generate basic blocks. Only after generating all the basic blocks
+  -- do we fill them in with instructions to allow for mutual dependencies in
+  -- the control flow graph.
+  for bbid in defn.body do
+    let some bb := (← getBuilderState).bbs.find? bbid
+      | throw <| .userError s!"Unable to find LLVM Basic block {bbid}. {reassureUserString}"
+    let llvmbb ← LLVM.appendBasicBlockInContext llvmctx llvmfn bb.name
+    llvmbbs := llvmbbs.push (bb, llvmbb)
+    modify fun s => { s with basicBlocks := s.basicBlocks.insert bbid llvmbb }
+
+  for (bb, llvmbb) in llvmbbs do
+      LLVM.positionBuilderAtEnd (← getLLVMBuilder) llvmbb
+      bb.instrs.forM (fun instr => do let _ ← Instruction.instantiate instr)
+      let _ ← bb.terminator.instantiate
+
+-- create an LLVM module that maps the pure 'BuilderState' into a real LLVM module pointer.
+def BuilderState.instantiate (modName : Name) (state : BuilderState) : InstantiationM llvmctx (LLVM.Module llvmctx) := do
+  let module ← LLVM.createModule llvmctx modName.toString
+  let _builder ← LLVM.createBuilderInContext llvmctx
+
+  -- 1. Create all function declarations up-front, to allow for mutual
+  --    definitions
+  for (_declName, decl) in (state.functionDecls.toArray) do
+    let _ ← decl.instantiate
+
+  for (_defnName, defn) in state.functionDefs.toArray do
+    let _ ← defn.toFunctionDeclaration.instantiate
+    defn.instantiate
+  return module
 
 end Lean.Compiler.LLVMAst
 
@@ -548,7 +704,7 @@ def emitLhsVal (x : VarId) (name : String := "") : M llvmctx (LLVM.Value llvmctx
 
 def emitLhsSlotStore (x : VarId) (v : LLVM.Value llvmctx) : M llvmctx Unit := do
   let (_, slot) ← emitLhsSlot_ x
-  LLVM.buildStore (← getBuilder) v slot
+  let _ ← LLVM.buildStore (← getBuilder) v slot
 
 def emitArgSlot_ (x : Arg) : M llvmctx (LLVM.LLVMType llvmctx × LLVM.Value llvmctx) := do
   match x with
@@ -693,7 +849,7 @@ def emitPartialApp (z : VarId) (f : FunId) (ys : Array Arg) : M llvmctx Unit := 
   let zval ← callLeanAllocClosureFn fv
                                     (← constIntUnsigned arity)
                                     (← constIntUnsigned ys.size)
-  LLVM.buildStore (← getBuilder) zval zslot
+  let _ ← LLVM.buildStore (← getBuilder) zval zslot
   ys.size.forM fun i => do
     let (yty, yslot) ← emitArgSlot_ ys[i]!
     let yval ← LLVM.buildLoad2 (← getBuilder) yty yslot
@@ -705,7 +861,7 @@ def emitApp (z : VarId) (f : VarId) (ys : Array Arg) : M llvmctx Unit := do
     for i in List.range ys.size do
       let (yty, yv) ← emitArgVal ys[i]!
       let aslot ← LLVM.buildInBoundsGEP2 (← getBuilder) yty aargs #[← constIntUnsigned 0, ← constIntUnsigned i] s!"param_{i}_slot"
-      LLVM.buildStore (← getBuilder) yv aslot
+      let _ ← LLVM.buildStore (← getBuilder) yv aslot
     let fnName :=  s!"lean_apply_m"
     let retty ← LLVM.voidPtrType llvmctx
     let args := #[← emitLhsVal f, ← constIntUnsigned ys.size, aargs]
@@ -733,7 +889,7 @@ def emitFullApp (z : VarId) (f : FunId) (ys : Array Arg) : M llvmctx Unit := do
   match decl with
   | Decl.extern _ ps retty extData =>
      let zv ← emitExternCall f ps extData ys retty
-     LLVM.buildStore (← getBuilder) zv zslot
+     let _ ← LLVM.buildStore (← getBuilder) zv zslot
   | Decl.fdecl .. =>
     if ys.size > 0 then
         let fv ← getOrAddFunIdValue f
@@ -742,10 +898,10 @@ def emitFullApp (z : VarId) (f : FunId) (ys : Array Arg) : M llvmctx Unit := do
             let yv ← LLVM.buildLoad2 (← getBuilder) yty yslot
             return yv)
         let zv ← LLVM.buildCall2 (← getBuilder) (← getFunIdTy f) fv ys
-        LLVM.buildStore (← getBuilder) zv zslot
+        let _ ← LLVM.buildStore (← getBuilder) zv zslot
     else
        let zv ← getOrAddFunIdValue f
-       LLVM.buildStore (← getBuilder) zv zslot
+       let _ ← LLVM.buildStore (← getBuilder) zv zslot
 
 -- Note that this returns a *slot*, just like `emitLhsSlot_`.
 def emitLit (z : VarId) (t : IRType) (v : LitVal) : M llvmctx (LLVM.Value llvmctx) := do
@@ -763,7 +919,7 @@ def emitLit (z : VarId) (t : IRType) (v : LitVal) : M llvmctx (LLVM.Value llvmct
                                 str_global #[zero] ""
                  let nbytes ← LLVM.constIntUnsigned llvmctx (UInt64.ofNat (v.utf8ByteSize))
                  callLeanMkStringFromBytesFn strPtr nbytes ""
-  LLVM.buildStore (← getBuilder) zv zslot
+  let _ ← LLVM.buildStore (← getBuilder) zv zslot
   return zslot
 
 def callLeanCtorGet (x i : LLVM.Value llvmctx) (retName : String) : M llvmctx (LLVM.Value llvmctx) := do
@@ -1156,7 +1312,7 @@ def emitFnArgs (needsPackedArgs? : Bool)  (llvmfn : LLVM.Value llvmctx) (params 
           let pv ← LLVM.buildLoad2 (← getBuilder) llvmty argsi
           -- slot for arg[i] which is always void* ?
           let alloca ← LLVM.buildAlloca (← getBuilder) llvmty s!"arg_{i}"
-          LLVM.buildStore (← getBuilder) pv alloca
+          let _ ← LLVM.buildStore (← getBuilder) pv alloca
           addVartoState params[i]!.x alloca llvmty
   else
       let n := LLVM.countParams llvmfn
@@ -1258,14 +1414,14 @@ def emitDeclInit (parentFn : LLVM.Value llvmctx) (d : Decl) : M llvmctx Unit := 
           let _ ← LLVM.buildRet (← getBuilder) resv
           pure ShouldForwardControlFlow.no)
       let dval ← callLeanIOResultGetValue resv s!"{d.name}_res"
-      LLVM.buildStore (← getBuilder) dval dslot
+      let _ ← LLVM.buildStore (← getBuilder) dval dslot
       if d.resultType.isScalar then
         let dval ← callLeanIOResultGetValue resv s!"{d.name}_res"
         let dval ← callUnboxForType d.resultType dval
-        LLVM.buildStore (← getBuilder) dval dslot
+        let _ ← LLVM.buildStore (← getBuilder) dval dslot
       else
          let dval ← callLeanIOResultGetValue resv s!"{d.name}_res"
-         LLVM.buildStore (← getBuilder) dval dslot
+         let _ ← LLVM.buildStore (← getBuilder) dval dslot
          callLeanMarkPersistentFn dval
       let _ ← LLVM.buildBr (← getBuilder) restBB
       LLVM.positionBuilderAtEnd (← getBuilder) restBB
@@ -1274,7 +1430,7 @@ def emitDeclInit (parentFn : LLVM.Value llvmctx) (d : Decl) : M llvmctx Unit := 
       let dslot ←  LLVM.getOrAddGlobal (← getLLVMModule) (← toCName d.name) llvmty
       LLVM.setInitializer dslot (← LLVM.getUndef llvmty)
       let dval ← callPureDeclInitFn (← toCInitName d.name) (← toLLVMType d.resultType)
-      LLVM.buildStore (← getBuilder) dval dslot
+      let _ ← LLVM.buildStore (← getBuilder) dval dslot
       if d.resultType.isObj then
          callLeanMarkPersistentFn dval
 
@@ -1304,7 +1460,7 @@ def emitInitFn (mod : LLVM.Module llvmctx) : M llvmctx Unit := do
       let out ← callLeanIOResultMKOk box0 "retval"
       let _ ← LLVM.buildRet (← getBuilder) out
       pure ShouldForwardControlFlow.no)
-  LLVM.buildStore (← getBuilder) (← LLVM.constTrue llvmctx) ginit?slot
+  let _ ← LLVM.buildStore (← getBuilder) (← LLVM.constTrue llvmctx) ginit?slot
 
   env.imports.forM fun import_ => do
     let builtin ← LLVM.getParam initFn 0
@@ -1370,7 +1526,7 @@ def callLeanInitTaskManager : M llvmctx Unit := do
   let argtys := #[]
   let fn ← getOrCreateFunctionPrototype (← getLLVMModule) retty fnName argtys
   let fnty ← LLVM.functionType retty argtys
-   let _ ← LLVM.buildCall2 (← getBuilder) fnty fn #[]
+  let _ ← LLVM.buildCall2 (← getBuilder) fnty fn #[]
 
 def callLeanFinalizeTaskManager : M llvmctx Unit := do
   let fnName :=  "lean_finalize_task_manager"
@@ -1378,7 +1534,7 @@ def callLeanFinalizeTaskManager : M llvmctx Unit := do
   let argtys := #[]
   let fn ← getOrCreateFunctionPrototype (← getLLVMModule) retty fnName argtys
   let fnty ← LLVM.functionType retty argtys
-   let _ ← LLVM.buildCall2 (← getBuilder) fnty fn #[]
+  let _ ← LLVM.buildCall2 (← getBuilder) fnty fn #[]
 
 def callLeanUnboxUint32
     (v : LLVM.Value llvmctx) (name : String := "") : M llvmctx (LLVM.Value llvmctx) := do
@@ -1409,6 +1565,7 @@ def callLeanMainFn (argv? : Option (LLVM.Value llvmctx)) (world : LLVM.Value llv
               | .none => #[world]
   LLVM.buildCall2 (← getBuilder) fnty fn args name
 
+-- TODO (hargonix): This function is taking 2s in both the old and the new compiler, why is this the case?
 def emitMainFn (mod : LLVM.Module llvmctx) : M llvmctx Unit := do
   let d ← getDecl `main
   let xs ← match d with
@@ -1456,7 +1613,7 @@ def emitMainFn (mod : LLVM.Module llvmctx) : M llvmctx Unit := do
         let islot ← LLVM.buildAlloca (← getBuilder) ity "islot"
         let argcval ← LLVM.getParam main 0
         let argvval ← LLVM.getParam main 1
-        LLVM.buildStore (← getBuilder) argcval islot
+        let _ ← LLVM.buildStore (← getBuilder) argcval islot
         buildWhile_ "argv"
           (condcodegen := do
             let iv ← LLVM.buildLoad2 (← getBuilder) ity islot "iv"
@@ -1465,7 +1622,7 @@ def emitMainFn (mod : LLVM.Module llvmctx) : M llvmctx Unit := do
           (bodycodegen := do
             let iv ← LLVM.buildLoad2 (← getBuilder) ity islot "iv"
             let iv_next ← LLVM.buildSub (← getBuilder) iv (← constIntUnsigned 1) "iv.next"
-            LLVM.buildStore (← getBuilder) iv_next islot
+            let _ ← LLVM.buildStore (← getBuilder) iv_next islot
             let nv ← callLeanAllocCtor 1 2 0 "nv"
             let argv_i_next_slot ← LLVM.buildGEP2 (← getBuilder) (← LLVM.voidPtrType llvmctx) argvval #[iv_next] "argv.i.next.slot"
             let argv_i_next_val ← LLVM.buildLoad2 (← getBuilder) (← LLVM.voidPtrType llvmctx) argv_i_next_slot "argv.i.next.val"
@@ -1473,7 +1630,7 @@ def emitMainFn (mod : LLVM.Module llvmctx) : M llvmctx Unit := do
             callLeanCtorSet nv (← constIntUnsigned 0) argv_i_next_val_str
             let inv ← LLVM.buildLoad2 (← getBuilder) inty inslot "inv"
             callLeanCtorSet nv (← constIntUnsigned 1) inv
-            LLVM.buildStore (← getBuilder) nv inslot)
+            let _ ← LLVM.buildStore (← getBuilder) nv inslot)
         let world ← callLeanIOMkWorld
         let inv ← LLVM.buildLoad2 (← getBuilder) inty inslot "inv"
         let resv ← callLeanMainFn (argv? := .some inv) (world := world) "resv"
