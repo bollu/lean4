@@ -15,7 +15,7 @@ import Lean.Compiler.IR.NormIds
 import Lean.Compiler.IR.SimpCase
 import Lean.Compiler.IR.Boxing
 import Lean.Compiler.IR.ResetReuse
-import Lean.Compiler.IR.LLVMBindings
+import Lean.Compiler.IR.LLVM.LLVMBindings
 
 open Lean.IR.ExplicitBoxing (isBoxedName)
 
