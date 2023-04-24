@@ -49,22 +49,31 @@ syntax llvm_sym := "@" noWs (num <|> ident)
 syntax llvm_value := llvm_reg -- TODO: extend with LLVM constants on demand
 
 inductive Instruction where
-| alloca (ty : Ty) (name : String) (dest : Reg)
-| load2 (ty : Ty) (val : Reg) (name : String) (dest : Reg)
+| alloca (ty : Ty) (name : String)
+| load2 (ty : Ty) (val : Reg) (name : String)
 | store (val pointer : Reg)
-| gep (ty : Ty) (base : Reg) (ixs : Array Reg) (dest : Reg)
-| inboundsgep (ty : Ty) (base : Reg) (ixs : Array Reg) (dest : Reg)
-| sext (val : Reg) (destTy : Ty) (dest : Reg) -- TODO: add source type argument.
-| zext (val : Reg) (destTy : Ty) (dest : Reg) -- TODO: add source type argument.
-| sext_or_trunc (val : Reg) (destTy : Ty) (dest : Reg) -- TODO: remove pseudo-instruction, provide builder.
-| ptrtoint (pointer : Reg) (destTy : Ty) (dest : Reg)
-| mul (lhs rhs : Reg) (name : String) (dest : Reg)
-| add (lhs rhs : Reg) (name : String) (dest : Reg)
-| sub (lhs rhs : Reg) (name : String) (dest : Reg)
-| not (arg : Reg) (name : String) (dest : Reg) -- -- TODO: remove pseudo-instruction, provide builder.
-| icmp (pred : LLVM.IntPredicate) (lhs rhs : Reg) (name : String) (dest : Reg)
-| phi (ty : Ty) (args : Array (BBId × Reg)) (dest : Reg)
+| gep (ty : Ty) (base : Reg) (ixs : Array Reg)
+| inboundsgep (ty : Ty) (base : Reg) (ixs : Array Reg)
+| sext (val : Reg) (destTy : Ty) -- TODO: add source type argument.
+| zext (val : Reg) (destTy : Ty) -- TODO: add source type argument.
+| sext_or_trunc (val : Reg) (destTy : Ty) -- TODO: remove pseudo-instruction, provide builder.
+| ptrtoint (pointer : Reg) (destTy : Ty)
+| mul (lhs rhs : Reg) (name : String)
+| add (lhs rhs : Reg) (name : String)
+| sub (lhs rhs : Reg) (name : String)
+| not (arg : Reg) (name : String)  -- -- TODO: remove pseudo-instruction, provide builder.
+| icmp (pred : LLVM.IntPredicate) (lhs rhs : Reg) (name : String)
+| phi (ty : Ty) (args : Array (BBId × Reg))
 deriving Inhabited, BEq
+
+/-- Abstraction for values that may or may not need a destination register -/
+inductive Named (α : Type) where
+| assign (dest : Reg) (value : α)
+| do_ (value :  α)
+
+def Named.value : Named α → α
+| .assign _ a => a
+| .do_ a => a
 
 scoped syntax "alloca" llvm_ty : llvm_instr
 scoped syntax "load" llvm_ty ", " ptr_ident llvm_reg : llvm_instr
@@ -107,13 +116,12 @@ scoped syntax "switch"  llvm_ty llvm_value ", "
   "label" llvm_bb_label
      "[" (llvm_ty llvm_reg ", " "label" llvm_bb_label )* "]" : llvm_terminator
 
-abbrev Arg := String × Ty
 structure BasicBlock where
   name : String
-  instrs : Array Instruction := #[]
+  instrs : Array (Named Instruction) := #[]
   terminator : Terminator := .default
 
-def BasicBlock.pushInstruction (i : Instruction) (bb : BasicBlock)  : BasicBlock :=
+def BasicBlock.pushInstruction (i : Named Instruction) (bb : BasicBlock)  : BasicBlock :=
  { bb with instrs := bb.instrs.push i }
 
 
@@ -123,6 +131,7 @@ scoped syntax ident noWs ":"
     (colEq (llvm_assignment <|> llvm_instr) linebreak)*
     llvm_terminator : llvm_bb
 
+abbrev Arg := String × Ty
 structure FunctionDeclaration where
   name : String
   args : Array Arg := #[]
@@ -225,7 +234,7 @@ def modifybb  (bbid : BBId) (f : BasicBlock → BasicBlock) : m Unit :=  do
   | none => throwString s!"unable to find basic block {bbid}"
   | .some bb => modify fun s => { s with bbs := s.bbs.insert bbid (f bb)}
 
-def insert (i : Instruction) : m Unit := do
+def insertInstruction (i : Named Instruction) : m Unit := do
   match (← get).bbInsertionPt? with
   | none => -- TODO: improve error message by printing instruction.
     throwString ↑s!"need insertion point to insert instruction"
@@ -237,52 +246,53 @@ def insertTerminator (t : Terminator) : m Unit := do
     throwString ↑s!"need insertion point to insert terminator."
   | some bbid => modifybb (bbid : BBId) (fun bb => { bb with terminator := t})
 
-def buildWithDest (f : Reg → Instruction) : m Reg := do
+def buildInstrWithDest (i : Instruction) : m Reg := do
   let dest ← regGen
-  insert (f dest)
+  insertInstruction (.assign dest i)
   return dest
 
--- Henrik's proposal: Make `Reg` into `Reg (τ : LLVM.Ty)`
+
 def Alloca (ty : Ty) (name : String := "") : m Reg :=
-  buildWithDest (Instruction.alloca ty name)
+  buildInstrWithDest (Instruction.alloca ty name)
 
 def Load2 (ty : Ty) (val : Reg) (name : String) : m Reg :=
-  buildWithDest (Instruction.load2 ty val name)
+  buildInstrWithDest (Instruction.load2 ty val name)
 
-def Store (val pointer : Reg) : m Unit := insert (.store val pointer)
+def Store (val pointer : Reg) : m Unit :=
+  insertInstruction (.do_ <| .store val pointer)
 
 def Gep (ty : Ty) (base : Reg) (ixs : Array Reg) : m Reg :=
-  buildWithDest (.gep ty base ixs)
+  buildInstrWithDest (.gep ty base ixs)
 
 def Inboundsgep (ty : Ty) (base : Reg) (ixs : Array Reg) : m Reg :=
-  buildWithDest (.inboundsgep ty base ixs)
+  buildInstrWithDest (.inboundsgep ty base ixs)
 
 def Sext (val : Reg) (destTy : Ty) : m Reg :=
-  buildWithDest (.sext val destTy)
+  buildInstrWithDest (.sext val destTy)
 
 def Zext (val : Reg) (destTy : Ty) : m Reg :=
-  buildWithDest (.zext val destTy)
+  buildInstrWithDest (.zext val destTy)
 
 def Ptrtoint (pointer : Reg) (destTy : Ty) : m Reg :=
-  buildWithDest (.ptrtoint pointer destTy)
+  buildInstrWithDest (.ptrtoint pointer destTy)
 
 def Mul (lhs rhs : Reg) (name : String) : m Reg :=
-  buildWithDest (.mul lhs rhs name)
+  buildInstrWithDest (.mul lhs rhs name)
 
 def Add (lhs rhs : Reg) (name : String) : m Reg :=
-  buildWithDest (.add lhs rhs name)
+  buildInstrWithDest (.add lhs rhs name)
 
 def Sub (lhs rhs : Reg) (name : String) : m Reg :=
-  buildWithDest (.sub lhs rhs name)
+  buildInstrWithDest (.sub lhs rhs name)
 
 def Not (arg : Reg) (name : String) : m Reg :=
-  buildWithDest (.not arg name)
+  buildInstrWithDest (.not arg name)
 
 def Icmp (pred : LLVM.IntPredicate) (lhs rhs : Reg) (name : String) : m Reg :=
-  buildWithDest (.icmp pred lhs rhs name)
+  buildInstrWithDest (.icmp pred lhs rhs name)
 
 def Phi (ty : Ty) (args : Array (BBId × Reg)) : m Reg :=
-  buildWithDest (.phi ty args)
+  buildInstrWithDest (.phi ty args)
 
 def Unreachable : m Unit := insertTerminator (.unreachable)
 
@@ -399,7 +409,6 @@ macro_rules
 | `([llvm_ty| [ $n:num × $ty:llvm_ty ]]) =>
     ``(Ty.array [llvm_ty| $ty] ($n : UInt64))
 | `([llvm_ty| $$($q)]) => `($q)
-| `()
 
 structure InstantiationContext (llvmctx : LLVM.Context) where
   llvmmodule : LLVM.Module llvmctx
@@ -536,7 +545,7 @@ def FunctionDefinition.instantiate (defn : FunctionDefinition) : InstantiationM 
 
   for (bb, llvmbb) in llvmbbs do
       LLVM.positionBuilderAtEnd (← getLLVMBuilder) llvmbb
-      bb.instrs.forM (fun instr => do let _ ← Instruction.instantiate instr)
+      bb.instrs.forM (fun namedInstr => do let _ ← Instruction.instantiate namedInstr.value)
       let _ ← bb.terminator.instantiate
 
 -- create an LLVM module that maps the pure 'BuilderState' into a real LLVM module pointer.
