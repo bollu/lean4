@@ -16,6 +16,7 @@ import Lean.Compiler.IR.SimpCase
 import Lean.Compiler.IR.Boxing
 import Lean.Compiler.IR.ResetReuse
 import Lean.Compiler.IR.LLVM.LLVMBindings
+import Lean.Compiler.IR.LLVM.CodeGeneratedBy
 
 open Lean.IR.ExplicitBoxing (isBoxedName)
 
@@ -1094,7 +1095,22 @@ def emitDeclAux (mod : LLVM.Module llvmctx) (d : Decl) : M llvmctx Unit := do
         let bb ← LLVM.appendBasicBlockInContext llvmctx llvmfn "entry"
         LLVM.positionBuilderAtEnd (← getBuilder) bb
         emitFnArgs needsPackedArgs? llvmfn xs
-        emitFnBody b
+        match LLVM.CodeGeneratedBy.getCodeGeneratorFromEnv? (← getEnv) d.name with
+        | .some cgen =>
+          -- convert code generator state into an LLVM builder state.
+          -- convert the arguments of the function into LLVM builder registers.
+          let initBuilderState : LLVM.Pure.BuilderState := {}
+          let argRegs : List LLVM.Pure.Reg := [] -- ← mkArgRegs
+          -- TODO: in fact, when we create `initBuilderState`, we should
+          -- | give it the
+          let builderState ← match (cgen argRegs).run initBuilderState with
+            | .ok (_, state) => pure state
+            | .error err => throw err
+          -- instantiate the user's build commands.
+          Lean.IR.LLVM.Pure.InstantiationM.run builderState mod (← getBuilder)
+          -- Run the code generator to produce LLVM code.
+        | .none =>
+          emitFnBody b
       pure ()
     | _ => pure ()
 
@@ -1109,7 +1125,7 @@ def emitDecl (mod : LLVM.Module llvmctx) (d : Decl) : M llvmctx Unit := do
 def emitFns (mod : LLVM.Module llvmctx) : M llvmctx Unit := do
   let env ← getEnv
   let decls := getDecls env
-  decls.reverse.forM (emitDecl mod)
+  decls.forM (emitDecl mod)
 
 def callIODeclInitFn (initFnName : String) (world : LLVM.Value llvmctx) : M llvmctx (LLVM.Value llvmctx) := do
   let retty ← LLVM.voidPtrType llvmctx
