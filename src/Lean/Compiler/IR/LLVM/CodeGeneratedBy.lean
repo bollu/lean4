@@ -14,6 +14,9 @@ open Lean.IR.LLVM.Pure
 
 def CodeGenerator : Type := List Reg → BuilderM Reg
 
+instance : Inhabited CodeGenerator where
+  default := fun _ => pure (0 : Reg)
+
 -- Unqualified `getEnv` refers to `CompilerM.getEnv`, which
 -- assumes the specific `CompilerM` monad stack, instead of implementing
 -- `MonadEnv CompilerM`.
@@ -27,30 +30,44 @@ private unsafe def getLLVMCodeGeneratorUnsafe (declName : Name) : CoreM CodeGene
 @[implemented_by getLLVMCodeGeneratorUnsafe]
 private opaque lookupCodeGeneratorForDeclaration (declName : Name) : CoreM CodeGenerator
 
-builtin_initialize codeGeneratorExt : PersistentEnvExtension Name (Name × CodeGenerator) (HashMap Name CodeGenerator) ←
-  registerPersistentEnvExtension {
-    mkInitial := return {}
-    addImportedFn := fun nss => do -- what does this do?
-      let mut out : HashMap Name CodeGenerator := {}
-      for ns in nss do
-        for n in ns do
-          out := out.insert n (← ImportM.runCoreM <| lookupCodeGeneratorForDeclaration n)
-      pure out
-    addEntryFn := fun state entry => state.insert entry.fst entry.snd
-    exportEntriesFn := fun state => state.toArray.map Prod.fst
+/-- does `PersistentEnvExtension` not know how to use `HashMap` ? -/
+-- #check MapDeclarationExtension
+builtin_initialize codeGeneratorExt : MapDeclarationExtension CodeGenerator ←
+  mkMapDeclarationExtension
+/-
+     registerPersistentEnvExtension {
+       mkInitial := do
+         dbg_trace s!"codeGeneratorExt: mkInitial=><="
+         return HashMap.empty
+       addImportedFn := fun _ => return HashMap.empty
+    -- addImportedFn := fun nss => do -- what does this do?
+    --   dbg_trace s!"codeGeneratorExt: addImportedFn '{nss}'=>"
+    --   let mut out : HashMap Name CodeGenerator := {}
+    --   for ns in nss do
+    --     for n in ns do
+    --       out := out.insert n (← ImportM.runCoreM <| lookupCodeGeneratorForDeclaration n)
+    --   dbg_trace s!"<=addImportedFn"
+    --   pure out
+    addEntryFn := fun state entry =>
+      dbg_trace s!"addEntryFn"
+      let out := state.insert entry.fst entry.snd
+      dbg_trace s!"<=addEntryFn"
+      out
+    exportEntriesFn := fun state =>
+      dbg_trace s!"exportEntriesFn=>"
+      let out := state.toArray.map Prod.fst
+      dbg_trace s!"<=exportEntriesFn"
+      out
   }
-
-/-- get the hash map of all code generators -/
-def getAllCodeGenerators : CoreM (HashMap Name CodeGenerator) :=
-  return codeGeneratorExt.getState (← MonadEnv.getEnv)
+-/
 
 /-- get the code generator for a given declaration name -/
 def getCodeGeneratorFromEnv? (env : Environment) (name : Name) : Option CodeGenerator :=
-   (codeGeneratorExt.getState env).find? name
+   codeGeneratorExt.find? env name
 
 /-- add a code generator, given the declaration name and the code generator -/
 def addCodeGenerator (declName : Name) (gen : CodeGenerator) : CoreM Unit := do
-    MonadEnv.modifyEnv fun env => codeGeneratorExt.addEntry env (declName, gen)
+    MonadEnv.modifyEnv fun env => codeGeneratorExt.insert env declName gen
 
 /-- add a code generator, given the declaration name -/
 def addCodeGeneratorFromDeclName (declName : Name) : CoreM Unit := do
