@@ -3,9 +3,9 @@ Copyright (c) 2023 Siddharth Bhat. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Siddharth Bhat
 -/
-import Lean
-import Lean.Environment
 import Lean.Attributes
+import Lean.Environment
+import Lean.CoreM
 import Lean.Compiler.IR.LLVM.Pure
 
 namespace Lean.IR.LLVM.CodeGeneratedBy
@@ -31,43 +31,27 @@ private unsafe def getLLVMCodeGeneratorUnsafe (declName : Name) : CoreM CodeGene
 private opaque lookupCodeGeneratorForDeclaration (declName : Name) : CoreM CodeGenerator
 
 /-- does `PersistentEnvExtension` not know how to use `HashMap` ? -/
--- #check MapDeclarationExtension
-builtin_initialize codeGeneratorExt : MapDeclarationExtension CodeGenerator ←
-  mkMapDeclarationExtension
-/-
-     registerPersistentEnvExtension {
-       mkInitial := do
-         dbg_trace s!"codeGeneratorExt: mkInitial=><="
-         return HashMap.empty
-       addImportedFn := fun _ => return HashMap.empty
-    -- addImportedFn := fun nss => do -- what does this do?
-    --   dbg_trace s!"codeGeneratorExt: addImportedFn '{nss}'=>"
-    --   let mut out : HashMap Name CodeGenerator := {}
-    --   for ns in nss do
-    --     for n in ns do
-    --       out := out.insert n (← ImportM.runCoreM <| lookupCodeGeneratorForDeclaration n)
-    --   dbg_trace s!"<=addImportedFn"
-    --   pure out
-    addEntryFn := fun state entry =>
-      dbg_trace s!"addEntryFn"
-      let out := state.insert entry.fst entry.snd
-      dbg_trace s!"<=addEntryFn"
-      out
-    exportEntriesFn := fun state =>
-      dbg_trace s!"exportEntriesFn=>"
-      let out := state.toArray.map Prod.fst
-      dbg_trace s!"<=exportEntriesFn"
-      out
+builtin_initialize codeGeneratorExt : PersistentEnvExtension Name (Name × CodeGenerator) (HashMap Name CodeGenerator) ←
+  registerPersistentEnvExtension {
+    mkInitial := return {}
+    addImportedFn := fun nss => return ← ImportM.runCoreM $ do
+      let mut hm := {}
+      for ns in nss do
+        for n in ns do
+          hm := hm.insert n (← lookupCodeGeneratorForDeclaration n)
+      return hm
+    addEntryFn := fun hm (name, codegen) => hm.insert name codegen
+    exportEntriesFn := fun hm => hm.toArray.map Prod.fst
   }
--/
+
 
 /-- get the code generator for a given declaration name -/
 def getCodeGeneratorFromEnv? (env : Environment) (name : Name) : Option CodeGenerator :=
-   codeGeneratorExt.find? env name
+   codeGeneratorExt.getState env |>.find? name
 
 /-- add a code generator, given the declaration name and the code generator -/
 def addCodeGenerator (declName : Name) (gen : CodeGenerator) : CoreM Unit := do
-    MonadEnv.modifyEnv fun env => codeGeneratorExt.insert env declName gen
+    MonadEnv.modifyEnv fun env => codeGeneratorExt.addEntry env (declName, gen)
 
 /-- add a code generator, given the declaration name -/
 def addCodeGeneratorFromDeclName (declName : Name) : CoreM Unit := do
