@@ -254,7 +254,7 @@ find_package(PythonInterp)
 include_directories(${CMAKE_BINARY_DIR}/include)
 
 # Pick up `llvm-config` to setup LLVM flags.
-if(LLVM)
+if(LLVM MATCHES "ON")
   if(NOT LLVM_CONFIG) # look for `llvm-config` if not supplied
     message(STATUS "'-DLLVM_CONFIG=<path/to/llvm-config>' not passed as CMake flag, finding `llvm-config` via CMake...")
     find_program(LLVM_CONFIG "llvm-config")
@@ -311,19 +311,19 @@ endif()
 string(APPEND LEANC_STATIC_LINKER_FLAGS " ${LEAN_CXX_STDLIB}")
 string(APPEND LEANSHARED_LINKER_FLAGS " ${LEAN_CXX_STDLIB}")
 
-if(LLVM)
+if(LLVM MATCHES "ON")
     # Here, we perform a replacement of `llvm-host` with `llvm`. This is necessary for our cross-compile
-    #   builds in `script/prepare-llvm-*.sh`. 
+    #   builds in `script/prepare-llvm-*.sh`.
     # - Recall that the host's copy of LLVM binaries and libraries is at
     #   `llvm-host`, and the target's copy of LLVM binaries and libraries is at
     #   `llvm`.
-    # - In an ideal world, we would run the target's `llvm/bin/llvm-config` and get the corrct link options for the target 
+    # - In an ideal world, we would run the target's `llvm/bin/llvm-config` and get the corrct link options for the target
     #   (e.g. `-Lllvm/lib/libLLVM`.)
     # - However, the target's `llvm/bin/llvm-config` has a different target
     #   triple from the host, and thus cannot be run on the host.
     # - So, we run the host `llvm-host/bin/llvm-config` from which we pick up
     #   compiler options, and change the output of the host to point to the target.
-    # - In particular, `host/bin/llvm-config` produces flags like `-Lllvm-host/lib/libLLVM`, while 
+    # - In particular, `host/bin/llvm-config` produces flags like `-Lllvm-host/lib/libLLVM`, while
     #   we need the path to be `-Lllvm/lib/libLLVM`. Thus, we perform this replacement here.
     string(APPEND LEANSHARED_LINKER_FLAGS " -L${LLVM_CONFIG_LIBDIR} ${LLVM_CONFIG_LDFLAGS} ${LLVM_CONFIG_LIBS} ${LLVM_CONFIG_SYSTEM_LIBS}")
     string(REPLACE "llvm-host" "llvm" LEANSHARED_LINKER_FLAGS ${LEANSHARED_LINKER_FLAGS})
