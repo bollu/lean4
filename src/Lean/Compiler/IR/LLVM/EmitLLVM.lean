@@ -34,6 +34,7 @@ namespace EmitLLVM
 
 structure Context (llvmctx : LLVM.Context) where
   env        : Environment
+  options    : Options
   modName    : Name
   jpMap      : JPParamsMap := {}
   mainFn     : FunId := default
@@ -68,6 +69,9 @@ def emitJp (jp : JoinPointId) : M llvmctx (LLVM.BasicBlock llvmctx) := do
 def getLLVMModule : M llvmctx (LLVM.Module llvmctx) := Context.llvmmodule <$> read
 
 def getEnv : M llvmctx Environment := Context.env <$> read
+
+instance : MonadOptions (M llvmctx) where
+  getOptions := Context.options <$> read
 
 def getModName : M llvmctx  Name := Context.modName <$> read
 
@@ -1095,8 +1099,8 @@ def emitDeclAux (mod : LLVM.Module llvmctx) (d : Decl) : M llvmctx Unit := do
         let bb ← LLVM.appendBasicBlockInContext llvmctx llvmfn "entry"
         LLVM.positionBuilderAtEnd (← getBuilder) bb
         emitFnArgs needsPackedArgs? llvmfn xs
-        match LLVM.CodeGeneratedBy.getCodeGeneratorFromEnv? (← getEnv) d.name with
-        | .some cgen =>
+        match ← LLVM.CodeGeneratedBy.getCodeGeneratorFromEnv? d.name (← getEnv) (← getOptions)  with
+        | some cgen =>
           -- convert code generator state into an LLVM builder state.
           -- convert the arguments of the function into LLVM builder registers.
           let initBuilderState : LLVM.Pure.BuilderState := {}
@@ -1109,7 +1113,7 @@ def emitDeclAux (mod : LLVM.Module llvmctx) (d : Decl) : M llvmctx Unit := do
           -- instantiate the user's build commands.
           Lean.IR.LLVM.Pure.InstantiationM.run builderState mod (← getBuilder)
           -- Run the code generator to produce LLVM code.
-        | .none =>
+        | none =>
           emitFnBody b
       pure ()
     | _ => pure ()
@@ -1470,13 +1474,13 @@ def optimizeLLVMModule (mod : LLVM.Module ctx) : IO Unit := do
 `emitLLVM` is the entrypoint for the lean shell to code generate LLVM.
 -/
 @[export lean_ir_emit_llvm]
-def emitLLVM (env : Environment) (modName : Name) (filepath : String) (tripleStr? : Option String) : IO Unit := do
+def emitLLVM (env : Environment) (options : Options) (modName : Name) (filepath : String) (tripleStr? : Option String) : IO Unit := do
   LLVM.llvmInitializeTargetInfo
   let llvmctx ← LLVM.createContext
   let module ← LLVM.createModule llvmctx modName.toString
   let builder ← LLVM.createBuilderInContext llvmctx
   let emitLLVMCtx : EmitLLVM.Context llvmctx :=
-    {env := env, modName := modName, llvmmodule := module, builder := builder}
+    {env := env, options := options, modName := modName, llvmmodule := module, builder := builder}
   let initState := { var2val := default, jp2bb := default : EmitLLVM.State llvmctx}
   let out? ← ((EmitLLVM.main (llvmctx := llvmctx)).run initState).run emitLLVMCtx
   match out? with

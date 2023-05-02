@@ -172,7 +172,7 @@ using namespace lean; // NOLINT
 
 extern "C" void *initialize_Lean_Compiler_IR_LLVM_EmitLLVM(uint8_t builtin,
                                                       lean_object *);
-extern "C" object *lean_ir_emit_llvm(object *env, object *mod_name,
+extern "C" object *lean_ir_emit_llvm(object *env, object *opts, object *mod_name,
                                      object *filepath, object *target_triple, object *w);
 
 static void display_header(std::ostream & out) {
@@ -767,7 +767,9 @@ extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
                     lean_io_mk_world());
             time_task _("LLVM code generation", opts);
             lean::consume_io_result(lean_ir_emit_llvm(
-                        env.to_obj_arg(), (*main_module_name).to_obj_arg(),
+                        env.to_obj_arg(),
+                        opts.to_obj_arg(),
+                        (*main_module_name).to_obj_arg(),
                         lean::string_ref(*llvm_output).to_obj_arg(),
                         target_triple_lean,
                         lean_io_mk_world()));
