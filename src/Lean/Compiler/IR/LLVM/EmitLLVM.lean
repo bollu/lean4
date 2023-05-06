@@ -282,8 +282,8 @@ def toLLVMType (t : IRType) : M llvmctx (LLVM.LLVMType llvmctx) := do
   | IRType.object     => do LLVM.pointerType (← LLVM.i8Type llvmctx)
   | IRType.tobject    => do LLVM.pointerType (← LLVM.i8Type llvmctx)
   | IRType.irrelevant => do LLVM.pointerType (← LLVM.i8Type llvmctx)
-  | IRType.struct _ _ => panic! "not implemented yet"
-  | IRType.union _ _  => panic! "not implemented yet"
+  | IRType.struct _ _ => panic! "dead code"
+  | IRType.union _ _  => panic! "dead code"
 
 def throwInvalidExportName {α : Type} (n : Name) : M llvmctx α := do
   throw s!"invalid export name {n.toString}"
@@ -1098,6 +1098,11 @@ def emitDeclAux (mod : LLVM.Module llvmctx) (d : Decl) : M llvmctx Unit := do
         set { var2val := default, jp2bb := default : EmitLLVM.State llvmctx } -- flush variable map
         let entrybb ← LLVM.appendBasicBlockInContext llvmctx llvmfn "entry"
         LLVM.positionBuilderAtEnd (← getBuilder) entrybb
+        -- This name is bankrupt anyway, because `d` may get specialized.
+        -- Howver. Henrik has infomed me that extern declarations are passed
+        -- unmolested through the entire compiler pipelines, and thus this lookup
+        -- is in fact """legal""", since our `CodeGeneratedBy` attribute marks
+        -- definitions as `extern`.
         emitFnArgs needsPackedArgs? llvmfn xs
         match ← LLVM.CodeGeneratedBy.getCodeGeneratorFromEnv? d.name (← getEnv) (← getOptions)  with
         | some cgen =>

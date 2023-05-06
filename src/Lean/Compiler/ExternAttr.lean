@@ -8,6 +8,7 @@ import Lean.Environment
 import Lean.Attributes
 import Lean.ProjFns
 import Lean.Meta.Basic
+import Lean.Elab.InfoTree.Main
 
 namespace Lean
 
@@ -16,6 +17,7 @@ inductive ExternEntry where
   | inline   (backend : Name) (pattern : String)
   | standard (backend : Name) (fn : String)
   | foreign  (backend : Name) (fn : String)
+  | codeGeneratedBy (fn : Name)
 
 /--
 - `@[extern]`
@@ -36,9 +38,13 @@ structure ExternAttrData where
   entries  : List ExternEntry
   deriving Inhabited
 
--- def externEntry := leading_parser optional ident >> optional (nonReservedSymbol "inline ") >> strLit
+-- def externEntry := leading_parser
+--   (optional ident) >>
+--     (((nonReservedSymbol "inline ") >> strLit) <|>
+--     ((nonReservedSymbol "codeGeneratedBy") >> ident) <|>
+--      strLit)
 -- @[builtin_attr_parser] def extern     := leading_parser nonReservedSymbol "extern " >> optional numLit >> many externEntry
-private def syntaxToExternAttrData (stx : Syntax) : AttrM ExternAttrData := do
+private def syntaxToExternAttrData (declName : Name) (stx : Syntax) : AttrM ExternAttrData := do
   let arity?  := if stx[1].isNone then none else some <| stx[1][0].isNatLit?.getD 0
   let entriesStx := stx[2].getArgs
   if entriesStx.size == 0 && arity? == none then
@@ -46,13 +52,21 @@ private def syntaxToExternAttrData (stx : Syntax) : AttrM ExternAttrData := do
   let mut entries := #[]
   for entryStx in entriesStx do
     let backend := if entryStx[0].isNone then `all else entryStx[0][0].getId
-    let str ← match entryStx[2].isStrLit? with
-      | none     => throwErrorAt entryStx[2] "string literal expected"
-      | some str => pure str
-    if entryStx[1].isNone then
+    if let some str := entryStx[1].isStrLit? then
       entries := entries.push <| ExternEntry.standard backend str
     else
-      entries := entries.push <| ExternEntry.inline backend str
+      let .atom _ modifier := entryStx[1] | throwErrorAt entryStx[1] "Expected 'inline', 'codeGeneratedBy' or a string literal with the extern function name"
+      match modifier with
+      | "inline" =>
+        let some str ← pure <| entryStx[2].isStrLit? | throwErrorAt entryStx[2] "string literal expected"
+        entries := entries.push <| ExternEntry.inline backend str
+      | "codeGeneratedBy" =>
+        let genName ← Elab.resolveGlobalConstNoOverloadWithInfo entryStx[2]
+        let info ← getConstInfo genName
+        unless info.type.constName? == some `Lean.IR.LLVM.CodeGeneratedBy.CodeGenerator do
+          throwError "Expected type 'CodeGenerator', found incorrect type '{info.type}'. Invalid code generator declaration at '{declName}', generator: '{genName}'."
+        entries := entries.push <| ExternEntry.codeGeneratedBy genName
+      | _ => unreachable!
   return { arity? := arity?, entries := entries.toList }
 
 @[extern "lean_add_extern"]
@@ -62,7 +76,7 @@ builtin_initialize externAttr : ParametricAttribute ExternAttrData ←
   registerParametricAttribute {
     name := `extern
     descr := "builtin and foreign functions"
-    getParam := fun _ stx => syntaxToExternAttrData stx
+    getParam := fun declName stx => syntaxToExternAttrData declName stx
     afterSet := fun declName _ => do
       let mut env ← getEnv
       if env.isProjectionFn declName || env.isConstructor declName then do
@@ -109,6 +123,7 @@ def ExternEntry.backend : ExternEntry → Name
   | ExternEntry.inline n _   => n
   | ExternEntry.standard n _ => n
   | ExternEntry.foreign n _  => n
+  | ExternEntry.codeGeneratedBy  _ => "llvm".toName
 
 def getExternEntryForAux (backend : Name) : List ExternEntry → Option ExternEntry
   | []    => none

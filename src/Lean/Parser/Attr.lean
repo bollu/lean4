@@ -44,7 +44,11 @@ namespace Attr
 @[builtin_attr_parser] def default_instance := leading_parser nonReservedSymbol "default_instance " >> optional priorityParser
 @[builtin_attr_parser] def «specialize»     := leading_parser (nonReservedSymbol "specialize") >> many (ident <|> numLit)
 
-def externEntry := leading_parser optional ident >> optional (nonReservedSymbol "inline ") >> strLit
+def externEntry := leading_parser
+  (optional ident) >>
+    (((nonReservedSymbol "inline ") >> strLit) <|>
+    ((nonReservedSymbol "codeGeneratedBy") >> ident) <|>
+     strLit)
 @[builtin_attr_parser] def extern     := leading_parser nonReservedSymbol "extern " >> optional numLit >> many externEntry
 
 end Attr
