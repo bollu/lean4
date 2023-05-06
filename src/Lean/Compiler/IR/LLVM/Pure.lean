@@ -42,6 +42,7 @@ scoped syntax "[" num " × " llvm_ty "]" : llvm_ty
 
 abbrev BBId := UInt64
 abbrev Reg := UInt64
+def Reg.ofNat : Nat → Reg := UInt64.ofNat
 
 syntax llvm_reg := "%" noWs (num <|> ident)
 syntax llvm_bb_label := llvm_reg
@@ -180,7 +181,7 @@ scoped syntax "[llvm_global|" llvm_global "]" : term
 -- TODO: this is literally BEGGING to be indexed by the type.
 abbrev FunctionId := UInt64
 
-structure BuilderState where
+structure PureBuilderState where
   instrs : HashMap Reg Instruction := {}
   bbs : HashMap BBId BasicBlock := {}
 
@@ -217,15 +218,15 @@ instance [CoeTC String ε] [MonadExcept ε m] : MonadExceptString m where
   throwString := throw ∘ CoeTC.coe
 
 
-class MonadBuilder (m : Type → Type) extends Monad m, MonadState BuilderState m, MonadExceptString m where
+class MonadBuilder (m : Type → Type) extends Monad m, MonadState PureBuilderState m, MonadExceptString m where
 
-instance [Monad m] [MonadState BuilderState m] [MonadExceptString m] : MonadBuilder m where
+instance [Monad m] [MonadState PureBuilderState m] [MonadExceptString m] : MonadBuilder m where
 
 -- TODO: change `String` to an error abbreviation.
 -- This morally does not need IO, but uses IO to enable `StateRefT`..
-abbrev BuilderM := StateRefT BuilderState (EST String Unit)
+abbrev BuilderM := StateRefT PureBuilderState (EST String Unit)
 
-def BuilderM.run (a : BuilderM α) (init : BuilderState) : Except String (α × BuilderState) :=
+def BuilderM.run (a : BuilderM α) (init : PureBuilderState) : Except String (α × PureBuilderState) :=
   match StateRefT'.run a init |>.run () with
   | .ok (val, state) _ => .ok (val, state)
   | .error err _ => .error err
@@ -238,7 +239,7 @@ export MonadExceptString (throwString)
 variable {m : Type → Type} [MonadBuilder m]
 
 def regGen : m Reg :=
-  BuilderState.reg <$> getModify (fun s => { s with reg := s.reg + 1})
+  PureBuilderState.reg <$> getModify (fun s => { s with reg := s.reg + 1})
 
 def modifybb  (bbid : BBId) (f : BasicBlock → BasicBlock) : m Unit :=  do
   match (← get).bbs.find? bbid with
@@ -338,7 +339,7 @@ def setInsertionPoint (bbid : BBId) : m Unit := do
   modify fun s => { s with bbInsertionPt? := bbid }
 
 def functionIdGen : m FunctionId :=
-  BuilderState.functionId <$> getModify (fun s => { s with functionId := s.functionId + 1})
+  PureBuilderState.functionId <$> getModify (fun s => { s with functionId := s.functionId + 1})
 
 def buildFunctionDeclaration (decl : FunctionDeclaration) : m FunctionId := do
   let fid ← functionIdGen
@@ -354,7 +355,7 @@ def setFunctionInsertionPoint (fid : FunctionId) : m Unit :=
   modify (fun s => { s with functionInsertionPt? := fid })
 
 def globalIdGen : m GlobalId :=
-  BuilderState.globalId <$> getModify (fun s => { s with functionId := s.functionId + 1})
+  PureBuilderState.globalId <$> getModify (fun s => { s with functionId := s.functionId + 1})
 
 def buildGlobalDeclaration (decl : FunctionDeclaration) : m GlobalId := do
   let gid ← globalIdGen
@@ -429,12 +430,12 @@ structure InstantiationContext (llvmctx : LLVM.Context) where
   functions : HashMap String (LLVM.Value llvmctx) := {}
 
 abbrev InstantiationM (llvmctx : LLVM.Context) (α : Type) : Type :=
-  ReaderT BuilderState (StateRefT (InstantiationContext llvmctx) IO) α
+  ReaderT PureBuilderState (StateRefT (InstantiationContext llvmctx) IO) α
 
 def getLLVMBuilder : InstantiationM llvmctx (LLVM.Builder llvmctx) :=
   InstantiationContext.llvmbuilder <$> get
 
-def getBuilderState : InstantiationM llvmctx BuilderState :=
+def getBuilderState : InstantiationM llvmctx PureBuilderState :=
    read
 
 
@@ -559,8 +560,8 @@ def FunctionDefinition.instantiate (defn : FunctionDefinition) : InstantiationM 
       bb.instrs.forM (fun namedInstr => do let _ ← Instruction.instantiate namedInstr.value)
       let _ ← bb.terminator.instantiate
 
--- create an LLVM module that maps the pure 'BuilderState' into a real LLVM module pointer.
-def instantiate : InstantiationM llvmctx Unit := do
+-- create an LLVM module that maps the pure 'PureBuilderState' into a real LLVM module pointer.
+def instantiateToplevel : InstantiationM llvmctx Unit := do
   let state ← getBuilderState
   -- 1. Create all function declarations up-front, to allow for mutual
   --    definitions
@@ -571,10 +572,10 @@ def instantiate : InstantiationM llvmctx Unit := do
     let _ ← defn.toFunctionDeclaration.instantiate
     defn.instantiate
 
-def InstantiationM.run' (m : InstantiationM llvmctx α) (s : BuilderState) (llvmmodule : LLVM.Module llvmctx) (llvmbuilder : LLVM.Builder llvmctx) : IO α :=
-  ReaderT.run m s |>.run' { llvmmodule, llvmbuilder }
+def InstantiationM.run' (m : InstantiationM llvmctx α) (s : PureBuilderState) (instantiationCtx : InstantiationContext llvmctx) : IO α :=
+  ReaderT.run m s |>.run' instantiationCtx
 
-def InstantiationM.run (s : BuilderState) (llvmmodule : LLVM.Module llvmctx) (llvmbuilder : LLVM.Builder llvmctx) : IO Unit :=
-  instantiate |>.run' s llvmmodule llvmbuilder
+def PureBuilderState.instantiate (s : PureBuilderState) (instantiationCtx : InstantiationContext llvmctx) : IO Unit :=
+  InstantiationM.run' instantiateToplevel s instantiationCtx
 
 end Lean.IR.LLVM.Pure

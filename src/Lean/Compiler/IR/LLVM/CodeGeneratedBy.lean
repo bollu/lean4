@@ -13,7 +13,7 @@ namespace Lean.IR.LLVM.CodeGeneratedBy
 open Lean
 open Lean.IR.LLVM.Pure
 
-def CodeGenerator : Type := List Reg → BuilderM Reg
+def CodeGenerator : Type := Array Reg → BuilderM Reg
 
 instance : Inhabited CodeGenerator where
   default := fun _ => pure (0 : Reg)
@@ -52,4 +52,3 @@ def getCodeGeneratorFromEnv? (name : Name) (env : Environment) (opt : Options) :
   | some genName => lookupCodeGeneratorFromName genName env opt
 
 end Lean.IR.LLVM.CodeGeneratedBy
-

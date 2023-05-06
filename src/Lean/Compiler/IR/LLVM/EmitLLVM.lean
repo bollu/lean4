@@ -1096,23 +1096,44 @@ def emitDeclAux (mod : LLVM.Module llvmctx) (d : Decl) : M llvmctx Unit := do
       let llvmfn ← LLVM.getOrAddFunction mod name fnty
       withReader (fun llvmctx => { llvmctx with mainFn := f, mainParams := xs }) do
         set { var2val := default, jp2bb := default : EmitLLVM.State llvmctx } -- flush variable map
-        let bb ← LLVM.appendBasicBlockInContext llvmctx llvmfn "entry"
-        LLVM.positionBuilderAtEnd (← getBuilder) bb
+        let entrybb ← LLVM.appendBasicBlockInContext llvmctx llvmfn "entry"
+        LLVM.positionBuilderAtEnd (← getBuilder) entrybb
         emitFnArgs needsPackedArgs? llvmfn xs
         match ← LLVM.CodeGeneratedBy.getCodeGeneratorFromEnv? d.name (← getEnv) (← getOptions)  with
         | some cgen =>
-          -- convert code generator state into an LLVM builder state.
-          -- convert the arguments of the function into LLVM builder registers.
-          let initBuilderState : LLVM.Pure.BuilderState := {}
-          let argRegs : List LLVM.Pure.Reg := [] -- ← mkArgRegs
-          -- TODO: in fact, when we create `initBuilderState`, we should
-          -- | give it the
-          let builderState ← match (cgen argRegs).run initBuilderState with
+          -- TODO: convert code generator state into an LLVM builder state.
+          -- TODO: convert the arguments of the function into LLVM builder registers.
+          let var2val := (← get).var2val
+          let entryBBId : LLVM.Pure.BBId := 0
+          let entryBB : LLVM.Pure.BasicBlock := { name := "entry" }
+          let initBuilderState : LLVM.Pure.PureBuilderState := {
+             bbs := HashMap.ofList [(entryBBId, entryBB)]
+          }
+          let mut argRegisters : Array LLVM.Pure.Reg := #[]
+          let mut registerFile : HashMap LLVM.Pure.Reg (LLVM.Value llvmctx) := {}
+          -- create a registers for each argument.
+          for (_var, (_ty, val)) in var2val.toList do
+            let reg := LLVM.Pure.Reg.ofNat argRegisters.size
+            argRegisters := argRegisters.push reg
+            registerFile := registerFile.insert reg val
+
+          -- TODO: create the correct initBuilderState
+          let pureBuilderState ← match (cgen argRegisters).run initBuilderState with
             | .ok (_, state) => pure state
             | .error err => throw err
           -- instantiate the user's build commands.
-          Lean.IR.LLVM.Pure.InstantiationM.run builderState mod (← getBuilder)
+          let instantiationCtx : LLVM.Pure.InstantiationContext llvmctx := {
+            llvmmodule := mod,
+            llvmbuilder := (← getBuilder),
+            registerFile := registerFile,
+            basicBlocks := HashMap.ofList [(entryBBId, entrybb)]
+            -- TODO: we need to also ideally setup `functions`
+            -- to allow the user to find functions.
+            -- However, maybe we do not need `functions` since we can always lookup functions
+            -- in the context. Think about this.
+          }
           -- Run the code generator to produce LLVM code.
+          pureBuilderState.instantiate instantiationCtx
         | none =>
           emitFnBody b
       pure ()
