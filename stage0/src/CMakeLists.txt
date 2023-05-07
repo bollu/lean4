@@ -254,7 +254,7 @@ find_package(PythonInterp)
 include_directories(${CMAKE_BINARY_DIR}/include)
 
 # Pick up `llvm-config` to setup LLVM flags.
-if(LLVM)
+if(LLVM MATCHES "ON")
   if(NOT LLVM_CONFIG) # look for `llvm-config` if not supplied
     message(STATUS "'-DLLVM_CONFIG=<path/to/llvm-config>' not passed as CMake flag, finding `llvm-config` via CMake...")
     find_program(LLVM_CONFIG "llvm-config")
@@ -276,10 +276,9 @@ if(LLVM)
   execute_process(COMMAND ${LLVM_CONFIG}  --ldflags OUTPUT_VARIABLE LLVM_CONFIG_LDFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
   execute_process(COMMAND ${LLVM_CONFIG}  --libs OUTPUT_VARIABLE LLVM_CONFIG_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
   execute_process(COMMAND ${LLVM_CONFIG}  --libdir OUTPUT_VARIABLE LLVM_CONFIG_LIBDIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-  execute_process(COMMAND ${LLVM_CONFIG}  --includedir OUTPUT_VARIABLE LLVM_CONFIG_INCLUDEDIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-  execute_process(COMMAND ${LLVM_CONFIG}  --cxxflags OUTPUT_VARIABLE LLVM_CONFIG_CXXFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
+  execute_process(COMMAND ${LLVM_CONFIG}  --cflags OUTPUT_VARIABLE LLVM_CONFIG_CFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
   execute_process(COMMAND ${LLVM_CONFIG}  --system-libs OUTPUT_VARIABLE LLVM_CONFIG_SYSTEM_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
-  message(STATUS "llvm-config: libdir '${LLVM_CONFIG_LIBDIR}' | ldflags '${LLVM_CONFIG_LDFLAGS}' | libs '${LLVM_CONFIG_LIBS}' | system libs '${LLVM_CONFIG_SYSTEM_LIBS}' | cxxflags: ${LLVM_CONFIG_CXXFLAGS} | includedir: ${LLVM_CONFIG_INCLUDEDIR}")
+  message(STATUS "llvm-config: libdir '${LLVM_CONFIG_LIBDIR}' | ldflags '${LLVM_CONFIG_LDFLAGS}' | libs '${LLVM_CONFIG_LIBS}' | system libs '${LLVM_CONFIG_SYSTEM_LIBS}' |  cflags: ${LLVM_CONFIG_CFLAGS}")
 else()
   message(WARNING "Disabling LLVM support")
 endif()
@@ -311,23 +310,23 @@ endif()
 string(APPEND LEANC_STATIC_LINKER_FLAGS " ${LEAN_CXX_STDLIB}")
 string(APPEND LEANSHARED_LINKER_FLAGS " ${LEAN_CXX_STDLIB}")
 
-if(LLVM)
+if(LLVM MATCHES "ON")
     # Here, we perform a replacement of `llvm-host` with `llvm`. This is necessary for our cross-compile
-    #   builds in `script/prepare-llvm-*.sh`. 
+    #   builds in `script/prepare-llvm-*.sh`.
     # - Recall that the host's copy of LLVM binaries and libraries is at
     #   `llvm-host`, and the target's copy of LLVM binaries and libraries is at
     #   `llvm`.
-    # - In an ideal world, we would run the target's `llvm/bin/llvm-config` and get the corrct link options for the target 
+    # - In an ideal world, we would run the target's `llvm/bin/llvm-config` and get the corrct link options for the target
     #   (e.g. `-Lllvm/lib/libLLVM`.)
     # - However, the target's `llvm/bin/llvm-config` has a different target
     #   triple from the host, and thus cannot be run on the host.
     # - So, we run the host `llvm-host/bin/llvm-config` from which we pick up
     #   compiler options, and change the output of the host to point to the target.
-    # - In particular, `host/bin/llvm-config` produces flags like `-Lllvm-host/lib/libLLVM`, while 
+    # - In particular, `host/bin/llvm-config` produces flags like `-Lllvm-host/lib/libLLVM`, while
     #   we need the path to be `-Lllvm/lib/libLLVM`. Thus, we perform this replacement here.
     string(APPEND LEANSHARED_LINKER_FLAGS " -L${LLVM_CONFIG_LIBDIR} ${LLVM_CONFIG_LDFLAGS} ${LLVM_CONFIG_LIBS} ${LLVM_CONFIG_SYSTEM_LIBS}")
     string(REPLACE "llvm-host" "llvm" LEANSHARED_LINKER_FLAGS ${LEANSHARED_LINKER_FLAGS})
-    string(APPEND CMAKE_CXX_FLAGS  " -I${LLVM_CONFIG_INCLUDEDIR}")
+    string(APPEND CMAKE_CXX_FLAGS  " ${LLVM_CONFIG_CFLAGS}")
     string(REPLACE "llvm-host" "llvm" LEAN_EXTRA_CXX_FLAGS ${LEAN_EXTRA_CXX_FLAGS})
     message(VERBOSE "leanshared linker flags: '${LEANSHARED_LINKER_FLAGS}' | lean extra cxx flags '${LEAN_EXTR_CXX_FLAGS}'")
 endif()

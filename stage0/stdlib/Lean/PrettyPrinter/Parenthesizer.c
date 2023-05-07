@@ -122,7 +122,6 @@ LEAN_EXPORT lean_object* l_Nat_forM_loop___at_Lean_PrettyPrinter_Parenthesizer_m
 static lean_object* l_Lean_PrettyPrinter_Parenthesizer_checkKind___closed__7;
 LEAN_EXPORT lean_object* l_Lean_PrettyPrinter_Parenthesizer_rawCh_parenthesizer___rarg(lean_object*, lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_addTrace___at_Lean_PrettyPrinter_Parenthesizer_maybeParenthesize___spec__3___boxed(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
-lean_object* l_Lean_Elab_addConstInfo___at_Lean_registerInitAttrUnsafe___spec__13(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_PrettyPrinter_Parenthesizer_tactic_parenthesizer___lambda__1(lean_object*);
 static lean_object* l_Lean_PrettyPrinter_Parenthesizer_leadingNode_parenthesizer___closed__1;
 static lean_object* l_Lean_PrettyPrinter_Parenthesizer_maybeParenthesize___lambda__10___closed__11;
@@ -194,6 +193,7 @@ size_t lean_usize_of_nat(lean_object*);
 LEAN_EXPORT lean_object* l_Lean_PrettyPrinter_Parenthesizer_checkNoWsBefore_parenthesizer___boxed(lean_object*, lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_PrettyPrinter_Parenthesizer_instMonadTraverserParenthesizerM___lambda__3___boxed(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_PrettyPrinter_instOrElseParenthesizerM(lean_object*);
+lean_object* l_Lean_Elab_addConstInfo___at___private_Lean_Compiler_ExternAttr_0__Lean_syntaxToExternAttrData___spec__14(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
 static lean_object* l_Lean_PrettyPrinter_Parenthesizer_maybeParenthesize___lambda__3___closed__1;
 LEAN_EXPORT lean_object* l_Lean_PrettyPrinter_Parenthesizer_rawStx_parenthesizer___boxed(lean_object*, lean_object*);
 lean_object* l_Array_reverse___rarg(lean_object*);
@@ -845,7 +845,7 @@ lean_object* x_18; lean_object* x_19;
 lean_free_object(x_11);
 x_18 = lean_box(0);
 lean_inc(x_1);
-x_19 = l_Lean_Elab_addConstInfo___at_Lean_registerInitAttrUnsafe___spec__13(x_2, x_1, x_18, x_4, x_5, x_14);
+x_19 = l_Lean_Elab_addConstInfo___at___private_Lean_Compiler_ExternAttr_0__Lean_syntaxToExternAttrData___spec__14(x_2, x_1, x_18, x_4, x_5, x_14);
 if (lean_obj_tag(x_19) == 0)
 {
 uint8_t x_20; 
@@ -940,7 +940,7 @@ else
 lean_object* x_35; lean_object* x_36; 
 x_35 = lean_box(0);
 lean_inc(x_1);
-x_36 = l_Lean_Elab_addConstInfo___at_Lean_registerInitAttrUnsafe___spec__13(x_2, x_1, x_35, x_4, x_5, x_29);
+x_36 = l_Lean_Elab_addConstInfo___at___private_Lean_Compiler_ExternAttr_0__Lean_syntaxToExternAttrData___spec__14(x_2, x_1, x_35, x_4, x_5, x_29);
 if (lean_obj_tag(x_36) == 0)
 {
 lean_object* x_37; lean_object* x_38; lean_object* x_39; 
@@ -1555,7 +1555,7 @@ else
 lean_object* x_44; lean_object* x_45; 
 lean_free_object(x_32);
 x_44 = lean_box(0);
-x_45 = l_Lean_Elab_addConstInfo___at_Lean_registerInitAttrUnsafe___spec__13(x_11, x_42, x_44, x_3, x_4, x_40);
+x_45 = l_Lean_Elab_addConstInfo___at___private_Lean_Compiler_ExternAttr_0__Lean_syntaxToExternAttrData___spec__14(x_11, x_42, x_44, x_3, x_4, x_40);
 lean_dec(x_4);
 if (lean_obj_tag(x_45) == 0)
 {
@@ -1638,7 +1638,7 @@ else
 {
 lean_object* x_60; lean_object* x_61; 
 x_60 = lean_box(0);
-x_61 = l_Lean_Elab_addConstInfo___at_Lean_registerInitAttrUnsafe___spec__13(x_11, x_57, x_60, x_3, x_4, x_55);
+x_61 = l_Lean_Elab_addConstInfo___at___private_Lean_Compiler_ExternAttr_0__Lean_syntaxToExternAttrData___spec__14(x_11, x_57, x_60, x_3, x_4, x_55);
 lean_dec(x_4);
 if (lean_obj_tag(x_61) == 0)
 {
