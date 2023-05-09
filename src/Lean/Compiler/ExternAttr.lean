@@ -123,7 +123,7 @@ def ExternEntry.backend : ExternEntry → Name
   | ExternEntry.inline n _   => n
   | ExternEntry.standard n _ => n
   | ExternEntry.foreign n _  => n
-  | ExternEntry.codeGeneratedBy  _ => "llvm".toName
+  | ExternEntry.codeGeneratedBy  _ => `llvm
 
 def getExternEntryForAux (backend : Name) : List ExternEntry → Option ExternEntry
   | []    => none
