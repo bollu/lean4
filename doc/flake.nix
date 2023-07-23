@@ -4,15 +4,15 @@
   inputs.lean.url = path:../.;
   inputs.flake-utils.follows = "lean/flake-utils";
   inputs.mdBook = {
-    url = github:leanprover/mdBook;
+    url = "github:leanprover/mdBook";
     flake = false;
   };
   inputs.alectryon = {
-    url = github:Kha/alectryon/typeid;
+    url = "github:Kha/alectryon/typeid";
     flake = false;
   };
   inputs.leanInk = {
-    url = github:leanprover/LeanInk;
+    url = "github:leanprover/LeanInk";
     flake = false;
   };
 
@@ -27,7 +27,7 @@
         src = inputs.mdBook;
         cargoDeps = drv.cargoDeps.overrideAttrs (_: {
           inherit src;
-          outputHash = "sha256-mhTWHs/bsmm3FH59SkUxBTl5lEH2Rlz/aF9CuBTu1TE=";
+          outputHash = "sha256-1YlPS6cqgxE4fjy9G8pWrpP27YrrbCDnfeyIsX81ZNw=";
         });
         doCheck = false;
       });
