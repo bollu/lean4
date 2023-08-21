@@ -78,8 +78,9 @@ def getDecl (n : Name) : M llvmctx Decl := do
   | some d => pure d
   | none   => throw s!"unknown declaration {n}"
 
-def constIntUnsigned (n : Nat) : M llvmctx (LLVM.Value llvmctx) :=  do
-    LLVM.constIntUnsigned llvmctx (UInt64.ofNat n)
+def constIntUnsigned (builder : LLVM.Builder llvmctx) (n : Nat) : M llvmctx (LLVM.Value llvmctx) :=  do
+    let v ← LLVM.constIntUnsigned llvmctx (UInt64.ofNat n)
+    LLVM.buildSextOrTrunc builder v (← getUSizeType)
 
 def getOrCreateFunctionPrototype (mod : LLVM.Module llvmctx)
     (retty : LLVM.LLVMType llvmctx) (name : String) (args : Array (LLVM.LLVMType llvmctx)) : M llvmctx  (LLVM.Value llvmctx) := do
@@ -525,7 +526,7 @@ def emitCtor (builder : LLVM.Builder llvmctx)
     (z : VarId) (c : CtorInfo) (ys : Array Arg) : M llvmctx Unit := do
   let (_llvmty, slot) ← emitLhsSlot_ z
   if c.size == 0 && c.usize == 0 && c.ssize == 0 then do
-    let v ← callLeanBox builder (← constIntUnsigned c.cidx) "lean_box_outv"
+    let v ← callLeanBox builder (← constIntUnsigned builder c.cidx) "lean_box_outv"
     let _ ← LLVM.buildStore builder v slot
   else do
     let v ← emitAllocCtor builder c
@@ -641,24 +642,24 @@ def emitPartialApp (builder : LLVM.Builder llvmctx) (z : VarId) (f : FunId) (ys 
   let arity := decl.params.size
   let (_zty, zslot) ← emitLhsSlot_ z
   let zval ← callLeanAllocClosureFn builder fv
-                                    (← constIntUnsigned arity)
-                                    (← constIntUnsigned ys.size)
+                                    (← constIntUnsigned builder arity)
+                                    (← constIntUnsigned builder ys.size)
   LLVM.buildStore builder zval zslot
   ys.size.forM fun i => do
     let (yty, yslot) ← emitArgSlot_ builder ys[i]!
     let yval ← LLVM.buildLoad2 builder yty yslot
-    callLeanClosureSetFn builder zval (← constIntUnsigned i) yval
+    callLeanClosureSetFn builder zval (← constIntUnsigned builder i) yval
 
 def emitApp (builder : LLVM.Builder llvmctx) (z : VarId) (f : VarId) (ys : Array Arg) : M llvmctx Unit := do
   if ys.size > closureMaxArgs then do
     let aargs ← LLVM.buildAlloca builder (← LLVM.arrayType (← LLVM.voidPtrType llvmctx) (UInt64.ofNat ys.size)) "aargs"
     for i in List.range ys.size do
       let (yty, yv) ← emitArgVal builder ys[i]!
-      let aslot ← LLVM.buildInBoundsGEP2 builder yty aargs #[← constIntUnsigned 0, ← constIntUnsigned i] s!"param_{i}_slot"
+      let aslot ← LLVM.buildInBoundsGEP2 builder yty aargs #[← constIntUnsigned builder 0, ← constIntUnsigned builder i] s!"param_{i}_slot"
       LLVM.buildStore builder yv aslot
     let fnName :=  s!"lean_apply_m"
     let retty ← LLVM.voidPtrType llvmctx
-    let args := #[← emitLhsVal builder f, ← constIntUnsigned ys.size, aargs]
+    let args := #[← emitLhsVal builder f, ← constIntUnsigned builder ys.size, aargs]
     -- '1 + ...'. '1' for the fn and 'args' for the arguments
     let argtys := #[← LLVM.voidPtrType llvmctx]
     let fn ← getOrCreateFunctionPrototype (← getLLVMModule) retty fnName argtys
@@ -730,7 +731,7 @@ def callLeanCtorGet (builder : LLVM.Builder llvmctx)
 
 def emitProj (builder : LLVM.Builder llvmctx) (z : VarId) (i : Nat) (x : VarId) : M llvmctx Unit := do
   let xval ← emitLhsVal builder x
-  let zval ← callLeanCtorGet builder xval (← constIntUnsigned i) ""
+  let zval ← callLeanCtorGet builder xval (← constIntUnsigned builder i) ""
   emitLhsSlotStore builder z zval
 
 def callLeanCtorGetUsize (builder : LLVM.Builder llvmctx)
@@ -744,14 +745,14 @@ def callLeanCtorGetUsize (builder : LLVM.Builder llvmctx)
 
 def emitUProj (builder : LLVM.Builder llvmctx) (z : VarId) (i : Nat) (x : VarId) : M llvmctx Unit := do
   let xval ← emitLhsVal builder x
-  let zval ← callLeanCtorGetUsize builder xval (← constIntUnsigned i) ""
+  let zval ← callLeanCtorGetUsize builder xval (← constIntUnsigned builder i) ""
   emitLhsSlotStore builder z zval
 
 def emitOffset (builder : LLVM.Builder llvmctx)
     (n : Nat) (offset : Nat) : M llvmctx (LLVM.Value llvmctx) := do
-   let out ← constIntUnsigned (← getVoidPtrSize)
-   let out ← LLVM.buildMul builder out (← constIntUnsigned n) "" -- sizeof(void*)*n
-   LLVM.buildAdd builder out (← constIntUnsigned offset) "" -- sizeof(void*)*n+offset
+   let out ← constIntUnsigned builder (← getVoidPtrSize)
+   let out ← LLVM.buildMul builder out (← constIntUnsigned builder n) "" -- sizeof(void*)*n
+   LLVM.buildAdd builder out (← constIntUnsigned builder offset) "" -- sizeof(void*)*n+offset
 
 def emitSProj (builder : LLVM.Builder llvmctx)
     (z : VarId) (t : IRType) (n offset : Nat) (x : VarId) : M llvmctx Unit := do
@@ -863,14 +864,14 @@ def emitReset (builder : LLVM.Builder llvmctx) (z : VarId) (n : Nat) (x : VarId)
    (fun builder => do
      let xv ← emitLhsVal builder x
      n.forM fun i => do
-         callLeanCtorRelease builder xv (← constIntUnsigned i)
+         callLeanCtorRelease builder xv (← constIntUnsigned builder i)
      emitLhsSlotStore builder z xv
      return ShouldForwardControlFlow.yes
    )
    (fun builder => do
       let xv ← emitLhsVal builder x
       callLeanDecRef builder xv
-      let box0 ← callLeanBox builder (← constIntUnsigned 0) "box0"
+      let box0 ← callLeanBox builder (← constIntUnsigned builder 0) "box0"
       emitLhsSlotStore builder z box0
       return ShouldForwardControlFlow.yes
    )
@@ -891,7 +892,7 @@ def emitReuse (builder : LLVM.Builder llvmctx)
        emitLhsSlotStore builder z xv
        if updtHeader then
           let zv ← emitLhsVal builder z
-          callLeanCtorSetTag builder zv (← constIntUnsigned c.cidx)
+          callLeanCtorSetTag builder zv (← constIntUnsigned builder c.cidx)
        return ShouldForwardControlFlow.yes
    )
   emitCtorSetArgs builder z ys
@@ -943,7 +944,7 @@ def emitSet (builder : LLVM.Builder llvmctx) (x : VarId) (i : Nat) (y : Arg) : M
   let argtys := #[ ← LLVM.voidPtrType llvmctx, ← getUSizeType, ← LLVM.voidPtrType llvmctx]
   let fn ← getOrCreateFunctionPrototype (← getLLVMModule) retty fnName argtys
   let fnty ← LLVM.functionType retty argtys
-  let _ ← LLVM.buildCall2 builder fnty fn  #[← emitLhsVal builder x, ← constIntUnsigned i, (← emitArgVal builder y).2]
+  let _ ← LLVM.buildCall2 builder fnty fn  #[← emitLhsVal builder x, ← constIntUnsigned builder i, (← emitArgVal builder y).2]
 
 def emitUSet (builder : LLVM.Builder llvmctx) (x : VarId) (i : Nat) (y : VarId) : M llvmctx Unit := do
   let fnName :=  "lean_ctor_set_usize"
@@ -951,7 +952,7 @@ def emitUSet (builder : LLVM.Builder llvmctx) (x : VarId) (i : Nat) (y : VarId) 
   let argtys := #[ ← LLVM.voidPtrType llvmctx, ← getUSizeType, ← getUSizeType]
   let fn ← getOrCreateFunctionPrototype (← getLLVMModule) retty fnName argtys
   let fnty ← LLVM.functionType retty argtys
-  let _ ← LLVM.buildCall2 builder fnty fn  #[← emitLhsVal builder x, ← constIntUnsigned i, (← emitLhsVal builder y)]
+  let _ ← LLVM.buildCall2 builder fnty fn  #[← emitLhsVal builder x, ← constIntUnsigned builder i, (← emitLhsVal builder y)]
 
 def emitTailCall (builder : LLVM.Builder llvmctx) (f : FunId) (v : Expr) : M llvmctx Unit := do
    match v with
@@ -1010,7 +1011,7 @@ def emitSetTag (builder : LLVM.Builder llvmctx) (x : VarId) (i : Nat) : M llvmct
   let fn ← getOrCreateFunctionPrototype (← getLLVMModule) retty "lean_ctor_set_tag" argtys
   let xv ← emitLhsVal builder x
   let fnty ← LLVM.functionType retty argtys
-  let _ ← LLVM.buildCall2 builder fnty fn  #[xv, ← constIntUnsigned i]
+  let _ ← LLVM.buildCall2 builder fnty fn  #[xv, ← constIntUnsigned builder i]
 
 def ensureHasDefault' (alts : Array Alt) : Array Alt :=
   if alts.any Alt.isDefault then alts
@@ -1036,7 +1037,7 @@ partial def emitCase (builder : LLVM.Builder llvmctx)
     match alt with
     | Alt.ctor c b  =>
        let destbb ← builderAppendBasicBlock builder s!"case_{xType}_{c.name}_{c.cidx}"
-       LLVM.addCase switch (← constIntUnsigned c.cidx) destbb
+       LLVM.addCase switch (← constIntUnsigned builder c.cidx) destbb
        LLVM.positionBuilderAtEnd builder destbb
        emitFnBody builder b
     | Alt.default b =>
@@ -1115,7 +1116,7 @@ def emitFnArgs (builder : LLVM.Builder llvmctx)
       for i in List.range params.size do
           let param := params[i]!
           -- argsi := (args + i)
-          let argsi ← LLVM.buildGEP2 builder (← LLVM.voidPtrType llvmctx) argsp #[← constIntUnsigned i] s!"packed_arg_{i}_slot"
+          let argsi ← LLVM.buildGEP2 builder (← LLVM.voidPtrType llvmctx) argsp #[← constIntUnsigned builder i] s!"packed_arg_{i}_slot"
           let llvmty ← toLLVMType param.ty
           -- pv := *(argsi) = *(args + i)
           let pv ← LLVM.buildLoad2 builder llvmty argsi
@@ -1446,19 +1447,19 @@ def emitMainFn (mod : LLVM.Module llvmctx) (builder : LLVM.Builder llvmctx) : M 
         buildWhile_ builder "argv"
           (condcodegen := fun builder => do
             let iv ← LLVM.buildLoad2 builder ity islot "iv"
-            let i_gt_1 ← LLVM.buildICmp builder LLVM.IntPredicate.UGT iv (← constIntUnsigned 1) "i_gt_1"
+            let i_gt_1 ← LLVM.buildICmp builder LLVM.IntPredicate.UGT iv (← constIntUnsigned builder 1) "i_gt_1"
             return i_gt_1)
           (bodycodegen := fun builder => do
             let iv ← LLVM.buildLoad2 builder ity islot "iv"
-            let iv_next ← LLVM.buildSub builder iv (← constIntUnsigned 1) "iv.next"
+            let iv_next ← LLVM.buildSub builder iv (← constIntUnsigned builder 1) "iv.next"
             LLVM.buildStore builder iv_next islot
             let nv ← callLeanAllocCtor builder 1 2 0 "nv"
             let argv_i_next_slot ← LLVM.buildGEP2 builder (← LLVM.voidPtrType llvmctx) argvval #[iv_next] "argv.i.next.slot"
             let argv_i_next_val ← LLVM.buildLoad2 builder (← LLVM.voidPtrType llvmctx) argv_i_next_slot "argv.i.next.val"
             let argv_i_next_val_str ← callLeanMkString builder argv_i_next_val "arg.i.next.val.str"
-            callLeanCtorSet builder nv (← constIntUnsigned 0) argv_i_next_val_str
+            callLeanCtorSet builder nv (← constIntUnsigned builder 0) argv_i_next_val_str
             let inv ← LLVM.buildLoad2 builder inty inslot "inv"
-            callLeanCtorSet builder nv (← constIntUnsigned 1) inv
+            callLeanCtorSet builder nv (← constIntUnsigned builder 1) inv
             LLVM.buildStore builder nv inslot)
         let world ← callLeanIOMkWorld builder
         let inv ← LLVM.buildLoad2 builder inty inslot "inv"
