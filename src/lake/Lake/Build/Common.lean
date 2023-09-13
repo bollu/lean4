@@ -78,17 +78,17 @@ def buildFileUnlessUpToDate (file : FilePath)
 
 /-! # Common Builds -/
 
-@[inline] def buildO (name : String)
+@[inline] def buildCToO (name : String)
 (oFile : FilePath) (srcJob : BuildJob FilePath)
 (args : Array String := #[]) (compiler : FilePath := "cc") : SchedulerM (BuildJob FilePath) :=
   buildFileAfterDep oFile srcJob (extraDepTrace := computeHash args) fun srcFile => do
-    compileO name oFile srcFile args compiler
+    compileCToO name oFile srcFile args compiler
 
-@[inline] def buildLeanO (name : String)
+@[inline] def buildLeanFromCToO (name : String)
 (oFile : FilePath) (srcJob : BuildJob FilePath)
 (args : Array String := #[]) : SchedulerM (BuildJob FilePath) :=
   buildFileAfterDep oFile srcJob (extraDepTrace := computeHash args) fun srcFile => do
-     compileO name oFile srcFile args (← getLeanc)
+     compileCToO name oFile srcFile args (← getLeanc)
 
 def buildStaticLib (libFile : FilePath)
 (oFileJobs : Array (BuildJob FilePath)) : SchedulerM (BuildJob FilePath) :=

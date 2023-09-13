@@ -139,7 +139,7 @@ def Module.recBuildLean (mod : Module) : IndexBuildM (BuildJob Unit) := do
     let srcTrace : BuildTrace ← computeTrace { path := mod.leanFile : TextFilePath }
     let modTrace := (← getLeanTrace).mix <| argTrace.mix <| srcTrace.mix depTrace
     buildUnlessUpToDate mod modTrace mod.traceFile do
-      compileLeanModule mod.name.toString mod.leanFile mod.oleanFile mod.ileanFile mod.cFile
+      compileLeanModule mod.name.toString mod.leanFile mod.oleanFile mod.ileanFile mod.cFile mod.bcFile
         (← getLeanPath) mod.rootDir dynlibs dynlibPath (mod.leanArgs ++ mod.weakLeanArgs) (← getLean)
       discard <| cacheFileHash mod.oleanFile
       discard <| cacheFileHash mod.ileanFile
@@ -170,12 +170,12 @@ def Module.cFacetConfig : ModuleFacetConfig cFacet :=
       return (mod.cFile, ← fetchFileTrace mod.cFile)
 
 /-- Recursively build the module's object file from its C file produced by `lean`. -/
-def Module.recBuildLeanO (self : Module) : IndexBuildM (BuildJob FilePath) := do
-  buildLeanO self.name.toString self.oFile (← self.c.fetch) self.leancArgs
+def Module.recBuildLeanCToO (self : Module) : IndexBuildM (BuildJob FilePath) := do
+  buildLeanFromCToO self.name.toString self.oFile (← self.c.fetch) self.leancArgs
 
 /-- The `ModuleFacetConfig` for the builtin `oFacet`. -/
 def Module.oFacetConfig : ModuleFacetConfig oFacet :=
-  mkFacetJobConfig Module.recBuildLeanO
+  mkFacetJobConfig Module.recBuildLeanCToO
 
 -- TODO: Return `BuildJob OrdModuleSet × OrdPackageSet` or `OrdRBSet Dynlib`
 /-- Recursively build the shared library of a module (e.g., for `--load-dynlib`). -/

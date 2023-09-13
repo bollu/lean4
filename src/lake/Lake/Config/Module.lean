@@ -82,6 +82,9 @@ abbrev pkg (self : Module) : Package :=
 @[inline] def cFile (self : Module) : FilePath :=
   self.irPath "c"
 
+@[inline] def bcFile (self : Module) : FilePath :=
+  self.irPath "bc"
+
 @[inline] def oFile (self : Module) : FilePath :=
   self.irPath "o"
 

@@ -11,7 +11,7 @@ namespace Lake
 open System
 
 def compileLeanModule (name : String) (leanFile : FilePath)
-(oleanFile? ileanFile? cFile? : Option FilePath)
+(oleanFile? ileanFile? cFile? bcFile?: Option FilePath)
 (leanPath : SearchPath := []) (rootDir : FilePath := ".")
 (dynlibs : Array FilePath := #[]) (dynlibPath : SearchPath := {})
 (leanArgs : Array String := #[]) (lean : FilePath := "lean")
@@ -28,6 +28,9 @@ def compileLeanModule (name : String) (leanFile : FilePath)
   if let some cFile := cFile? then
     createParentDirs cFile
     args := args ++ #["-c", cFile.toString]
+  if let some bcFile := bcFile? then
+    createParentDirs bcFile
+    args := args ++ #["-b", bcFile.toString]
   for dynlib in dynlibs do
     args := args.push s!"--load-dynlib={dynlib}"
   proc {
@@ -39,7 +42,17 @@ def compileLeanModule (name : String) (leanFile : FilePath)
     ]
   }
 
-def compileO (name : String) (oFile srcFile : FilePath)
+def compileBcToO (name : String) (oFile srcFile : FilePath)
+(moreArgs : Array String := #[]) (target : String := "native") (llc : FilePath := "llc") : BuildM Unit := do
+  logStep s!"Compiling {name}"
+  createParentDirs oFile
+  proc {
+    cmd := llc.toString
+    args := #["-march=", target, "-o", oFile.toString, srcFile.toString] ++ moreArgs
+  }
+
+
+def compileCToO (name : String) (oFile srcFile : FilePath)
 (moreArgs : Array String := #[]) (compiler : FilePath := "cc") : BuildM Unit := do
   logStep s!"Compiling {name}"
   createParentDirs oFile
