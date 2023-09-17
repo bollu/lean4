@@ -1,5 +1,7 @@
 set -euo pipefail
 
+CLANGPP=clang++-15
+
 ulimit -s 8192
 DIFF=diff
 if diff --color --help >/dev/null 2>&1; then
@@ -35,7 +37,10 @@ function compile_lean_llvm_backend {
     rm "*.bc" || true # remove bitcode files
     rm "*.o" || true # remove object files
     lean --bc="$f.linked.bc" "$f" || fail "Failed to compile $f into bitcode file"
-    leanc -o "$f.out" "$@" "$f.linked.bc.o" || fail "Failed to link object file '$f.linked.bc.o'"
+    # TODO: do we want to link via `llvm-link`, or do we want to already produce a linked LLVM module?
+    $CLANGPP -O3 -c -emit-llvm "$f.linked.bc" -o "$f.linked.O3.bc" || fail "Failed to optimize $f into a bitcode file and build an object file "
+    $CLANGPP -c "$f.linked.O3.bc" -o "$f.linked.O3.o" || fail "Failed to optimize $f into a bitcode file and build an object file "
+    $CLANGPP -o "$f.out" "$@" "$f.linked.O3.o" || fail "Failed to link object file '$f.linked.bc.o'"
     set +o xtrace
 }
 
