@@ -38,9 +38,10 @@ function compile_lean_llvm_backend {
     rm "*.o" || true # remove object files
     lean --bc="$f.linked.bc" "$f" || fail "Failed to compile $f into bitcode file"
     # TODO: do we want to link via `llvm-link`, or do we want to already produce a linked LLVM module?
-    $CLANGPP -O3 -c -emit-llvm "$f.linked.bc" -o "$f.linked.O3.bc" || fail "Failed to optimize $f into a bitcode file and build an object file "
+    # $CLANGPP -O3 -c -emit-llvm "$f.linked.bc" -o "$f.linked.O3.bc" || fail "Failed to optimize $f into a bitcode file and build an object file "
+    $CLANGPP -O0 -c -emit-llvm "$f.linked.bc" -o "$f.linked.O3.bc" || fail "Failed to optimize $f into a bitcode file and build an object file "
     $CLANGPP -c "$f.linked.O3.bc" -o "$f.linked.O3.o" || fail "Failed to optimize $f into a bitcode file and build an object file "
-    leanc -o "$f.out" "$@" "$f.linked.O3.o" || fail "Failed to link object file '$f.linked.bc.o'"
+    leanc -g -o "$f.out" "$@" "$f.linked.O3.o" || fail "Failed to link object file '$f.linked.bc.o'"
     set +o xtrace
 }
 
