@@ -1,7 +1,9 @@
 /-
 Copyright (c) 2021 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Sebastian Ullrich, Mac Malone
+Authors: Sebastian Ullrich, Mac Malone, Siddharth Bhat
+
+Commands to build a Lean module.
 -/
 import Lake.Util.OrdHashSet
 import Lean.Elab.ParseImportsFast
@@ -131,7 +133,7 @@ def Module.depsFacetConfig : ModuleFacetConfig depsFacet :=
 /--
 Recursively build a Lean module.
 Fetch its dependencies and then elaborate the Lean source file, producing
-all possible artifacts (i.e., `.olean`, `ilean`, and `.c`).
+all possible artifacts (i.e., `.olean`, `ilean`, `.c`, and `.bc`).
 -/
 def Module.recBuildLean (mod : Module) : IndexBuildM (BuildJob Unit) := do
   (← mod.deps.fetch).bindSync fun (dynlibPath, dynlibs) depTrace => do
@@ -144,6 +146,7 @@ def Module.recBuildLean (mod : Module) : IndexBuildM (BuildJob Unit) := do
       discard <| cacheFileHash mod.oleanFile
       discard <| cacheFileHash mod.ileanFile
       discard <| cacheFileHash mod.cFile
+      discard <| cacheFileHash mod.bcFile
     return ((), depTrace)
 
 /-- The `ModuleFacetConfig` for the builtin `leanArtsFacet`. -/
@@ -169,13 +172,30 @@ def Module.cFacetConfig : ModuleFacetConfig cFacet :=
       -- do content-aware hashing so that we avoid recompiling unchanged C files
       return (mod.cFile, ← fetchFileTrace mod.cFile)
 
+/-- The `ModuleFacetConfig` for the builtin `bcFacet`. -/
+def Module.bcFacetConfig : ModuleFacetConfig bcFacet :=
+  mkFacetJobConfigSmall fun mod => do
+    (← mod.leanArts.fetch).bindSync fun _ _ =>
+      -- do content-aware hashing so that we avoid recompiling unchanged bitcode files
+      return (mod.bcFile, ← fetchFileTrace mod.bcFile)
+
 /-- Recursively build the module's object file from its C file produced by `lean`. -/
 def Module.recBuildLeanCToO (self : Module) : IndexBuildM (BuildJob FilePath) := do
   buildLeanFromCToO self.name.toString self.oFile (← self.c.fetch) self.leancArgs
 
+/-- Recursively build the module's object file from its bitcode file produced by `lean`. -/
+def Module.recBuildLeanBcToO (self : Module) : IndexBuildM (BuildJob FilePath) := do
+  -- TODO: add option to pass target.
+  buildLeanFromBcToO self.name.toString self.oFile (← self.bc.fetch)
+
 /-- The `ModuleFacetConfig` for the builtin `oFacet`. -/
 def Module.oFacetConfig : ModuleFacetConfig oFacet :=
-  mkFacetJobConfig Module.recBuildLeanCToO
+  -- TODO: add option to switch between `.bc` and `.o` builds.
+  mkFacetJobConfig (fun module => 
+    if module.backend == Backend.C
+    then module.recBuildLeanCToO 
+    else module.recBuildLeanBcToO 
+  )
 
 -- TODO: Return `BuildJob OrdModuleSet × OrdPackageSet` or `OrdRBSet Dynlib`
 /-- Recursively build the shared library of a module (e.g., for `--load-dynlib`). -/
@@ -229,5 +249,6 @@ def initModuleFacetConfigs : DNameMap ModuleFacetConfig :=
   |>.insert oleanFacet oleanFacetConfig
   |>.insert ileanFacet ileanFacetConfig
   |>.insert cFacet cFacetConfig
+  |>.insert bcFacet bcFacetConfig
   |>.insert oFacet oFacetConfig
   |>.insert dynlibFacet dynlibFacetConfig

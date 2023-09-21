@@ -94,6 +94,15 @@ That is, the minimum of package's `buildType` and the library's  `buildType`.
 @[inline] def buildType (self : LeanLib) : BuildType :=
   min self.pkg.buildType self.config.buildType
 
+
+/--
+The backend type for  modules of this library.
+That is, the minimum of package's `backend` and the library's  `backend`.
+-/
+@[inline] def backend (self : LeanLib) : Backend :=
+  min self.pkg.backend self.config.backend
+
+
 /--
 The arguments to pass to `lean` when compiling the library's Lean files.
 That is, the package's `moreLeanArgs` plus the library's  `moreLeanArgs`.
@@ -114,6 +123,7 @@ That is, the build type's `leancArgs`, the package's `moreLeancArgs`,
 and then the library's `moreLeancArgs`.
 -/
 @[inline] def leancArgs (self : LeanLib) : Array String :=
+  -- How to set this up for debug v/s release?
   self.buildType.leancArgs ++ self.pkg.moreLeancArgs ++ self.config.moreLeancArgs
 
 /--

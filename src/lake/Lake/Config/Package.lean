@@ -309,6 +309,10 @@ def release? (self : Package) : Option (String × String) := do
 @[inline] def buildType (self : Package) : BuildType :=
   self.config.buildType
 
+/-- The package's `backend` configuration. -/
+@[inline] def backend (self : Package) : Backend :=
+  self.config.backend
+
 /-- The package's `moreLeanArgs` configuration. -/
 @[inline] def moreLeanArgs (self : Package) : Array String :=
   self.config.moreLeanArgs

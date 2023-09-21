@@ -1,7 +1,9 @@
 /-
 Copyright (c) 2021 Mac Malone. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Mac Malone
+Authors: Mac Malone, Siddharth Bhat
+
+
 -/
 import Lake.Build.Monad
 import Lake.Build.Actions
@@ -78,7 +80,7 @@ def buildFileUnlessUpToDate (file : FilePath)
 
 /-! # Common Builds -/
 
-@[inline] def buildCToO (name : String)
+@[inline] def buildCToOXX (name : String)
 (oFile : FilePath) (srcJob : BuildJob FilePath)
 (args : Array String := #[]) (compiler : FilePath := "cc") : SchedulerM (BuildJob FilePath) :=
   buildFileAfterDep oFile srcJob (extraDepTrace := computeHash args) fun srcFile => do
@@ -89,6 +91,12 @@ def buildFileUnlessUpToDate (file : FilePath)
 (args : Array String := #[]) : SchedulerM (BuildJob FilePath) :=
   buildFileAfterDep oFile srcJob (extraDepTrace := computeHash args) fun srcFile => do
      compileCToO name oFile srcFile args (← getLeanc)
+
+@[inline] def buildLeanFromBcToO (name : String)
+(oFile : FilePath) (srcJob : BuildJob FilePath)
+(target : String := "native") : SchedulerM (BuildJob FilePath) :=
+  buildFileAfterDep oFile srcJob fun srcFile => do
+     compileBcToO name oFile srcFile target (← getLeanCc)
 
 def buildStaticLib (libFile : FilePath)
 (oFileJobs : Array (BuildJob FilePath)) : SchedulerM (BuildJob FilePath) :=

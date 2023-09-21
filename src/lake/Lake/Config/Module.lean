@@ -101,6 +101,9 @@ abbrev pkg (self : Module) : Package :=
 @[inline] def buildType (self : Module) : BuildType :=
   self.lib.buildType
 
+@[inline] def backend (self : Module) : Backend :=
+  self.lib.backend
+
 @[inline] def leanArgs (self : Module) : Array String :=
   self.lib.leanArgs
 

@@ -74,6 +74,10 @@ module_data ilean : BuildJob FilePath
 abbrev Module.cFacet := `c
 module_data c : BuildJob FilePath
 
+/-- The LLVM BC file built from the Lean file via `lean`. -/
+abbrev Module.bcFacet := `bc
+module_data bc : BuildJob FilePath
+
 /-- The object file built from `c`. -/
 abbrev Module.oFacet := `o
 module_data o : BuildJob FilePath

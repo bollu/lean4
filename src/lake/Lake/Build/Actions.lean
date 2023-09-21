@@ -1,7 +1,10 @@
 /-
 Copyright (c) 2017 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Gabriel Ebner, Sebastian Ullrich, Mac Malone
+Authors: Gabriel Ebner, Sebastian Ullrich, Mac Malone, Siddharth Bhat
+
+Low level actions to build common Lean artfiacts via the Lean
+toolchain.
 -/
 import Lake.Util.Proc
 import Lake.Util.NativeLib
@@ -43,12 +46,14 @@ def compileLeanModule (name : String) (leanFile : FilePath)
   }
 
 def compileBcToO (name : String) (oFile srcFile : FilePath)
-(moreArgs : Array String := #[]) (target : String := "native") (llc : FilePath := "llc") : BuildM Unit := do
+  (target : String := "native") (clang : FilePath := "clang") : BuildM Unit := do
   logStep s!"Compiling {name}"
   createParentDirs oFile
   proc {
-    cmd := llc.toString
-    args := #["-march=", target, "-o", oFile.toString, srcFile.toString] ++ moreArgs
+    cmd := clang.toString
+    args := #["-c",
+             "-march=" ++ target, -- '-march=<target>' must be a single string.
+             "-o", oFile.toString, srcFile.toString]
   }
 
 

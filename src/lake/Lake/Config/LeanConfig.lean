@@ -34,6 +34,10 @@ inductive BuildType
   | release
 deriving Inhabited, Repr, DecidableEq, Ord
 
+/--
+Ordering on build types. The ordering is used to determine
+the *minimum* build version that is necessary for a build.
+-/
 instance : LT BuildType := ltOfOrd
 instance : LE BuildType := leOfOrd
 instance : Min BuildType := minOfLe
@@ -45,6 +49,35 @@ def BuildType.leancArgs : BuildType → Array String
 | relWithDebInfo => #["-O3", "-g", "-DNDEBUG"]
 | minSizeRel => #["-Os", "-DNDEBUG"]
 | release => #["-O3", "-DNDEBUG"]
+
+/--
+Compiler backend with which to compile Lean.
+-/
+inductive Backend
+  /--
+  C backend.
+  -/
+  | C
+  /--
+  LLVM backend.
+  -/
+  | LLVM
+deriving Inhabited, Repr, DecidableEq, Ord
+
+/--
+Ordering on backends. The ordering is used to determine
+the *minimum* backend that is necessary for a build.
+-/
+instance : LT Backend := ltOfOrd
+instance : LE Backend := leOfOrd
+instance : Min Backend := minOfLe
+instance : Max Backend := maxOfLe
+
+/-- The arguments to pass to `leanc` based on the build type. -/
+def Backend.leanArgs : Backend → Array String
+| C => #["-c"]
+| LLVM => #["-b"] -- `-b` for "bitcode".
+
 
 /-- Configuration options common to targets that build modules. -/
 structure LeanConfig where
@@ -80,4 +113,9 @@ structure LeanConfig where
   external libraries.
   -/
   moreLinkArgs : Array String := #[]
+  /--
+    Compiler backend that modules should be built using (e.g., `C`, `LLVM`).
+    Defaults to `C`.
+  -/
+  backend : Backend := Backend.C
 deriving Inhabited, Repr

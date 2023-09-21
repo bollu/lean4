@@ -171,7 +171,7 @@ variable [MonadLakeEnv m] [Functor m]
 /-- Get the path of the `ar` binary in the detected Lean installation. -/
 @[inline] def getLeanAr : m FilePath :=
   (·.ar) <$> getLeanInstall
-
+  
 /-- Get the path of C compiler in the detected Lean installation. -/
 @[inline] def getLeanCc : m FilePath :=
   (·.cc) <$> getLeanInstall
