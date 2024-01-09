@@ -5,6 +5,7 @@ Authors: Leonardo de Moura
 -/
 import Lean.AuxRecursor
 import Lean.Meta.AppBuilder
+import Lean.Meta.Constructions.BrecOn
 
 namespace Lean
 
@@ -29,6 +30,7 @@ def mkBelow (declName : Name) : m Unit := adaptFn mkBelowImp declName
 def mkIBelow (declName : Name) : m Unit := adaptFn mkIBelowImp declName
 def mkBRecOn (declName : Name) : m Unit := adaptFn mkBRecOnImp declName
 def mkBInductionOn (declName : Name) : m Unit := adaptFn mkBInductionOnImp declName
+
 
 open Meta
 
