@@ -24,6 +24,7 @@ import Lean.AuxRecursor
 import Lean.Meta.AppBuilder
 import Lean.Meta.RecursorInfo
 import Lean.Meta.Basic
+import Lean.Declaration
 
 namespace Lean
 namespace BrecOn
@@ -72,8 +73,11 @@ def mkBelow (declName : Name) : MetaM Unit := do
   let nminors := recVal.numMinors
   -- unsigned ntypeformers  = rec_val.get_nmotives();
   let ntypeformer := recVal.numMotives
+  let recInfo ← getConstInfoInduct recVal.getInduct
   -- names lps              = rec_info.get_lparams();
+  let lps := recInfo.levelParams
   -- bool is_reflexive      = ind_val.is_reflexive();
+  let isReflexive := indVal.isReflexive
   -- level  lvl             = mk_univ_param(head(lps));
   -- levels lvls            = lparams_to_levels(tail(lps));
   -- names blvls;           // universe parameter names of ibelow/below
