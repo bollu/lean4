@@ -48,7 +48,16 @@ def mkCasesOn (declName : Name) : m Unit := adaptFn mkCasesOnImp declName
 def mkRecOn (declName : Name) : m Unit := adaptFn mkRecOnImp declName
 def mkNoConfusionCore (declName : Name) : m Unit := adaptFn mkNoConfusionCoreImp declName
 
-def mkBelow (declName : Name) : MetaM Unit := adaptFn mkBelowImp declName
+def isRecursiveDatatype (declName : Name) : MetaM Bool := do
+  match (← getEnv).find? declName with
+  | .some (.inductInfo indval) => pure indval.isRec
+  | _ => return False
+  
+
+def mkBelow (declName : Name) : MetaM Unit := do
+  if ! (← isRecursiveDatatype declName) then return ()
+  if (← isInductivePredicate declName) then return ()
+  adaptFn mkBelowImp declName
 
 -- def mkBelow (declName : Name) : m Unit := do
 --   -- if (!is_recursive_datatype(env, n)) return env;
