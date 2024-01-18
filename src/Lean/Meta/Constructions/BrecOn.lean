@@ -23,10 +23,13 @@ https://github.com/leanprover/lean4/blob/7c38649527c85116345df831254985afa2680dd
 import Lean.AuxRecursor
 import Lean.Meta.AppBuilder
 import Lean.Meta.RecursorInfo
+import Lean.Meta.Basic
 
 namespace Lean
-
 namespace BrecOn
+
+open Lean Meta
+
 @[extern "lean_mk_cases_on"] opaque mkCasesOnImp (env : Environment) (declName : @& Name) : Except KernelException Environment
 @[extern "lean_mk_rec_on"] opaque mkRecOnImp (env : Environment) (declName : @& Name) : Except KernelException Environment
 @[extern "lean_mk_no_confusion"] opaque mkNoConfusionCoreImp (env : Environment) (declName : @& Name) : Except KernelException Environment
@@ -45,8 +48,7 @@ def mkCasesOn (declName : Name) : m Unit := adaptFn mkCasesOnImp declName
 def mkRecOn (declName : Name) : m Unit := adaptFn mkRecOnImp declName
 def mkNoConfusionCore (declName : Name) : m Unit := adaptFn mkNoConfusionCoreImp declName
 
-
-def mkBelow (declName : Name) : m Unit := adaptFn mkBelowImp declName
+def mkBelow (declName : Name) : MetaM Unit := adaptFn mkBelowImp declName
 
 -- def mkBelow (declName : Name) : m Unit := do
 --   -- if (!is_recursive_datatype(env, n)) return env;
