@@ -57,31 +57,27 @@ def isRecursiveDatatype (declName : Name) : MetaM Bool := do
 def mkBelow (declName : Name) : MetaM Unit := do
   if ! (← isRecursiveDatatype declName) then return ()
   if (← isInductivePredicate declName) then return ()
+  -- local_ctx lctx;
+  -- constant_info ind_info = env.get(n);
+  let .some constInfo := (← getEnv).find? declName | return ()
+  -- inductive_val ind_val  = ind_info.to_inductive_val();
+  let .inductInfo indVal := constInfo | return ()
+  -- name_generator ngen    = mk_constructions_name_generator();
+  -- unsigned nparams       = ind_val.get_nparams();
+  let naparams := indVal.numParams
+  -- constant_info rec_info = env.get(mk_rec_name(n));
+  -- recursor_val rec_val   = rec_info.to_recursor_val();
+  let recVal : RecursorVal ← getConstInfoRec (mkRecName declName)
+  -- unsigned nminors       = rec_val.get_nminors();
+  -- unsigned ntypeformers  = rec_val.get_nmotives();
+  -- names lps              = rec_info.get_lparams();
+  -- bool is_reflexive      = ind_val.is_reflexive();
+  -- level  lvl             = mk_univ_param(head(lps));
+  -- levels lvls            = lparams_to_levels(tail(lps));
+  -- names blvls;           // universe parameter names of ibelow/below
+  -- level  rlvl;           // universe level of the resultant type
   adaptFn mkBelowImp declName
 
--- def mkBelow (declName : Name) : m Unit := do
---   -- if (!is_recursive_datatype(env, n)) return env;
---   let recursorInfo ← Lean.Meta.mkRecursorInfo declName
---   if !is_recursive_datatype (declName)
---   then return ()
---   -- if (is_inductive_predicate(env, n)) return env;
---   if !is_inductive_predicate declName
---   then return ()
---   -- local_ctx lctx;
---   -- constant_info ind_info = env.get(n);
---   -- inductive_val ind_val  = ind_info.to_inductive_val();
---   -- name_generator ngen    = mk_constructions_name_generator();
---   -- unsigned nparams       = ind_val.get_nparams();
---   -- constant_info rec_info = env.get(mk_rec_name(n));
---   -- recursor_val rec_val   = rec_info.to_recursor_val();
---   -- unsigned nminors       = rec_val.get_nminors();
---   -- unsigned ntypeformers  = rec_val.get_nmotives();
---   -- names lps              = rec_info.get_lparams();
---   -- bool is_reflexive      = ind_val.is_reflexive();
---   -- level  lvl             = mk_univ_param(head(lps));
---   -- levels lvls            = lparams_to_levels(tail(lps));
---   -- names blvls;           // universe parameter names of ibelow/below
---   -- level  rlvl;           // universe level of the resultant type
 --   -- // The arguments of below (ibelow) are the ones in the recursor - minor premises.
 --   -- // The universe we map to is also different (l+1 for below of reflexive types) and (0 fo ibelow).
 --   -- expr ref_type;
