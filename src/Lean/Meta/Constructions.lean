@@ -15,7 +15,7 @@ variable [Monad m] [MonadEnv m] [MonadError m] [MonadOptions m]
 def mkCasesOn (declName : Name) : m Unit := BrecOn.mkCasesOn declName
 def mkRecOn (declName : Name) : m Unit := BrecOn.mkRecOn declName
 def mkNoConfusionCore (declName : Name) : m Unit := BrecOn.mkNoConfusionCore declName
-def mkBelow (declName : Name) : m Unit := BrecOn.mkBelow declName
+def mkBelow (declName : Name) : MetaM Unit := BrecOn.mkBelow declName
 def mkIBelow (declName : Name) : m Unit := BrecOn.mkIBelow declName
 def mkBRecOn (declName : Name) : m Unit := BrecOn.mkBRecOn declName
 def mkBInductionOn (declName : Name) : m Unit := BrecOn.mkBInductionOn declName
