@@ -9,27 +9,16 @@ import Lean.Meta.Constructions.BrecOn
 
 namespace Lean
 
-@[extern "lean_mk_cases_on"] opaque mkCasesOnImp (env : Environment) (declName : @& Name) : Except KernelException Environment
-@[extern "lean_mk_rec_on"] opaque mkRecOnImp (env : Environment) (declName : @& Name) : Except KernelException Environment
-@[extern "lean_mk_no_confusion"] opaque mkNoConfusionCoreImp (env : Environment) (declName : @& Name) : Except KernelException Environment
-@[extern "lean_mk_below"] opaque mkBelowImp (env : Environment) (declName : @& Name) : Except KernelException Environment
-@[extern "lean_mk_ibelow"] opaque mkIBelowImp (env : Environment) (declName : @& Name) : Except KernelException Environment
-@[extern "lean_mk_brec_on"] opaque mkBRecOnImp (env : Environment) (declName : @& Name) : Except KernelException Environment
-@[extern "lean_mk_binduction_on"] opaque mkBInductionOnImp (env : Environment) (declName : @& Name) : Except KernelException Environment
-
+/- Forward declrartations from Lean.Meta.Construction.BrecOn -/
 variable [Monad m] [MonadEnv m] [MonadError m] [MonadOptions m]
 
-@[inline] private def adaptFn (f : Environment → Name → Except KernelException Environment) (declName : Name) : m Unit := do
-  let env ← ofExceptKernelException (f (← getEnv) declName)
-  modifyEnv fun _ => env
-
 def mkCasesOn (declName : Name) : m Unit := BrecOn.mkCasesOn declName
-def mkRecOn (declName : Name) : m Unit := adaptFn mkRecOnImp declName
-def mkNoConfusionCore (declName : Name) : m Unit := adaptFn mkNoConfusionCoreImp declName
-def mkBelow (declName : Name) : m Unit := adaptFn mkBelowImp declName
-def mkIBelow (declName : Name) : m Unit := adaptFn mkIBelowImp declName
-def mkBRecOn (declName : Name) : m Unit := adaptFn mkBRecOnImp declName
-def mkBInductionOn (declName : Name) : m Unit := adaptFn mkBInductionOnImp declName
+def mkRecOn (declName : Name) : m Unit := BrecOn.mkRecOn declName
+def mkNoConfusionCore (declName : Name) : m Unit := BrecOn.mkNoConfusionCore declName
+def mkBelow (declName : Name) : m Unit := BrecOn.mkBelow declName
+def mkIBelow (declName : Name) : m Unit := BrecOn.mkIBelow declName
+def mkBRecOn (declName : Name) : m Unit := BrecOn.mkBRecOn declName
+def mkBInductionOn (declName : Name) : m Unit := BrecOn.mkBInductionOn declName
 
 
 open Meta
