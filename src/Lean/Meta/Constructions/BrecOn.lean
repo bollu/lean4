@@ -43,24 +43,7 @@ variable [Monad m] [MonadEnv m] [MonadError m] [MonadOptions m]
 def mkCasesOn (declName : Name) : m Unit := adaptFn mkCasesOnImp declName
 def mkRecOn (declName : Name) : m Unit := adaptFn mkRecOnImp declName
 def mkNoConfusionCore (declName : Name) : m Unit := adaptFn mkNoConfusionCoreImp declName
-
-def mkBelow_ (declName : Name) : m ConstantInfo := sorry
-/-
-Run the C++ implementation of mkBelow, and compare the output to our
-version in mkBelow_
--/
-def mkBelow (declName : Name) : m Unit := do
-  adaptFn mkBelowImp declName
-  let e <- getEnv
-  let correct <-  
-    match e.find? declName with
-    | .some v => pure v
-    | .none => error "cannot find declaration '{declName}'"
-  let out <- mkBelow_ declName
-  if correct /= out 
-  then error "incorrect output from mkBelow"
-  else pure ()
-
+def mkBelow (declName : Name) : m Unit := adaptFn mkBelowImp declName
 def mkIBelow (declName : Name) : m Unit := adaptFn mkIBelowImp declName
 def mkBRecOn (declName : Name) : m Unit := adaptFn mkBRecOnImp declName
 def mkBInductionOn (declName : Name) : m Unit := adaptFn mkBInductionOnImp declName

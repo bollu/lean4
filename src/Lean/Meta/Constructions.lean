@@ -23,8 +23,6 @@ variable [Monad m] [MonadEnv m] [MonadError m] [MonadOptions m]
   let env ← ofExceptKernelException (f (← getEnv) declName)
   modifyEnv fun _ => env
 
-def diffDecls (declName : Name) (expected : m Unit) (found : m Unit) :  m Unit := 
-
 def mkCasesOn (declName : Name) : m Unit := BrecOn.mkCasesOn declName
 def mkRecOn (declName : Name) : m Unit := adaptFn mkRecOnImp declName
 def mkNoConfusionCore (declName : Name) : m Unit := adaptFn mkNoConfusionCoreImp declName
