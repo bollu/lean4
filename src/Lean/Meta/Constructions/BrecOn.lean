@@ -69,7 +69,9 @@ def mkBelow (declName : Name) : MetaM Unit := do
   -- recursor_val rec_val   = rec_info.to_recursor_val();
   let recVal : RecursorVal ← getConstInfoRec (mkRecName declName)
   -- unsigned nminors       = rec_val.get_nminors();
+  let nminors := recVal.numMinors
   -- unsigned ntypeformers  = rec_val.get_nmotives();
+  let ntypeformer := recVal.numMotives
   -- names lps              = rec_info.get_lparams();
   -- bool is_reflexive      = ind_val.is_reflexive();
   -- level  lvl             = mk_univ_param(head(lps));
