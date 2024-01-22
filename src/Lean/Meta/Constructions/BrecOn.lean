@@ -53,16 +53,24 @@ def isRecursiveDatatype (declName : Name) : MetaM Bool := do
   match (← getEnv).find? declName with
   | .some (.inductInfo indval) => pure indval.isRec
   | _ => return False
-  
 
+
+-- level mk_univ_param(name const & n) { return level(lean_level_mk_param(n.to_obj_arg())); }
+def mkUnivParam (n : Name) : Level := mkLevelParam n
+
+def getDatatypeLevel (env : Environment) (type : Expr) : Level := sorry
+
+
+
+#check getLevel
 def mkBelow (declName : Name) : MetaM Unit := do
   if ! (← isRecursiveDatatype declName) then return ()
   if (← isInductivePredicate declName) then return ()
   -- local_ctx lctx;
   -- constant_info ind_info = env.get(n);
-  let .some constInfo := (← getEnv).find? declName | return ()
+  let .some indInfo := (← getEnv).find? declName | return ()
   -- inductive_val ind_val  = ind_info.to_inductive_val();
-  let .inductInfo indVal := constInfo | return ()
+  let .inductInfo indVal := indInfo | return ()
   -- name_generator ngen    = mk_constructions_name_generator();
   -- unsigned nparams       = ind_val.get_nparams();
   let naparams := indVal.numParams
@@ -79,7 +87,9 @@ def mkBelow (declName : Name) : MetaM Unit := do
   -- bool is_reflexive      = ind_val.is_reflexive();
   let isReflexive := indVal.isReflexive
   -- level  lvl             = mk_univ_param(head(lps));
+  let lvl := mkUnivParam lps[0]!
   -- levels lvls            = lparams_to_levels(tail(lps));
+  let lvls := lps |>.drop 1 |>.map mkLevelParam
   -- names blvls;           // universe parameter names of ibelow/below
   -- level  rlvl;           // universe level of the resultant type
   adaptFn mkBelowImp declName
@@ -107,6 +117,26 @@ def mkBelow (declName : Name) : MetaM Unit := do
 --     --     rlvl        = mk_max(mk_level_one(), lvl);
 --     --     ref_type    = rec_info.get_type();
 --     -- }
+
+    let (blvls, rlvl, ref_type) : List Name × Level × Expr := ← do
+      if isReflexive
+      then 
+        let rlvl := getDatatypeLevel (← getEnv) indInfo.type
+        -- if rlvl is of the form (max 1 l), then rlvl <- l
+        let rlvl := -- TODO: should this be normalized first?
+          match rlvl with 
+          | .max (.succ .zero) rhs => rhs 
+          | _ => rlvl
+        let rlvl := Level.max (Level.succ lvl) rlvl
+        -- TODO: is `instantiateTypeLevelParams` the correct function?
+        -- TODO: why is the `lvl` always going to be a parameter?
+        let (Level.param lvlParamId) := lvl
+          | throwError "level parameter must be a Level.param"
+        let ref_type := recInfo.type.instantiateLevelParams [lvlParamId] [Level.succ lvl]
+        pure (lps, rlvl, ref_type)
+      else 
+        pure (lps, Level.max levelOne lvl, recInfo.type)
+    let typeResult := Expr.sort rlvl
 --     -- Type_result        = mk_sort(rlvl);
 --     -- buffer<expr> ref_args;
 --     -- to_telescope(lctx, ngen, ref_type, ref_args);
