@@ -62,7 +62,8 @@ def getDatatypeLevel (env : Environment) (type : Expr) : Level := sorry
 
 
 
-#check getLevel
+
+
 def mkBelow (declName : Name) : MetaM Unit := do
   if ! (← isRecursiveDatatype declName) then return ()
   if (← isInductivePredicate declName) then return ()
@@ -73,14 +74,14 @@ def mkBelow (declName : Name) : MetaM Unit := do
   let .inductInfo indVal := indInfo | return ()
   -- name_generator ngen    = mk_constructions_name_generator();
   -- unsigned nparams       = ind_val.get_nparams();
-  let naparams := indVal.numParams
+  let nparams := indVal.numParams
   -- constant_info rec_info = env.get(mk_rec_name(n));
   -- recursor_val rec_val   = rec_info.to_recursor_val();
   let recVal : RecursorVal ← getConstInfoRec (mkRecName declName)
   -- unsigned nminors       = rec_val.get_nminors();
   let nminors := recVal.numMinors
   -- unsigned ntypeformers  = rec_val.get_nmotives();
-  let ntypeformer := recVal.numMotives
+  let ntypeformers := recVal.numMotives
   let recInfo ← getConstInfoInduct recVal.getInduct
   -- names lps              = rec_info.get_lparams();
   let lps := recInfo.levelParams
@@ -118,28 +119,29 @@ def mkBelow (declName : Name) : MetaM Unit := do
 --     --     ref_type    = rec_info.get_type();
 --     -- }
 
-    let (blvls, rlvl, ref_type) : List Name × Level × Expr := ← do
-      if isReflexive
-      then 
-        let rlvl := getDatatypeLevel (← getEnv) indInfo.type
-        -- if rlvl is of the form (max 1 l), then rlvl <- l
-        let rlvl := -- TODO: should this be normalized first?
-          match rlvl with 
-          | .max (.succ .zero) rhs => rhs 
-          | _ => rlvl
-        let rlvl := Level.max (Level.succ lvl) rlvl
-        -- TODO: is `instantiateTypeLevelParams` the correct function?
-        -- TODO: why is the `lvl` always going to be a parameter?
-        let (Level.param lvlParamId) := lvl
-          | throwError "level parameter must be a Level.param"
-        let ref_type := recInfo.type.instantiateLevelParams [lvlParamId] [Level.succ lvl]
-        pure (lps, rlvl, ref_type)
-      else 
+  let (blvls, rlvl, ref_type) ← do -- : List Name × Level × Expr := ← do
+    if isReflexive
+    then 
+      let rlvl := getDatatypeLevel (← getEnv) indInfo.type
+      -- if rlvl is of the form (max 1 l), then rlvl <- l
+      let rlvl := -- TODO: should this be normalized first?
+        match rlvl with 
+        | .max (.succ .zero) rhs => rhs 
+        | _ => rlvl
+      let rlvl := Level.max (Level.succ lvl) rlvl
+      -- TODO: is `instantiateTypeLevelParams` the correct function?
+      -- TODO: why is the `lvl` always going to be a parameter?
+      let (Level.param lvlParamId) := lvl
+        | throwError "level parameter must be a Level.param"
+      let ref_type := recInfo.type.instantiateLevelParams [lvlParamId] [Level.succ lvl]
+      pure (lps, rlvl, ref_type)
+    else 
         pure (lps, Level.max levelOne lvl, recInfo.type)
-    let typeResult := Expr.sort rlvl
 --     -- Type_result        = mk_sort(rlvl);
+  let typeResult := Expr.sort rlvl
 --     -- buffer<expr> ref_args;
 --     -- to_telescope(lctx, ngen, ref_type, ref_args);
+  forallTelescope ref_type fun refArgs _refBody => do 
 --     -- lean_assert(ref_args.size() == nparams + ntypeformers + nminors + ind_val.get_nindices() + 1);
 -- 
 --     -- // args contains the below/ibelow arguments
@@ -148,25 +150,42 @@ def mkBelow (declName : Name) : MetaM Unit := do
 --     -- // add parameters and typeformers
 --     -- for (unsigned i = 0; i < nparams; i++)
 --     --     args.push_back(ref_args[i]);
+    let args : Array Expr := refArgs
 --     -- for (unsigned i = nparams; i < nparams + ntypeformers; i++) {
 --     --     args.push_back(ref_args[i]);
 --     --     typeformer_names.push_back(fvar_name(ref_args[i]));
 --     -- }
+    -- TODO: range has no map
+    let mut typeformerNames := #[]
+    for i in [nparams:nparams+ntypeformers] do
+      typeformerNames := typeformerNames.push <| refArgs[i]! |>.fvarId! |>.name 
 --     -- // we ignore minor premises in below/ibelow
 --     -- for (unsigned i = nparams + ntypeformers + nminors; i < ref_args.size(); i++)
 --     --     args.push_back(ref_args[i]);
 -- 
 --     -- // We define below/ibelow using the recursor for this type
 --     -- levels rec_lvls       = cons(mk_succ(rlvl), lvls);
+    let recLvls : List Level := (Level.succ rlvl)::lvls
 --     -- expr rec              = mk_constant(rec_info.get_name(), rec_lvls);
+    let mut rec_ : Expr := Expr.const recInfo.name recLvls
 --     -- for (unsigned i = 0; i < nparams; i++)
 --     --     rec = mk_app(rec, args[i]);
+    rec_ := args.foldl (init := rec_) (fun accum arg => Expr.app accum arg)
 --     -- // add type formers
 --     -- for (unsigned i = nparams; i < nparams + ntypeformers; i++) {
 --     --     buffer<expr> targs;
 --     --     to_telescope(lctx, ngen, lctx.get_type(args[i]), targs);
 --     --     rec = mk_app(rec, lctx.mk_lambda(targs, Type_result));
 --     -- }
+    for i in [nparams:nparams+ntypeformers] do 
+      -- TODO: what is the correct way to convert this piece of code?
+      -- Since `forallTelescoping`'s API is continuation based, I am entirely unsure
+      --   if this way of encoding the above `for` loop is correct.
+      -- TODO: totally unsure if `inferType` is the correct way to grab the type.
+      rec_ ← forallTelescope (← inferType args[i]!) (fun targs _tbody => do
+        let lam ← mkLambdaFVars targs typeResult
+        pure <| Expr.app rec_ lam)
+-- ^^^^^^^^^^^^^^^^^^ TRANSLATED UPTO HERE ^^^^^^^^^^^^^^^^^^^^^
 --     -- // add minor premises
 --     -- for (unsigned i = nparams + ntypeformers; i < nparams + ntypeformers + nminors; i++) {
 --     --     expr minor = ref_args[i];
