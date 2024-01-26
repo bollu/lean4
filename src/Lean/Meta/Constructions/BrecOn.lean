@@ -25,6 +25,8 @@ import Lean.Meta.AppBuilder
 import Lean.Meta.RecursorInfo
 import Lean.Meta.Basic
 import Lean.Declaration
+import Lean.Modifiers
+import Lean.Server.Completion
 
 namespace Lean
 namespace BrecOn
@@ -62,6 +64,23 @@ def getDatatypeLevel (env : Environment) (type : Expr) : Level := sorry
 
 
 
+def mkDefinitionInferringUnsafe (name : Name) (levelParams : List Name) (type : Expr) (value : Expr)
+  (reducibilityHints : ReducibilityHints) : MetaM Declaration := do 
+    let env ← getEnv
+    let unsafe_ : DefinitionSafety := 
+      if env.hasUnsafe value || env.hasUnsafe type
+      then DefinitionSafety.unsafe
+      else DefinitionSafety.safe
+    return Declaration.defnDecl ({
+      name := name
+      levelParams := levelParams,
+      type := type
+      value := value,
+      hints := reducibilityHints,
+      safety := unsafe_,
+      all := [] -- TODO: is this correct?
+      : DefinitionVal
+    })
 
 
 def mkBelow (declName : Name) : MetaM Unit := do
@@ -185,48 +204,72 @@ def mkBelow (declName : Name) : MetaM Unit := do
       rec_ ← forallTelescope (← inferType args[i]!) (fun targs _tbody => do
         let lam ← mkLambdaFVars targs typeResult
         pure <| Expr.app rec_ lam)
--- ^^^^^^^^^^^^^^^^^^ TRANSLATED UPTO HERE ^^^^^^^^^^^^^^^^^^^^^
 --     -- // add minor premises
 --     -- for (unsigned i = nparams + ntypeformers; i < nparams + ntypeformers + nminors; i++) {
---     --     expr minor = ref_args[i];
---     --     expr minor_type = lctx.get_type(minor);
---     --     buffer<expr> minor_args;
---     --     minor_type = to_telescope(lctx, ngen, minor_type, minor_args);
---     --     buffer<expr> prod_pairs;
---     --     for (expr & minor_arg : minor_args) {
---     --         buffer<expr> minor_arg_args;
---     --         expr minor_arg_type = to_telescope(env, lctx, ngen, lctx.get_type(minor_arg), minor_arg_args);
---     --         if (is_typeformer_app(typeformer_names, minor_arg_type)) {
---     --             expr fst  = lctx.get_type(minor_arg);
---     --             minor_arg = lctx.mk_local_decl(ngen,
---     --                lctx.get_local_decl(minor_arg).get_user_name(), lctx.mk_pi(minor_arg_args, Type_result));
---     --             expr snd  = lctx.mk_pi(minor_arg_args, mk_app(minor_arg, minor_arg_args));
---     --             type_checker tc(env, lctx);
---     --             prod_pairs.push_back(mk_pprod(tc, fst, snd, ibelow));
---     --         }
---     --     }
---     --     type_checker tc(env, lctx);
---     --     expr new_arg = foldr([&](expr const & a, expr const & b) { return mk_pprod(tc, a, b, ibelow); },
---     --                          [&]() { return mk_unit(rlvl, ibelow); },
---     --                          prod_pairs.size(), prod_pairs.data());
---     --     rec = mk_app(rec, lctx.mk_lambda(minor_args, new_arg));
---     -- }
+      for i in [nparams+ntypeformers:nparams+ntypeformers+nminors] do 
+--       --     expr minor = ref_args[i];
+        let minor := refArgs[i]!
+--      --     expr minor_type = lctx.get_type(minor);
+        -- | TODO: check if this is the correct way to get the type.
+        let minorType := ((← getLCtx).get! minor.fvarId!).type
+--      --     buffer<expr> minor_args;
+--      --     minor_type = to_telescope(lctx, ngen, minor_type, minor_args);
+        forallTelescope minorType (fun minorArgs _tbody => do
+-- ^^^^^^^^^^^^^^^^^^ TRANSLATED UPTO HERE ^^^^^^^^^^^^^^^^^^^^^
+        sorry
+--      --     buffer<expr> prod_pairs;
+--      --     for (expr & minor_arg : minor_args) {
+--      --         buffer<expr> minor_arg_args;
+--      --         expr minor_arg_type = to_telescope(env, lctx, ngen, lctx.get_type(minor_arg), minor_arg_args);
+--      --         if (is_typeformer_app(typeformer_names, minor_arg_type)) {
+--      --             expr fst  = lctx.get_type(minor_arg);
+--      --             minor_arg = lctx.mk_local_decl(ngen,
+--      --                lctx.get_local_decl(minor_arg).get_user_name(), lctx.mk_pi(minor_arg_args, Type_result));
+--      --             expr snd  = lctx.mk_pi(minor_arg_args, mk_app(minor_arg, minor_arg_args));
+--      --             type_checker tc(env, lctx);
+--      --             prod_pairs.push_back(mk_pprod(tc, fst, snd, ibelow));
+--      --         }
+--      --     }
+--      --     type_checker tc(env, lctx);
+--      --     expr new_arg = foldr([&](expr const & a, expr const & b) { return mk_pprod(tc, a, b, ibelow); },
+--      --                          [&]() { return mk_unit(rlvl, ibelow); },
+--      --                          prod_pairs.size(), prod_pairs.data());
+--      --     rec = mk_app(rec, lctx.mk_lambda(minor_args, new_arg));
+--      -- }
+        )
+--           
+--    -- // add indices and major premise
+--    -- for (unsigned i = nparams + ntypeformers; i < args.size(); i++) {
+      for i in [nparams+ntypeformers:args.size] do 
+--    --     rec = mk_app(rec, args[i]);
+        rec_ :=  Expr.app rec_ args[i]!
+--    -- }
 -- 
---     -- // add indices and major premise
---     -- for (unsigned i = nparams + ntypeformers; i < args.size(); i++) {
---     --     rec = mk_app(rec, args[i]);
---     -- }
--- 
---     -- name below_name  = ibelow ? name{n, "ibelow"} : name{n, "below"};
---     -- expr below_type  = lctx.mk_pi(args, Type_result);
---     -- expr below_value = lctx.mk_lambda(args, rec);
--- 
---     -- declaration new_d = mk_definition_inferring_unsafe(env, below_name, blvls, below_type, below_value,
---     --                                                    reducibility_hints::mk_abbreviation());
---     -- environment new_env = env.add(new_d);
---     -- new_env = set_reducible(new_env, below_name, reducible_status::Reducible, true);
---     -- new_env = completion_add_to_black_list(new_env, below_name);
---     -- return add_protected(new_env, below_name);
+--    -- name below_name  = ibelow ? name{n, "ibelow"} : name{n, "below"};
+      let belowName : Name := 
+        if false
+        then Name.mkStr (Name.num Name.anonymous n) "below"
+        else Name.mkStr "ibelow" (Name.num Name.anonymous n)
+--    -- expr below_type  = lctx.mk_pi(args, Type_result);
+      let belowType ←  mkForallFVars args typeResult -- TODO: is this the correct function?
+--    -- expr below_value = lctx.mk_lambda(args, rec);
+      let belowValue ← mkLambdaFVars args rec_ -- TODO: is this the correct function?
+--    -- declaration new_d = mk_definition_inferring_unsafe(env, below_name, blvls, below_type, below_value,
+--    --                                                    reducibility_hints::mk_abbreviation());
+      let newD : Declaration ← 
+        mkDefinitionInferringUnsafe belowName blvls belowType belowValue 
+          ReducibilityHints.abbrev
+--    -- environment new_env = env.add(new_d);
+      modifyEnv fun env => 
+        match env.addDecl newD with
+        | Except.ok newEnv => newEnv
+        | Except.error err => env -- TODO: what to do if we get an error?
+--    -- new_env = set_reducible(new_env, below_name, reducible_status::Reducible, true);
+      setReducibilityStatus belowName ReducibilityStatus.reducible
+--    -- new_env = completion_add_to_black_list(new_env, below_name);
+      modifyEnv <| Server.Completion.addToBlackList (declName := belowName)
+--    -- return add_protected(new_env, below_name);
+      modifyEnv <| addProtected (n := belowName)
 
 
 def mkIBelow (declName : Name) : m Unit := adaptFn mkIBelowImp declName
