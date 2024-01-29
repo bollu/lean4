@@ -248,8 +248,8 @@ def mkBelow (declName : Name) : MetaM Unit := do
 --    -- name below_name  = ibelow ? name{n, "ibelow"} : name{n, "below"};
       let belowName : Name := 
         if false
-        then Name.mkStr (Name.num Name.anonymous n) "below"
-        else Name.mkStr "ibelow" (Name.num Name.anonymous n)
+        then (Name.str declName "ibelow")
+        else (Name.str declName "below")
 --    -- expr below_type  = lctx.mk_pi(args, Type_result);
       let belowType ←  mkForallFVars args typeResult -- TODO: is this the correct function?
 --    -- expr below_value = lctx.mk_lambda(args, rec);
