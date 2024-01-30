@@ -62,6 +62,17 @@ def mkUnivParam (n : Name) : Level := mkLevelParam n
 
 def getDatatypeLevel (env : Environment) (type : Expr) : Level := sorry
 
+def isTypeformerApp (typeformerNames : Array Name) (e : Expr) : Option Nat :=  Id.run do
+  let fn := e.appFn!
+  if !fn.isFVar
+  then .none
+  else do
+    let mut r := 0
+    for name in typeformerNames do 
+      if fn.fvarId!.name == name 
+      then return .some r
+      r := r + 1
+    return .none
 
 
 def mkDefinitionInferringUnsafe (name : Name) (levelParams : List Name) (type : Expr) (value : Expr)
@@ -81,7 +92,6 @@ def mkDefinitionInferringUnsafe (name : Name) (levelParams : List Name) (type : 
       all := [] -- TODO: is this correct?
       : DefinitionVal
     })
-
 
 def mkBelow (declName : Name) : MetaM Unit := do
   if ! (← isRecursiveDatatype declName) then return ()
@@ -169,7 +179,7 @@ def mkBelow (declName : Name) : MetaM Unit := do
 --     -- // add parameters and typeformers
 --     -- for (unsigned i = 0; i < nparams; i++)
 --     --     args.push_back(ref_args[i]);
-    let args : Array Expr := refArgs
+    let mut args : Array Expr := #[]
 --     -- for (unsigned i = nparams; i < nparams + ntypeformers; i++) {
 --     --     args.push_back(ref_args[i]);
 --     --     typeformer_names.push_back(fvar_name(ref_args[i]));
@@ -177,6 +187,7 @@ def mkBelow (declName : Name) : MetaM Unit := do
     -- TODO: range has no map
     let mut typeformerNames := #[]
     for i in [nparams:nparams+ntypeformers] do
+      args := args.push <| refArgs[i]!
       typeformerNames := typeformerNames.push <| refArgs[i]! |>.fvarId! |>.name 
 --     -- // we ignore minor premises in below/ibelow
 --     -- for (unsigned i = nparams + ntypeformers + nminors; i < ref_args.size(); i++)
@@ -213,13 +224,16 @@ def mkBelow (declName : Name) : MetaM Unit := do
         -- | TODO: check if this is the correct way to get the type.
         let minorType := ((← getLCtx).get! minor.fvarId!).type
 --      --     buffer<expr> minor_args;
+        rec_ ←  Meta.forallTelescope minorType (fun minorArgs minorType => do
 --      --     minor_type = to_telescope(lctx, ngen, minor_type, minor_args);
-        forallTelescope minorType (fun minorArgs _tbody => do
 --      --     buffer<expr> prod_pairs;
+          let mut prodPairs : Array Expr := #[]
+          for minorArg in minorArgs do
 --      --     for (expr & minor_arg : minor_args) {
 --      --         buffer<expr> minor_arg_args;
 --      --         expr minor_arg_type = to_telescope(env, lctx, ngen, lctx.get_type(minor_arg), minor_arg_args);
---      --         if (is_typeformer_app(typeformer_names, minor_arg_type)) {
+                
+--      --         if (is_typeformer_app(typeformer_names, minor_arg_type)) { -- TODO: what is 'is_typeformer_app equialent?
 --      --             expr fst  = lctx.get_type(minor_arg);
 --      --             minor_arg = lctx.mk_local_decl(ngen,
 --      --                lctx.get_local_decl(minor_arg).get_user_name(), lctx.mk_pi(minor_arg_args, Type_result));
@@ -228,14 +242,33 @@ def mkBelow (declName : Name) : MetaM Unit := do
 --      --             prod_pairs.push_back(mk_pprod(tc, fst, snd, ibelow));
 --      --         }
 --      --     }
+            let pair? ← Meta.forallTelescope (← inferType minorArg) (fun minorArgArgs minorArgType => do
+              if (isTypeformerApp typeformerNames minorArgType).isSome then 
+                let fst ← inferType minorArg
+                --                TODO: does this ACTUALLY mutate the array as it goes along? If so, this should be refactored into a new fn.
+                -- | TODO: how to edit the local decl? I need a function with signature `MetaM Unit`.
+                let minorArg := (← getLCtx).mkLocalDecl
+                                  (fvarId := sorry) -- TODO: what's the correct fvarId?
+                                  (userName := ((← getLCtx).get! minorArg.fvarId!).userName)
+                                  (type := (← getLCtx).mkForall minorArgArgs typeResult)
+                -- TODO: the `sorry` should be minorArg, but I don't know how to add stuff into the local context.
+                let snd := (← getLCtx).mkForall minorArgs (← mkAppM' sorry minorArgArgs)
+                pure <| Option.some (← Lean.Meta.mkAppM ``PProd.mk #[fst, snd])
+              else pure Option.none)
+            prodPairs := 
+              match pair? with 
+              | Option.some pair => prodPairs.push pair
+              | Option.none => prodPairs
 --      --     type_checker tc(env, lctx);
 --      --     expr new_arg = foldr([&](expr const & a, expr const & b) { return mk_pprod(tc, a, b, ibelow); },
 --      --                          [&]() { return mk_unit(rlvl, ibelow); },
 --      --                          prod_pairs.size(), prod_pairs.data());
+            let newArg ← prodPairs.foldrM (init := ← Lean.Meta.mkAppM ``Unit.unit #[])
+                                          (f := fun a b => Lean.Meta.mkAppM ``PProd.mk #[a, b])
 --      --     rec = mk_app(rec, lctx.mk_lambda(minor_args, new_arg));
+            let rec_ := mkApp rec_ (← mkLambdaFVars minorArgs newArg)
 --      -- }
-        )
---           
+          pure rec_)
 --    -- // add indices and major premise
 --    -- for (unsigned i = nparams + ntypeformers; i < args.size(); i++) {
       for i in [nparams+ntypeformers:args.size] do 
