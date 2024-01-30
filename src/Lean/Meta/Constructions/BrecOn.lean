@@ -215,8 +215,6 @@ def mkBelow (declName : Name) : MetaM Unit := do
 --      --     buffer<expr> minor_args;
 --      --     minor_type = to_telescope(lctx, ngen, minor_type, minor_args);
         forallTelescope minorType (fun minorArgs _tbody => do
--- ^^^^^^^^^^^^^^^^^^ TRANSLATED UPTO HERE ^^^^^^^^^^^^^^^^^^^^^
-        sorry
 --      --     buffer<expr> prod_pairs;
 --      --     for (expr & minor_arg : minor_args) {
 --      --         buffer<expr> minor_arg_args;
