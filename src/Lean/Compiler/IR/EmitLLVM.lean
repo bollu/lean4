@@ -1456,8 +1456,8 @@ def emitMainFn (mod : LLVM.Module llvmctx) (builder : LLVM.Builder llvmctx) : M 
   unless xs.size == 2 || xs.size == 1 do throw s!"Invalid main function, main expected to have '2' or '1' arguments, found '{xs.size}' arguments"
   let env ← getEnv
   let usesLeanAPI := usesModuleFrom env `Lean
-  let mainTy ← LLVM.functionType (← LLVM.i64Type llvmctx)
-      #[(← LLVM.i64Type llvmctx), (← LLVM.pointerType (← LLVM.voidPtrType llvmctx))]
+  let mainTy ← LLVM.functionType (← LLVM.i32Type llvmctx)
+      #[(← LLVM.i32Type llvmctx), (← LLVM.pointerType (← LLVM.voidPtrType llvmctx))]
   let main ← LLVM.getOrAddFunction mod "main" mainTy
   let entry ← LLVM.appendBasicBlockInContext llvmctx main "entry"
   LLVM.positionBuilderAtEnd builder entry
@@ -1468,7 +1468,7 @@ def emitMainFn (mod : LLVM.Module llvmctx) (builder : LLVM.Builder llvmctx) : M 
   -/
   let inty ← LLVM.voidPtrType llvmctx
   let inslot ← buildPrologueAlloca builder (← LLVM.pointerType inty) "in"
-  let resty ← LLVM.voidPtrType llvmctx
+  let resty ← LLVM.i32Type llvmctx
   let res ← buildPrologueAlloca builder (← LLVM.pointerType resty) "res"
   if usesLeanAPI then callLeanInitialize builder else callLeanInitializeRuntimeModule builder
     /- We disable panic messages because they do not mesh well with extracted closed terms.
