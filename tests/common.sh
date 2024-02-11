@@ -30,13 +30,8 @@ function compile_lean_c_backend {
 }
 
 function compile_lean_llvm_backend {
-    set -o xtrace
-    rm "*.ll" || true # remove debugging files.
-    rm "*.bc" || true # remove bitcode files
-    rm "*.o" || true # remove object files
     lean --bc="$f.linked.bc" "$f" || fail "Failed to compile $f into bitcode file"
     leanc ${LEANC_OPTS-} -O3 -DNDEBUG -o "$f.out" "$@" "$f.linked.bc" || fail "Failed to link object file '$f.linked.bc'"
-    set +o xtrace
 }
 
 function exec_capture {

@@ -491,7 +491,7 @@ def emitFnDeclAux (mod : LLVM.Module llvmctx)
         LLVM.getOrAddFunction mod cppBaseName fnty
   -- we must now set symbol visibility for global.
   if ps.isEmpty then
-    if isClosedTermName env decl.name then LLVM.setVisibility global LLVM.Visibility.hidden -- static
+    if isClosedTermName env decl.name then LLVM.setLinkage global LLVM.Linkage.internal -- static
     else if isExternal then pure () -- extern (Recall that C/LLVM funcs are extern linkage by default.)
     else LLVM.setDLLStorageClass global LLVM.DLLStorageClass.export  -- LEAN_EXPORT
   else if !isExternal
@@ -1211,7 +1211,7 @@ def emitDeclAux (mod : LLVM.Module llvmctx) (builder : LLVM.Builder llvmctx) (d 
       --       Find the spots where this refactor needs to happen by grepping for 'LEAN_EXPORT'
       --       in the C backend
       if xs.size == 0 then
-        LLVM.setVisibility llvmfn LLVM.Visibility.hidden -- "static "
+        LLVM.setLinkage llvmfn LLVM.Linkage.internal -- "static "
       else
         LLVM.setDLLStorageClass llvmfn LLVM.DLLStorageClass.export  -- LEAN_EXPORT: make symbol visible to the interpreter
       withReader (fun llvmctx => { llvmctx with mainFn := f, mainParams := xs }) do
@@ -1329,7 +1329,7 @@ def emitInitFn (mod : LLVM.Module llvmctx) (builder : LLVM.Builder llvmctx) : M 
   LLVM.positionBuilderAtEnd builder entryBB
   let ginit?ty := ← LLVM.i1Type llvmctx
   let ginit?slot ← LLVM.getOrAddGlobal mod (modName.mangle ++ "_G_initialized") ginit?ty
-  LLVM.setVisibility ginit?slot LLVM.Visibility.hidden -- static
+  LLVM.setLinkage ginit?slot LLVM.Linkage.internal -- static
   LLVM.setInitializer ginit?slot (← LLVM.constFalse llvmctx)
   let ginit?v ← LLVM.buildLoad2 builder ginit?ty ginit?slot "init_v"
   buildIfThen_ builder "isGInitialized" ginit?v
