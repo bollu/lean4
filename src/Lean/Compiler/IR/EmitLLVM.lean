@@ -493,13 +493,13 @@ def emitFnDeclAux (mod : LLVM.Module llvmctx)
   if ps.isEmpty then
     if isClosedTermName env decl.name then LLVM.setLinkage global LLVM.Linkage.internal -- static
     else if isExternal then pure () -- extern (Recall that C/LLVM funcs are extern linkage by default.)
-    else LLVM.setDLLStorageClass global LLVM.DLLStorageClass.export  -- LEAN_EXPORT
+    else pure () -- LLVM.setDLLStorageClass global LLVM.DLLStorageClass.export  -- LEAN_EXPORT
   else if !isExternal
     -- An extern decl might be linked in from a different translation unit.
     -- Thus, we cannot export an external declaration as we do not define it,
     -- only declare its presence.
     -- So, we only export non-external definitions.
-    then LLVM.setDLLStorageClass global LLVM.DLLStorageClass.export
+    then pure () -- LLVM.setDLLStorageClass global LLVM.DLLStorageClass.export
   return global
 
 
@@ -1213,7 +1213,8 @@ def emitDeclAux (mod : LLVM.Module llvmctx) (builder : LLVM.Builder llvmctx) (d 
       if xs.size == 0 then
         LLVM.setLinkage llvmfn LLVM.Linkage.internal -- "static "
       else
-        LLVM.setDLLStorageClass llvmfn LLVM.DLLStorageClass.export  -- LEAN_EXPORT: make symbol visible to the interpreter
+        pure ()
+        -- LLVM.setDLLStorageClass llvmfn LLVM.DLLStorageClass.export  -- LEAN_EXPORT: make symbol visible to the interpreter
       withReader (fun llvmctx => { llvmctx with mainFn := f, mainParams := xs }) do
         set { var2val := default, jp2bb := default : EmitLLVM.State llvmctx } -- flush variable map
         let bb ← LLVM.appendBasicBlockInContext llvmctx llvmfn "entry"
