@@ -1570,7 +1570,7 @@ def emitMainFnIfNeeded (mod : LLVM.Module llvmctx) (builder : LLVM.Builder llvmc
   if (← hasMainFn) then emitMainFn mod builder
 
 def main : M llvmctx Unit := do
-  emitFnDecls
+  -- emitFnDecls
   let builder ← LLVM.createBuilderInContext llvmctx
   emitFns (← getLLVMModule) builder
   emitInitFn (← getLLVMModule) builder
