@@ -1462,6 +1462,7 @@ def emitMainFn (mod : LLVM.Module llvmctx) (builder : LLVM.Builder llvmctx) : M 
   let mainTy ← LLVM.functionType (← LLVM.i32Type llvmctx)
       #[(← LLVM.i32Type llvmctx), (← LLVM.pointerType (← LLVM.voidPtrType llvmctx))]
   let main ← LLVM.getOrAddFunction mod "main" mainTy
+  LLVM.setVisibility main LLVM.Visibility.hidden
   let entry ← LLVM.appendBasicBlockInContext llvmctx main "entry"
   LLVM.positionBuilderAtEnd builder entry
   /-
