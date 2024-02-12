@@ -103,6 +103,9 @@ def getDecl (n : Name) : M llvmctx Decl := do
 def constInt8 (n : Nat) : M llvmctx (LLVM.Value llvmctx) :=  do
     LLVM.constInt8 llvmctx (UInt64.ofNat n)
 
+def constInt32 (n : Nat) : M llvmctx (LLVM.Value llvmctx) :=  do
+    LLVM.constInt32 llvmctx (UInt64.ofNat n)
+
 def constInt64 (n : Nat) : M llvmctx (LLVM.Value llvmctx) :=  do
     LLVM.constInt64 llvmctx (UInt64.ofNat n)
 
@@ -1456,7 +1459,7 @@ def emitMainFn (mod : LLVM.Module llvmctx) (builder : LLVM.Builder llvmctx) : M 
   unless xs.size == 2 || xs.size == 1 do throw s!"Invalid main function, main expected to have '2' or '1' arguments, found '{xs.size}' arguments"
   let env ← getEnv
   let usesLeanAPI := usesModuleFrom env `Lean
-  let mainTy ← LLVM.functionType (← LLVM.i64Type llvmctx)
+  let mainTy ← LLVM.functionType (← LLVM.i32Type llvmctx)
       #[(← LLVM.i32Type llvmctx), (← LLVM.pointerType (← LLVM.voidPtrType llvmctx))]
   let main ← LLVM.getOrAddFunction mod "main" mainTy
   let entry ← LLVM.appendBasicBlockInContext llvmctx main "entry"
@@ -1544,7 +1547,7 @@ def emitMainFn (mod : LLVM.Module llvmctx) (builder : LLVM.Builder llvmctx) : M 
         pure ShouldForwardControlFlow.no
       else do
         callLeanDecRef builder resv
-        let _ ← LLVM.buildRet builder (← constInt64 0)
+        let _ ← LLVM.buildRet builder (← constInt32 0)
         pure ShouldForwardControlFlow.no
 
     )
@@ -1552,7 +1555,7 @@ def emitMainFn (mod : LLVM.Module llvmctx) (builder : LLVM.Builder llvmctx) : M 
         let resv ← LLVM.buildLoad2 builder resty res "resv"
         callLeanIOResultShowError builder resv
         callLeanDecRef builder resv
-        let _ ← LLVM.buildRet builder (← constInt64 1)
+        let _ ← LLVM.buildRet builder (← constInt32 1)
         pure ShouldForwardControlFlow.no)
   -- at the merge
   let _ ← LLVM.buildUnreachable builder
