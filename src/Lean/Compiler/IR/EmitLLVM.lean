@@ -1457,7 +1457,7 @@ def emitMainFn (mod : LLVM.Module llvmctx) (builder : LLVM.Builder llvmctx) : M 
   let env ← getEnv
   let usesLeanAPI := usesModuleFrom env `Lean
   let mainTy ← LLVM.functionType (← LLVM.i64Type llvmctx)
-      #[(← LLVM.i64Type llvmctx), (← LLVM.pointerType (← LLVM.voidPtrType llvmctx))]
+      #[(← LLVM.i32Type llvmctx), (← LLVM.pointerType (← LLVM.voidPtrType llvmctx))]
   let main ← LLVM.getOrAddFunction mod "main" mainTy
   let entry ← LLVM.appendBasicBlockInContext llvmctx main "entry"
   LLVM.positionBuilderAtEnd builder entry
