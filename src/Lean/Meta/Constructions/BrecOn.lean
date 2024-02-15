@@ -47,12 +47,6 @@ variable [Monad m] [MonadEnv m] [MonadError m] [MonadOptions m]
   let env ← ofExceptKernelException (f (← getEnv) declName)
   modifyEnv fun _ => env
 
-
-abbrev MkBelowM := StateT LocalContext MetaM
-
-def MkBelowM.getLocalCtx : MkBelowM LocalContext := StateT.get
-def MkBelowM.setLocalCtx : LocalContext → MkBelowM Unit := StateT.set
-
 def mkCasesOn (declName : Name) : m Unit := adaptFn mkCasesOnImp declName
 def mkRecOn (declName : Name) : m Unit := adaptFn mkRecOnImp declName
 def mkNoConfusionCore (declName : Name) : m Unit := adaptFn mkNoConfusionCoreImp declName
@@ -67,7 +61,39 @@ def isRecursiveDatatype (declName : Name) : MetaM Bool := do
 def mkUnivParam (n : Name) : Level := mkLevelParam n
 
 -- forallTelescopeReducing, isInductivePredicate
-def getDatatypeLevel (env : Environment) (type : Expr) : Level := sorry
+/-- Return `true` if `declName` is an inductive predicate. That is, `inductive` type in `Prop`. -/
+/-
+def isInductivePredicate (declName : Name) : MetaM Bool := do
+  match (← getEnv).find? declName with
+  | some (.inductInfo { type := type, ..}) =>
+    forallTelescopeReducing type fun _ type => do
+      match (← whnfD type) with
+      | .sort u .. => return u == levelZero
+      | _ => return false
+  | _ => return false
+-/
+/-
+level get_datatype_level(environment const & env, expr const & ind_type) {
+    local_ctx lctx;
+    name_generator ngen(*g_util_fresh);
+    expr it = type_checker(env, lctx).whnf(ind_type);
+    while (is_pi(it)) {
+        expr local = lctx.mk_local_decl(ngen, binding_name(it), binding_domain(it), binding_info(it));
+        it = type_checker(env, lctx).whnf(instantiate(binding_body(it), local));
+    }
+    if (is_sort(it)) {
+        return sort_level(it);
+    } else {
+        throw exception("invalid inductive datatype type");
+    }
+}
+-/
+
+def getDatatypeLevel (env_ : Environment) (type : Expr) : MetaM Level :=
+  Meta.forallTelescopeReducing type fun args body =>
+    if body.isSort
+    then return body.sortLevel!
+    else throwError "invalid inductive datatype type"
 
 def isTypeformerApp (typeformerNames : Array Name) (e : Expr) : Option Nat :=  Id.run do
   let fn := e.appFn!
@@ -133,7 +159,7 @@ def mkRefType (isReflexive : Bool) (indInfo : ConstantInfo) (recInfo : Inductive
     return (blvls, rlvl, refType)
   else if isReflexive
   then
-    let rlvl := getDatatypeLevel (← getEnv) indInfo.type
+    let rlvl ← getDatatypeLevel (← getEnv) indInfo.type
     -- if rlvl is of the form (max 1 l), then rlvl <- l
     let rlvl := -- TODO: should this be normalized first?
       match rlvl with
@@ -311,26 +337,6 @@ def addRecMinorPremiseAddMinorArg (minorArgs : Array Expr) (minorArg : Expr)
     let pair := (← Lean.Meta.mkAppM ``PProd.mk #[fst, snd])
     prodPairs := prodPairs.push pair
   return (minorArg, prodPairs)
-/-
-    let pair? ← Meta.forallTelescope (← inferType minorArg) (fun minorArgArgs minorArgType => do
-      if (isTypeformerApp typeformerNames minorArgType).isSome then
-        let fst ← inferType minorArg
-        let minorArg := (← getLCtx).mkLocalDecl
-                          (fvarId := sorry) -- TODO: what's the correct fvarId?
-                          (userName := ((← getLCtx).get! minorArg.fvarId!).userName)
-                          (type := (← getLCtx).mkForall minorArgArgs typeResult)
-        let snd := (← getLCtx).mkForall minorArgs (← mkAppM' sorry minorArgArgs)
-        pure <| Option.some (← Lean.Meta.mkAppM ``PProd.mk #[fst, snd])
-      else pure Option.none)
-    prodPairs :=
-      match pair? with
-      | Option.some pair => prodPairs.push pair
-      | Option.none => prodPairs
-    let newArg ← prodPairs.foldrM (init := ← Lean.Meta.mkAppM ``Unit.unit #[])
-                                  (f := fun a b => Lean.Meta.mkAppM ``PProd.mk #[a, b])
-    let rec_ := mkApp rec_ (← mkLambdaFVars minorArgs newArg)
-  pure rec_)
--/
 
 def addRecMinorPremises (rec_ : Expr) (refArgs : Array Expr) (typeformerNames : Array Name)
     (nparams ntypeformers nminors : Nat) : MetaM Expr := do
