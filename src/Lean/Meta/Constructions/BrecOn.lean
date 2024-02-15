@@ -47,6 +47,12 @@ variable [Monad m] [MonadEnv m] [MonadError m] [MonadOptions m]
   let env ← ofExceptKernelException (f (← getEnv) declName)
   modifyEnv fun _ => env
 
+
+abbrev MkBelowM := StateT LocalContext MetaM
+
+def MkBelowM.getLocalCtx : MkBelowM LocalContext := StateT.get
+def MkBelowM.setLocalCtx : LocalContext → MkBelowM Unit := StateT.set
+
 def mkCasesOn (declName : Name) : m Unit := adaptFn mkCasesOnImp declName
 def mkRecOn (declName : Name) : m Unit := adaptFn mkRecOnImp declName
 def mkNoConfusionCore (declName : Name) : m Unit := adaptFn mkNoConfusionCoreImp declName
@@ -60,6 +66,7 @@ def isRecursiveDatatype (declName : Name) : MetaM Bool := do
 -- level mk_univ_param(name const & n) { return level(lean_level_mk_param(n.to_obj_arg())); }
 def mkUnivParam (n : Name) : Level := mkLevelParam n
 
+-- forallTelescopeReducing, isInductivePredicate
 def getDatatypeLevel (env : Environment) (type : Expr) : Level := sorry
 
 def isTypeformerApp (typeformerNames : Array Name) (e : Expr) : Option Nat :=  Id.run do
