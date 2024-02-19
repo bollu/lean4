@@ -41,6 +41,12 @@ open Lean Meta
 @[extern "lean_mk_brec_on"] opaque mkBRecOnImp (env : Environment) (declName : @& Name) : Except KernelException Environment
 @[extern "lean_mk_binduction_on"] opaque mkBInductionOnImp (env : Environment) (declName : @& Name) : Except KernelException Environment
 
+abbrev MkBelowM := StateT LocalContext MetaM
+
+def MkBelowM.inferType (e : Expr) : MkBelowM Expr := do
+  let lctx : LocalContext ← get
+  Meta.withLCtx lctx (← Meta.getLocalInstances) (Meta.inferType e)
+
 variable [Monad m] [MonadEnv m] [MonadError m] [MonadOptions m]
 
 @[inline] private def adaptFn (f : Environment → Name → Except KernelException Environment) (declName : Name) : m Unit := do
@@ -374,6 +380,29 @@ def addRecTypeformers (rec_ : Expr) (args : Array Expr) (typeResult : Expr) (npa
     rec_ ← mkLambdaFVars targs typeResult
   return rec_
 
+/-
+
+Uses ot `to_telescope`:
+
+#### 81:to_telescope(lctx, ngen, ref_type, ref_args)
+- used line 111:expr minor = ref_args[i].
+
+#### 106:to_telescope(lctx, ngen, lctx.get_type(args[i]), targs)
+- 107:rec = mk_app(rec, lctx.mk_lambda(targs, Type_result));`
+- Live range ends immediately.
+
+#### 114:to_telescope(lctx, ngen, minor_type, minor_args);
+- Live range ends after a loop.
+- 131:rec = mk_app(rec, lctx.mk_lambda(minor_args, new_arg));
+
+
+#### 118:minor_arg_type = to_telescope(env, lctx, ngen, lctx.get_type(minor_arg), minor_arg_args);
+- Live range ends 4 lines after straight line code.
+- 119:if (is_typeformer_app(typeformer_names, minor_arg_type)) ...
+- 121:minor_arg = lctx.mk_local_decl(ngen, lctx.get_local_decl(minor_arg).get_user_name(), lctx.mk_pi(minor_arg_args, Type_result));
+- 122:expr snd = lctx.mk_pi(minor_arg_args, mk_app(minor_arg, minor_arg_args));
+
+-/
 
 -- Since `forallTelescoping`'s API is continuation based, I am entirely unsure
 --   if this way of encoding the above `for` loop is correct.
@@ -412,6 +441,7 @@ def mkBelow' (declName : Name) (ibelow : Bool) : MetaM Unit := do
   let lps := recInfo.levelParams
   let isReflexive := indVal.isReflexive
   let lvl := mkUnivParam lps[0]!
+
   let lvls := lps |>.drop 1 |>.map mkLevelParam
   adaptFn mkBelowImp declName
 
