@@ -272,7 +272,7 @@ static environment mk_below(environment const & env, name const & n, bool ibelow
         buffer<expr> minor_args;
         minor_type = to_telescope(lctx, ngen, minor_type, minor_args);
         buffer<expr> prod_pairs;
-        vvvvvv addRecMinorPremiseAddMinorArg vvvvvvvvvvvvvv
+        vvvvvv addRecMinorPremisesAddMinorArgLoopIterK vvvvvvvvvvvvvv
         for (expr & minor_arg : minor_args) {
             buffer<expr> minor_arg_args;
             expr minor_arg_type = to_telescope(env, lctx, ngen, lctx.get_type(minor_arg), minor_arg_args);
@@ -322,48 +322,68 @@ def addRecParams (rec_ : Expr) (args : Array Expr) (nparams : Nat) : MetaM Expr 
   return rec_
 
 
-def addRecMinorPremiseAddMinorArg (minorArgs : Array Expr) (minorArg : Expr)
-    (typeformerNames : Array Name) (prodPairs : Array Expr) :
-    MetaM (Expr × Array Expr) := do
-  let mut prodPairs := prodPairs
-  let (minorArgArgs, minorArgType) ← forallTelescope (← inferType minorArg)
-    (fun minorArgArgs minorArgType => return (minorArgArgs, minorArgType))
-  let mut minorArg := minorArg
-  if (isTypeformerApp typeformerNames minorArgType).isSome then
-    let fst ← inferType minorArg
-    -- | TODO: still not sure how to create a new local decl.
-    -- `withLocalDecl` expects a continuation, which makes the rest of the code
-    --   also need to be CPSd. This seems super painful, especially because
-    --   the call site of this function performs a loop, which is even more annoying to CPS!
-    -- minorArg := (← getLCtx).mkLocalDecl
-    --                   (fvarId := sorry) -- TODO: what's the correct fvarId?
-    --                   (userName := ((← getLCtx).get! minorArg.fvarId!).userName)
-    --                   (type := (← getLCtx).mkForall minorArgArgs typeResult)
-    let snd := (← getLCtx).mkForall minorArgs (← mkAppM' minorArg minorArgArgs)
-    let pair := (← Lean.Meta.mkAppM ``PProd.mk #[fst, snd])
-    prodPairs := prodPairs.push pair
-  return (minorArg, prodPairs)
+def addRecMinorPremisesAddMinorArgLoopIterK (typeResult : Expr)
+    (minorArgs : Array Expr) (minorArgIx : Nat)
+    (typeformerNames : Array Name) (prodPairs : Array Expr)
+    (k : (minorArg: Expr) → (minorArgs : Array Expr) → (prodPairs: Array Expr) → MetaM α) :
+    MetaM α := do
+    -- MetaM (Expr × Array Expr) := do
+  let minorArg := minorArgs[minorArgIx]!
+  forallTelescope (← inferType minorArg) fun minorArgArgs minorArgType => do
+    if (isTypeformerApp typeformerNames minorArgType).isSome then
+      let fst ← inferType minorArg
+      let type ← mkForallFVars minorArgArgs typeResult
+      withLocalDecl (name := minorArg.fvarId!.name) (bi := BinderInfo.default) (type := type) fun minorArg => do
+        let snd ← mkForallFVars minorArgs (← mkAppM' minorArg minorArgArgs)
+        let pair ← Lean.Meta.mkAppM ``PProd.mk #[fst, snd]
+        let prodPairs := prodPairs.push pair
+        let minorArgs := minorArgs.set! minorArgIx minorArg
+        k minorArg minorArgs prodPairs
+    else
+      k minorArg minorArgs #[]
 
-def addRecMinorPremises (rec_ : Expr) (refArgs : Array Expr) (typeformerNames : Array Name)
+
+/-
+for (unsigned i = nparams; i < nparams + ntypeformers; i++) {
+    buffer<expr> targs;
+    to_telescope(lctx, ngen, lctx.get_type(args[i]), targs);
+    rec = mk_app(rec, lctx.mk_lambda(targs, Type_result));
+}
+-/
+def addRecMinorPremiseAddMinorArgsLoopK (typeResult : Expr)
+    (rec_ : Expr) (refArgs : Array Expr) (typeformerNames : Array Name)
+    (minorArgs : Array Expr) (prodPairs : Array Expr)
+    (nparams ntypeformers nminors : Nat)
+    (minorArgIx : Nat)
+    (k: (rec_ : Expr) → (minorArgs : Array Expr) → (prodPairs : Array Expr) → MetaM α)
+    : MetaM α := do
+  if minorArgIx == minorArgs.size then k rec_ minorArgs prodPairs
+  else
+    addRecMinorPremisesAddMinorArgLoopIterK typeResult
+      minorArgs minorArgIx typeformerNames prodPairs fun minorArg minorArgs prodPairs => do
+        let minorArgs := minorArgs.set! minorArgIx minorArg
+        sorry
+
+
+def addRecMinorPremises (typeResult : Expr)
+    (rec_ : Expr) (refArgs : Array Expr) (typeformerNames : Array Name)
     (nparams ntypeformers nminors : Nat) : MetaM Expr := do
   let mut rec_ := rec_
   for i in [nparams+ntypeformers:nparams+ntypeformers+nminors] do
     let minor := refArgs[i]!
     let minorType := ((← getLCtx).get! minor.fvarId!).type
-    let (minorArgs_, minorType) ← Meta.forallTelescope minorType (fun minorArgs minorType => return (minorArgs, minorType))
-    let mut minorArgs := minorArgs_
-    let mut prodPairs : Array Expr := #[]
-    for i in [0:minorArgs.size] do
-      let minorArg := minorArgs[i]!
-      let (minorArg, prodPairs_) ← addRecMinorPremiseAddMinorArg minorArgs minorArg typeformerNames prodPairs
-      prodPairs := prodPairs_
-      minorArgs := minorArgs.set! i minorArg
-
-    let newArg ← prodPairs.foldrM
-      (init := ← Lean.Meta.mkAppM ``Unit.unit #[])
-      (f := fun a b => Lean.Meta.mkAppM ``PProd.mk #[a, b])
-    rec_ :=  Expr.app rec_ ((← getLCtx).mkLambda minorArgs newArg)
+    rec_ ← Meta.forallTelescope minorType (fun minorArgs minorType => do
+      let mut prodPairs : Array Expr := #[]
+      addRecMinorPremiseAddMinorArgsLoopK typeResult rec_ refArgs typeformerNames minorArgs prodPairs nparams ntypeformers nminors
+        (minorArgIx := 0) fun rec_ minorArgs prodPairs => do
+          let newArg ← prodPairs.foldrM
+            (init := ← Lean.Meta.mkAppM ``Unit.unit #[])
+            (f := fun a b => Lean.Meta.mkAppM ``PProd.mk #[a, b])
+          let rec_ :=  Expr.app rec_ ((← getLCtx).mkLambda minorArgs newArg)
+          return rec_)
   return rec_
+
+
 
 
 /-
@@ -376,8 +396,8 @@ for (unsigned i = nparams; i < nparams + ntypeformers; i++) {
 def addRecTypeformers (rec_ : Expr) (args : Array Expr) (typeResult : Expr) (nparams ntypeformers : Nat) : MetaM Expr := do
   let mut rec_ := rec_
   for i in [nparams:nparams+ntypeformers] do
-    let targs ← Meta.forallTelescope (← inferType args[i]!) (fun targs _ => return targs)
-    rec_ ← mkLambdaFVars targs typeResult
+    rec_ ← Meta.forallTelescope (← inferType args[i]!) (fun targs _ =>
+      mkLambdaFVars targs typeResult)
   return rec_
 
 /-
@@ -428,6 +448,35 @@ def mkArgsAndTypeformerNames (refArgs : Array Expr) (nparams ntypeformers nminor
       args := args.push <| refArgs[i]!
     return (args, typeformerNames)
 
+def mkBelow'RefArgsTelescopeK (declName : Name) (ibelow : Bool)
+  (nparams ntypeformers nminors : Nat)
+  (blvls : List Name) (rlvl : Level) (lvls : List Level)
+  (recInfo : InductiveVal)
+  (typeResult : Expr)
+  (refArgs : Array Expr) : MetaM Unit := do
+  let (args, typeformerNames) ← mkArgsAndTypeformerNames refArgs nparams ntypeformers nminors
+  let recLvls : List Level := (Level.succ rlvl)::lvls
+  let mut rec_ : Expr := Expr.const recInfo.name recLvls
+  rec_ ← addRecParams rec_ args nparams
+  rec_ ← addRecTypeformers rec_ args typeResult nparams ntypeformers
+  rec_ ← addRecMinorPremises typeResult rec_ refArgs typeformerNames nparams ntypeformers nminors
+  let belowName : Name :=
+    if ibelow
+    then (Name.str declName "ibelow")
+    else (Name.str declName "below")
+  let belowType ←  mkForallFVars args typeResult -- TODO: is this the correct function?
+  let belowValue ← mkLambdaFVars args rec_ -- TODO: is this the correct function?
+  let newD : Declaration ←
+    mkDefinitionInferringUnsafe belowName blvls belowType belowValue
+      ReducibilityHints.abbrev
+  modifyEnv fun env =>
+    match env.addDecl newD with
+    | Except.ok newEnv => newEnv
+    | Except.error err => env -- TODO: what to do if we get an error?
+  setReducibilityStatus belowName ReducibilityStatus.reducible
+  modifyEnv <| Server.Completion.addToBlackList (declName := belowName)
+  modifyEnv <| addProtected (n := belowName)
+
 def mkBelow' (declName : Name) (ibelow : Bool) : MetaM Unit := do
   if ! (← isRecursiveDatatype declName) then return ()
   if (← isInductivePredicate declName) then return ()
@@ -447,29 +496,13 @@ def mkBelow' (declName : Name) (ibelow : Bool) : MetaM Unit := do
 
   let (blvls, rlvl, ref_type) ← mkRefType isReflexive indInfo recInfo lvl lps ibelow
   let typeResult := Expr.sort rlvl
-  let refArgs ← Meta.forallTelescope ref_type (fun refArgs _ => return refArgs)
-  let (args, typeformerNames) ← mkArgsAndTypeformerNames refArgs nparams ntypeformers nminors
-  let recLvls : List Level := (Level.succ rlvl)::lvls
-  let mut rec_ : Expr := Expr.const recInfo.name recLvls
-  rec_ ← addRecParams rec_ args nparams
-  rec_ ← addRecTypeformers rec_ args typeResult nparams ntypeformers
-  rec_ ← addRecMinorPremises rec_ refArgs typeformerNames nparams ntypeformers nminors
-  let belowName : Name :=
-    if ibelow
-    then (Name.str declName "ibelow")
-    else (Name.str declName "below")
-  let belowType ←  mkForallFVars args typeResult -- TODO: is this the correct function?
-  let belowValue ← mkLambdaFVars args rec_ -- TODO: is this the correct function?
-  let newD : Declaration ←
-    mkDefinitionInferringUnsafe belowName blvls belowType belowValue
-      ReducibilityHints.abbrev
-  modifyEnv fun env =>
-    match env.addDecl newD with
-    | Except.ok newEnv => newEnv
-    | Except.error err => env -- TODO: what to do if we get an error?
-  setReducibilityStatus belowName ReducibilityStatus.reducible
-  modifyEnv <| Server.Completion.addToBlackList (declName := belowName)
-  modifyEnv <| addProtected (n := belowName)
+  Meta.forallTelescope ref_type <| fun refArgs _ => mkBelow'RefArgsTelescopeK
+    (declName := declName) (ibelow := ibelow)
+    (nparams := nparams) (ntypeformers := ntypeformers) (nminors := nminors)
+    (blvls := blvls) (rlvl := rlvl) (lvls := lvls)
+    (recInfo := recInfo)
+    (typeResult := typeResult)
+    (refArgs := refArgs)
 
 def mkIBelow (declName : Name) : m Unit := adaptFn mkIBelowImp declName
 def mkBRecOn (declName : Name) : m Unit := adaptFn mkBRecOnImp declName
