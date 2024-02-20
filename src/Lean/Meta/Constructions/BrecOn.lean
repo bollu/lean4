@@ -504,6 +504,9 @@ def mkBelow' (declName : Name) (ibelow : Bool) : MetaM Unit := do
     (typeResult := typeResult)
     (refArgs := refArgs)
 
+def mkBelow (declName : Name) : MetaM Unit :=
+  mkBelow' declName false
+
 def mkIBelow (declName : Name) : m Unit := adaptFn mkIBelowImp declName
 def mkBRecOn (declName : Name) : m Unit := adaptFn mkBRecOnImp declName
 def mkBInductionOn (declName : Name) : m Unit := adaptFn mkBInductionOnImp declName
