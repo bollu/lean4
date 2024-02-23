@@ -449,3 +449,17 @@ example (x : BitVec 8) (hx : (x + 1) <<< 1 = 4) : x = 1 ∨ x = 129 := by
 example (x y : BitVec 64) (_ : x < (y.truncate 32).zeroExtend 64) :
     ~~~x > (1#64 <<< 63) := by
   bv_omega
+
+
+example : 2^w % 2^(w+1) = 2^w  := by
+  fail_if_success omega
+  sorry
+
+-- msb_eq_decide
+example (w : Nat) : (2 : Int) ^ (w - 1) % 2 ^ w - 2 ^ w = -2 ^ (w - 1) := by
+  fail_if_success omega
+  sorry
+
+example (i w : Nat) : decide (i < w + 1) && (w ≤ w - i) = (i = 0) := by
+  fail_if_success omega
+  sorry
