@@ -1,0 +1,20 @@
+- attributes:
+    description: binarytrees
+    tags:
+    - fast
+    - suite
+  build_config:
+    cmd: ./compile.sh binarytrees.lean
+    working_dir: .
+  run_config:
+    cmd: ./binarytrees.lean.out 21
+    perf_stat:
+      properties:
+      - wall-clock
+      - task-clock
+      - instructions
+      - branches
+      - branch-misses
+    runner: perf_stat
+    rusage_properties:
+    - maxrss
