@@ -39,6 +39,7 @@ Author: Leonardo de Moura
 #include "library/compiler/ir_interpreter.h"
 #include "util/path.h"
 #include "stdlib_flags.h"
+#include "Tracy.hpp"
 #ifdef _MSC_VER
 #include <io.h>
 #define STDOUT_FILENO 1
@@ -433,6 +434,7 @@ void check_optarg(char const * option_name) {
 extern "C" object * lean_enable_initializer_execution(object * w);
 
 extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
+	printf("sleeping for 5s to connect..."); sleep(5);
 #ifdef LEAN_EMSCRIPTEN
     // When running in command-line mode under Node.js, we make system directories available in the virtual filesystem.
     // This mode is used to compile 32-bit oleans.
@@ -734,6 +736,7 @@ extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
             write_module(env, *olean_fn);
         }
 
+	FrameMarkStart("cpp");
         if (c_output && ok) {
             std::ofstream out(*c_output, std::ios_base::binary);
             if (out.fail()) {
@@ -744,6 +747,7 @@ extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
             out << lean::ir::emit_c(env, *main_module_name).data();
             out.close();
         }
+	FrameMarkEnd("cpp");
 
         if (llvm_output && ok) {
             initialize_Lean_Compiler_IR_EmitLLVM(/*builtin*/ false,

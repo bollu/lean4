@@ -490,6 +490,27 @@ else()
   set(LEAN_OBJS ${LEAN_OBJS} $<TARGET_OBJECTS:initialize>)
 
   add_library(leancpp STATIC ${LEAN_OBJS})
+
+  # Tracy
+  # ----
+
+  # https://stackoverflow.com/questions/54587052/cmake-on-mac-could-not-find-threads-missing-threads-found
+  # assume built-in pthreads on MacOS
+  IF(APPLE)
+      set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+      set(CMAKE_HAVE_THREADS_LIBRARY 1)
+      set(CMAKE_USE_WIN32_THREADS_INIT 0)
+      set(CMAKE_USE_PTHREADS_INIT 1)
+      set(THREADS_PREFER_PTHREAD_FLAG ON)
+  ENDIF()
+
+  option(TRACY_NO_EXIT "" 1)
+  option(TRACY_ENABLE "" ON)
+  option(TRACY_ON_DEMAND "" ON)
+  add_subdirectory(util/tracy) # target: TracyClient or alias Tracy::TracyClient
+  target_link_libraries(leancpp PUBLIC TracyClient)
+
+
   set_target_properties(leancpp PROPERTIES
     OUTPUT_NAME leancpp)
 endif()
