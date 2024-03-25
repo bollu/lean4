@@ -24,7 +24,7 @@ IF(APPLE)
 ENDIF()
 
 find_package(tracy REQUIRED)
-target_include_directories(util PUBLIC ${TRACY_INCLUDE_DIRS})
+# target_include_directories(util PUBLIC ${TRACY_INCLUDE_DIRS})
 target_include_directories(util PUBLIC Tracy::Include)
 target_link_libraries(util Tracy::TracyClient)
 
