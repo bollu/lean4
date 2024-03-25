@@ -39,7 +39,8 @@ Author: Leonardo de Moura
 #include "library/compiler/ir_interpreter.h"
 #include "util/path.h"
 #include "stdlib_flags.h"
-#include "Tracy.hpp"
+#define TRACY_ENABLE
+#include "tracy/Tracy.hpp"
 #ifdef _MSC_VER
 #include <io.h>
 #define STDOUT_FILENO 1

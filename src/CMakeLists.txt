@@ -121,6 +121,27 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
     string(APPEND LEAN_EXTRA_LINKER_FLAGS " ${EMSCRIPTEN_SETTINGS}")
 endif()
 
+
+# Tracy
+# ----
+
+# https://stackoverflow.com/questions/54587052/cmake-on-mac-could-not-find-threads-missing-threads-found
+# assume built-in pthreads on MacOS
+IF(APPLE)
+    set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+    set(CMAKE_HAVE_THREADS_LIBRARY 1)
+    set(CMAKE_USE_WIN32_THREADS_INIT 0)
+    set(CMAKE_USE_PTHREADS_INIT 1)
+    set(THREADS_PREFER_PTHREAD_FLAG ON)
+ENDIF()
+
+option(TRACY_NO_EXIT "" 1)
+option(TRACY_ENABLE "" ON)
+option(TRACY_ON_DEMAND "" ON)
+find_package(tracy REQUIRED)
+# add_subdirectory(util/tracy) # target: TracyClient or alias Tracy::TracyClient
+#------------------------------------------------------------------------------------
+
 # Added for CTest
 include(CTest)
 
@@ -318,6 +339,16 @@ string(APPEND TOOLCHAIN_SHARED_LINKER_FLAGS " ${LEAN_CXX_STDLIB}")
 # flags for user binaries = flags for toolchain binaries + Lake
 string(APPEND LEANC_STATIC_LINKER_FLAGS " ${TOOLCHAIN_STATIC_LINKER_FLAGS} -lLake")
 
+get_target_property(TRACY_LIBRARY_PATH Tracy::TracyClient LOCATION)
+message(STATUS "Tracy library path: ${TRACY_LIBRARY_PATH}")
+
+# Assume TRACY_LIBRARY_PATH holds the full path to the library
+get_filename_component(TRACY_LIBRARY_DIR ${TRACY_LIBRARY_PATH} DIRECTORY)
+message(STATUS "Tracy library directory: ${TRACY_LIBRARY_DIR}")
+
+# tracy library directory
+string(APPEND LEANSHARED_LINKER_FLAGS " ${TRACY_LIBRARY_PATH} ")
+
 if (LLVM)
   string(APPEND LEANSHARED_LINKER_FLAGS " -L${LLVM_CONFIG_LIBDIR} ${LLVM_CONFIG_LDFLAGS} ${LLVM_CONFIG_LIBS} ${LLVM_CONFIG_SYSTEM_LIBS}")
   string(APPEND CMAKE_CXX_FLAGS " -I${LLVM_CONFIG_INCLUDEDIR}")
@@ -491,29 +522,13 @@ else()
 
   add_library(leancpp STATIC ${LEAN_OBJS})
 
-  # Tracy
-  # ----
-
-  # https://stackoverflow.com/questions/54587052/cmake-on-mac-could-not-find-threads-missing-threads-found
-  # assume built-in pthreads on MacOS
-  IF(APPLE)
-      set(CMAKE_THREAD_LIBS_INIT "-lpthread")
-      set(CMAKE_HAVE_THREADS_LIBRARY 1)
-      set(CMAKE_USE_WIN32_THREADS_INIT 0)
-      set(CMAKE_USE_PTHREADS_INIT 1)
-      set(THREADS_PREFER_PTHREAD_FLAG ON)
-  ENDIF()
-
-  option(TRACY_NO_EXIT "" 1)
-  option(TRACY_ENABLE "" ON)
-  option(TRACY_ON_DEMAND "" ON)
-  add_subdirectory(util/tracy) # target: TracyClient or alias Tracy::TracyClient
-  target_link_libraries(leancpp PUBLIC TracyClient)
-
-
   set_target_properties(leancpp PROPERTIES
     OUTPUT_NAME leancpp)
 endif()
+
+target_link_libraries(leancpp PUBLIC Tracy::TracyClient)
+# target_link_libraries(leancpp INTERFACE Tracy::TracyClient)
+
 
 # MSYS2 bash usually handles Windows paths relatively well, but not when putting them in the PATH
 string(REGEX REPLACE "^([a-zA-Z]):" "/\\1" LEAN_BIN "${CMAKE_BINARY_DIR}/bin")
@@ -591,6 +606,7 @@ else()
 
   string(APPEND CMAKE_EXE_LINKER_FLAGS " -lInit_shared -lleanshared")
 endif()
+
 
 if(${STAGE} GREATER 0 AND NOT ${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
   if(NOT EXISTS ${LEAN_SOURCE_DIR}/lake/Lake.lean)
