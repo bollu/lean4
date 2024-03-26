@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 
 Author: Leonardo de Moura
 */
+#include <cstdlib>
 #include <iostream>
 #include <fstream>
 #include <signal.h>
@@ -13,6 +14,7 @@ Author: Leonardo de Moura
 #include <utility>
 #include <vector>
 #include <set>
+#include "runtime/alloc.h"
 #include "runtime/stackinfo.h"
 #include "runtime/interrupt.h"
 #include "runtime/memory.h"
@@ -22,6 +24,7 @@ Author: Leonardo de Moura
 #include "runtime/load_dynlib.h"
 #include "runtime/array_ref.h"
 #include "runtime/object_ref.h"
+#include "runtime/memory.h"
 #include "util/timer.h"
 #include "util/macros.h"
 #include "util/io.h"
@@ -432,6 +435,27 @@ void check_optarg(char const * option_name) {
 
 extern "C" object * lean_enable_initializer_execution(object * w);
 
+void display_profiling_times(std::string file_path, std::ostream &o) {
+    o << file_path << ", " << "rss" << ", " << lean::get_peak_rss() << "\n";
+    o << file_path << ", " << "num_alloc" << ", " << lean::allocator::get_num_alloc() << "\n";
+    o << file_path << ", " << "num_small_alloc" << ", " << lean::allocator::get_num_small_alloc() << "\n";
+    o << file_path << ", " << "num_dealloc" << ", " << lean::allocator::get_num_dealloc() << "\n";
+    o << file_path << ", " << "num_small_dealloc" << ", " << lean::allocator::get_num_small_dealloc() << "\n";
+    o << file_path << ", " << "num_segments" << ", " << lean::allocator::get_num_segments() << "\n";
+    o << file_path << ", " << "num_pages" << ", " << lean::allocator::get_num_pages() << "\n";
+    o << file_path << ", " << "num_exports" << ", " << lean::allocator::get_num_exports() << "\n";
+    o << file_path << ", " << "num_recycled_pages" << ", " << lean::allocator::get_num_recycled_pages() << "\n";
+
+// static atomic<uint64> g_num_alloc(0);
+// static atomic<uint64> g_num_small_alloc(0);
+// static atomic<uint64> g_num_dealloc(0);
+// static atomic<uint64> g_num_small_dealloc(0);
+// static atomic<uint64> g_num_segments(0);
+// static atomic<uint64> g_num_pages(0);
+// static atomic<uint64> g_num_exports(0);
+// static atomic<uint64> g_num_recycled_pages(0);
+}
+
 extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
 #ifdef LEAN_EMSCRIPTEN
     // When running in command-line mode under Node.js, we make system directories available in the virtual filesystem.
@@ -756,6 +780,14 @@ extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
         }
 
         display_cumulative_profiling_times(std::cerr);
+
+	if (const char* out_path = std::getenv("LEAN_PROFILER_CSV_PATH")) {
+	    std::cerr << "writing profiling information to '" << out_path << "'\n";
+	    std::ofstream profiler_out_file(out_path, std::ios::app);
+	    display_profiling_times(mod_fn, profiler_out_file);
+	} else {
+	    display_profiling_times(mod_fn, std::cerr);
+	}
 
 #ifdef LEAN_SMALL_ALLOCATOR
         // If the small allocator is not enabled, then we assume we are not using the sanitizer.

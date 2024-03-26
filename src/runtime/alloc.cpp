@@ -36,24 +36,34 @@ namespace lean {
 
 namespace allocator {
 #ifdef LEAN_RUNTIME_STATS
-static atomic<uint64> g_num_alloc(0);
-static atomic<uint64> g_num_small_alloc(0);
-static atomic<uint64> g_num_dealloc(0);
-static atomic<uint64> g_num_small_dealloc(0);
-static atomic<uint64> g_num_segments(0);
-static atomic<uint64> g_num_pages(0);
-static atomic<uint64> g_num_exports(0);
-static atomic<uint64> g_num_recycled_pages(0);
+static atomic<uint64_t> g_num_alloc(0);
+static atomic<uint64_t> g_num_small_alloc(0);
+static atomic<uint64_t> g_num_dealloc(0);
+static atomic<uint64_t> g_num_small_dealloc(0);
+static atomic<uint64_t> g_num_segments(0);
+static atomic<uint64_t> g_num_pages(0);
+static atomic<uint64_t> g_num_exports(0);
+static atomic<uint64_t> g_num_recycled_pages(0);
+
+uint64_t get_num_alloc() { return g_num_alloc; }
+uint64_t get_num_small_alloc () { return g_num_small_alloc; }
+uint64_t get_num_dealloc() { return g_num_dealloc; }
+uint64_t get_num_small_dealloc() { return g_num_small_dealloc; }
+uint64_t get_num_segments() { return g_num_segments; }
+uint64_t get_num_pages() { return g_num_pages; }
+uint64_t get_num_exports() { return g_num_exports; }
+uint64_t get_num_recycled_pages() { return g_num_recycled_pages; }
+
 struct alloc_stats {
     ~alloc_stats() {
-        std::cerr << "num. alloc.:         " << g_num_alloc << "\n";
-        std::cerr << "num. small alloc.:   " << g_num_small_alloc << "\n";
-        std::cerr << "num. dealloc.:       " << g_num_dealloc << "\n";
-        std::cerr << "num. small dealloc.: " << g_num_small_dealloc << "\n";
-        std::cerr << "num. segments:       " << g_num_segments << "\n";
-        std::cerr << "num. pages:          " << g_num_pages << "\n";
-        std::cerr << "num. recycled pages: " << g_num_recycled_pages << "\n";
-        std::cerr << "num. exports:        " << g_num_exports << "\n";
+        // std::cerr << "num. alloc.:         " << g_num_alloc << "\n";
+        // std::cerr << "num. small alloc.:   " << g_num_small_alloc << "\n";
+        // std::cerr << "num. dealloc.:       " << g_num_dealloc << "\n";
+        // std::cerr << "num. small dealloc.: " << g_num_small_dealloc << "\n";
+        // std::cerr << "num. segments:       " << g_num_segments << "\n";
+        // std::cerr << "num. pages:          " << g_num_pages << "\n";
+        // std::cerr << "num. recycled pages: " << g_num_recycled_pages << "\n";
+        // std::cerr << "num. exports:        " << g_num_exports << "\n";
     }
 };
 static alloc_stats g_alloc_stats;
