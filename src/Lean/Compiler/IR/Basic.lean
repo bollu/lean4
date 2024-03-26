@@ -198,7 +198,7 @@ inductive Expr where
   | ctor (i : CtorInfo) (ys : Array Arg)
   | reset (n : Nat) (x : VarId)
   /-- `reuse x in ctor_i ys` instruction in the paper. -/
-  | reuse (x : VarId) (i : CtorInfo) (updtHeader : Bool) (ys : Array Arg)
+  | reuse (x : VarId) (old new : CtorInfo) (updtHeader : Bool) (ys : Array Arg)
   /-- Extract the `tobject` value at Position `sizeof(void*)*i` from `x`.
   We also use `proj` for extracting fields from `struct` return values, and casting `union` return values. -/
   |  proj (i : Nat) (x : VarId)
@@ -538,7 +538,8 @@ instance: AlphaEqv (Array Arg) := ⟨args.alphaEqv⟩
 def Expr.alphaEqv (ρ : IndexRenaming) : Expr → Expr → Bool
   | Expr.ctor i₁ ys₁,        Expr.ctor i₂ ys₂        => i₁ == i₂ && aeqv ρ ys₁ ys₂
   | Expr.reset n₁ x₁,        Expr.reset n₂ x₂        => n₁ == n₂ && aeqv ρ x₁ x₂
-  | Expr.reuse x₁ i₁ u₁ ys₁, Expr.reuse x₂ i₂ u₂ ys₂ => aeqv ρ x₁ x₂ && i₁ == i₂ && u₁ == u₂ && aeqv ρ ys₁ ys₂
+  -- TODO: think if we need the old
+  | Expr.reuse x₁ old₁ new₁ u₁ ys₁, Expr.reuse x₂ old₂ new₂ u₂ ys₂ => aeqv ρ x₁ x₂ && old₁ == old₂ && new₁ == new₂ && u₁ == u₂ && aeqv ρ ys₁ ys₂
   | Expr.proj i₁ x₁,         Expr.proj i₂ x₂         => i₁ == i₂ && aeqv ρ x₁ x₂
   | Expr.uproj i₁ x₁,        Expr.uproj i₂ x₂        => i₁ == i₂ && aeqv ρ x₁ x₂
   | Expr.sproj n₁ o₁ x₁,     Expr.sproj n₂ o₂ x₂     => n₁ == n₂ && o₁ == o₂ && aeqv ρ x₁ x₂

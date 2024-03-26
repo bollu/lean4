@@ -959,7 +959,7 @@ def emitVDecl (builder : LLVM.Builder llvmctx) (z : VarId) (t : IRType) (v : Exp
   match v with
   | Expr.ctor c ys      => emitCtor builder z c ys
   | Expr.reset n x      => emitReset builder z n x
-  | Expr.reuse x c u ys => emitReuse builder z x c u ys
+  | Expr.reuse x _cold cnew u ys => emitReuse builder z x cnew u ys
   | Expr.proj i x       => emitProj builder z i x
   | Expr.uproj i x      => emitUProj builder z i x
   | Expr.sproj n o x    => emitSProj builder z t n o x

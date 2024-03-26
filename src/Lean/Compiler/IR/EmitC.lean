@@ -371,12 +371,13 @@ def emitReset (z : VarId) (n : Nat) (x : VarId) : M Unit := do
   emit " "; emitLhs z; emitLn "lean_box(0);";
   emitLn "}"
 
-def emitReuse (z : VarId) (x : VarId) (c : CtorInfo) (updtHeader : Bool) (ys : Array Arg) : M Unit := do
+-- How much of this should we track?
+def emitReuse (z : VarId) (x : VarId) (_cold cnew : CtorInfo) (updtHeader : Bool) (ys : Array Arg) : M Unit := do
   emit "if (lean_is_scalar("; emit x; emitLn ")) {";
-  emit " "; emitLhs z; emitAllocCtor c;
+  emit " "; emitLhs z; emitAllocCtor cnew;
   emitLn "} else {";
   emit " "; emitLhs z; emit x; emitLn ";";
-  if updtHeader then emit " lean_ctor_set_tag("; emit z; emit ", "; emit c.cidx; emitLn ");"
+  if updtHeader then emit " lean_ctor_set_tag("; emit z; emit ", "; emit cnew.cidx; emitLn ");"
   emitLn "}";
   emitCtorSetArgs z ys
 
@@ -505,7 +506,7 @@ def emitVDecl (z : VarId) (t : IRType) (v : Expr) : M Unit :=
   match v with
   | Expr.ctor c ys      => emitCtor z c ys
   | Expr.reset n x      => emitReset z n x
-  | Expr.reuse x c u ys => emitReuse z x c u ys
+  | Expr.reuse x cold cnew u ys => emitReuse z x cold cnew u ys
   | Expr.proj i x       => emitProj z i x
   | Expr.uproj i x      => emitUProj z i x
   | Expr.sproj n o x    => emitSProj z t n o x

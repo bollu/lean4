@@ -122,7 +122,7 @@ private def bindParams (ps : Array Param) : Collector := fun s =>
 def collectExpr : Expr → Collector
   | Expr.ctor _ ys      => collectArgs ys
   | Expr.reset _ x      => collectVar x
-  | Expr.reuse x _ _ ys => collectVar x ∘ collectArgs ys
+  | Expr.reuse x _old _new _ ys => collectVar x ∘ collectArgs ys
   | Expr.proj _ x       => collectVar x
   | Expr.uproj _ x      => collectVar x
   | Expr.sproj _ _ x    => collectVar x

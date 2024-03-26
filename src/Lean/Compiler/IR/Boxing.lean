@@ -273,8 +273,8 @@ def visitVDeclExpr (x : VarId) (ty : IRType) (e : Expr) (b : FnBody) : M FnBody 
       return FnBody.vdecl x ty (Expr.lit (LitVal.num c.cidx)) b
     else
       boxArgsIfNeeded ys fun ys => return FnBody.vdecl x ty (Expr.ctor c ys) b
-  | Expr.reuse w c u ys =>
-    boxArgsIfNeeded ys fun ys => return FnBody.vdecl x ty (Expr.reuse w c u ys) b
+  | Expr.reuse w cold c u ys =>
+    boxArgsIfNeeded ys fun ys => return FnBody.vdecl x ty (Expr.reuse w cold c u ys) b
   | Expr.fap f ys => do
     let decl ← getDecl f
     castArgsIfNeeded ys decl.params fun ys =>

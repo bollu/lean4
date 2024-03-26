@@ -42,7 +42,7 @@ structure Context where
 partial def consumed (x : VarId) : FnBody → Bool
   | .vdecl _ _ v b   =>
     match v with
-    | Expr.reuse y _ _ _ => x == y || consumed x b
+    | Expr.reuse y _old _new _ _ => x == y || consumed x b
     | _                  => consumed x b
   | .dec y _ _ _ b   => x == y || consumed x b
   | .case _ _ _ alts => alts.all fun alt => consumed x alt.body
@@ -94,7 +94,7 @@ partial def reuseToCtor (x : VarId) : FnBody → FnBody
     else FnBody.dec y n c p (reuseToCtor x b)
   | FnBody.vdecl z t v b   =>
     match v with
-    | Expr.reuse y c _ xs =>
+    | Expr.reuse y _oldc c _ xs =>
       if x == y then FnBody.vdecl z t (Expr.ctor c xs) b
       else FnBody.vdecl z t v (reuseToCtor x b)
     | _ =>
@@ -192,7 +192,7 @@ partial def reuseToSet (ctx : Context) (x y : VarId) : FnBody → FnBody
     else FnBody.dec z n c p (reuseToSet ctx x y b)
   | FnBody.vdecl z t v b   =>
     match v with
-    | Expr.reuse w c u zs =>
+    | Expr.reuse w _cold c u zs =>
       if x == w then
         let b := setFields y zs (b.replaceVar z y)
         let b := if u then FnBody.setTag y c.cidx b else b
