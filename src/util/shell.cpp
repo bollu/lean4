@@ -435,28 +435,31 @@ void check_optarg(char const * option_name) {
 
 extern "C" object * lean_enable_initializer_execution(object * w);
 
-void display_profiling_times(std::string file_path, std::ostream &o) {
-    o << file_path << ", " << "rss" << ", " << lean::get_peak_rss() << "\n";
-    o << file_path << ", " << "num_alloc" << ", " << lean::allocator::get_num_alloc() << "\n";
-    o << file_path << ", " << "num_small_alloc" << ", " << lean::allocator::get_num_small_alloc() << "\n";
-    o << file_path << ", " << "num_dealloc" << ", " << lean::allocator::get_num_dealloc() << "\n";
-    o << file_path << ", " << "num_small_dealloc" << ", " << lean::allocator::get_num_small_dealloc() << "\n";
-    o << file_path << ", " << "num_segments" << ", " << lean::allocator::get_num_segments() << "\n";
-    o << file_path << ", " << "num_pages" << ", " << lean::allocator::get_num_pages() << "\n";
-    o << file_path << ", " << "num_exports" << ", " << lean::allocator::get_num_exports() << "\n";
-    o << file_path << ", " << "num_recycled_pages" << ", " << lean::allocator::get_num_recycled_pages() << "\n";
+struct Profiler {
+    void write_profiling_times(std::string file_path, std::ostream &o) {
+        o << file_path << ", " << "rss" << ", " << lean::get_peak_rss() << "\n";
+        o << file_path << ", " << "num_alloc" << ", " << lean::allocator::get_num_alloc() << "\n";
+        o << file_path << ", " << "num_small_alloc" << ", " << lean::allocator::get_num_small_alloc() << "\n";
+        o << file_path << ", " << "num_dealloc" << ", " << lean::allocator::get_num_dealloc() << "\n";
+        o << file_path << ", " << "num_small_dealloc" << ", " << lean::allocator::get_num_small_dealloc() << "\n";
+        o << file_path << ", " << "num_segments" << ", " << lean::allocator::get_num_segments() << "\n";
+        o << file_path << ", " << "num_pages" << ", " << lean::allocator::get_num_pages() << "\n";
+        o << file_path << ", " << "num_exports" << ", " << lean::allocator::get_num_exports() << "\n";
+        o << file_path << ", " << "num_recycled_pages" << ", " << lean::allocator::get_num_recycled_pages() << "\n";
 
-// static atomic<uint64> g_num_alloc(0);
-// static atomic<uint64> g_num_small_alloc(0);
-// static atomic<uint64> g_num_dealloc(0);
-// static atomic<uint64> g_num_small_dealloc(0);
-// static atomic<uint64> g_num_segments(0);
-// static atomic<uint64> g_num_pages(0);
-// static atomic<uint64> g_num_exports(0);
-// static atomic<uint64> g_num_recycled_pages(0);
-}
+    // static atomic<uint64> g_num_alloc(0);
+    // static atomic<uint64> g_num_small_alloc(0);
+    // static atomic<uint64> g_num_dealloc(0);
+    // static atomic<uint64> g_num_small_dealloc(0);
+    // static atomic<uint64> g_num_segments(0);
+    // static atomic<uint64> g_num_pages(0);
+    // static atomic<uint64> g_num_exports(0);
+    // static atomic<uint64> g_num_recycled_pages(0);
+    }
+};
 
 extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
+    Profiler profiler;
 #ifdef LEAN_EMSCRIPTEN
     // When running in command-line mode under Node.js, we make system directories available in the virtual filesystem.
     // This mode is used to compile 32-bit oleans.
@@ -784,9 +787,9 @@ extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
 	if (const char* out_path = std::getenv("LEAN_PROFILER_CSV_PATH")) {
 	    std::cerr << "writing profiling information to '" << out_path << "'\n";
 	    std::ofstream profiler_out_file(out_path, std::ios::app);
-	    display_profiling_times(mod_fn, profiler_out_file);
+	    profiler.write_profiling_times(mod_fn, profiler_out_file);
 	} else {
-	    display_profiling_times(mod_fn, std::cerr);
+	    profiler.write_profiling_times(mod_fn, std::cerr);
 	}
 
 #ifdef LEAN_SMALL_ALLOCATOR
