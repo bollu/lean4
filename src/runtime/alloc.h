@@ -29,5 +29,11 @@ uint64_t get_num_segments();
 uint64_t get_num_pages();
 uint64_t get_num_exports();
 uint64_t get_num_recycled_pages();
+
 }
+}
+
+extern "C" {
+// dump allocator info into logfile.
+void research_dump_allocator_log();
 }

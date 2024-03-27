@@ -6,9 +6,14 @@ Author: Leonardo de Moura
 */
 #include <vector>
 #include <lean/lean.h>
+#include <iostream>
+#include <fstream>
+#include <string>
 #include "runtime/thread.h"
 #include "runtime/debug.h"
 #include "runtime/alloc.h"
+#include "runtime/memory.h"
+#include "runtime/research.h"
 
 #ifdef LEAN_RUNTIME_STATS
 #define LEAN_RUNTIME_STAT_CODE(c) c
@@ -29,6 +34,40 @@ Author: Leonardo de Moura
 
 LEAN_CASSERT(LEAN_PAGE_SIZE > LEAN_MAX_SMALL_OBJECT_SIZE);
 LEAN_CASSERT(LEAN_SEGMENT_SIZE > LEAN_PAGE_SIZE);
+
+extern "C"{
+// dump allocator info into logfile.
+void research_dump_allocator_log() {
+  std::ostream *o = &std::cerr;
+  std::ofstream *profiler_out_file = NULL;
+
+  std::string out_path_str = "---";
+  if (const char *out_path = std::getenv("RESEARCH_LEAN_PROFILER_CSV_PATH")) {
+    out_path_str = out_path;
+    profiler_out_file = new std::ofstream(out_path, std::ios::app);
+    o = profiler_out_file;
+  }
+  const bool isReuseEnabled = research_isReuseAcrossConstructorsEnabled(lean_box(-1));
+
+  std::cerr << "writing profiling information "
+            << "[reuseEnabled=" << (isReuseEnabled ? "true" : "false") << "]"
+            << " to file '" << out_path_str << "'"
+            << "\n";
+  (*o << "rss, " << lean::get_peak_rss()) << "\n";
+  (*o << "num_alloc, " << lean::allocator::get_num_alloc()) << "\n";
+  (*o << "num_small_alloc, " << lean::allocator::get_num_small_alloc()) << "\n";
+  (*o << "num_dealloc, " << lean::allocator::get_num_dealloc()) << "\n";
+  (*o << "num_small_dealloc, " << lean::allocator::get_num_small_dealloc()) << "\n";
+  (*o << "num_segments, " << lean::allocator::get_num_segments()) << "\n";
+  (*o << "num_pages, " << lean::allocator::get_num_pages()) << "\n";
+  (*o << "num_exports, " << lean::allocator::get_num_exports()) << "\n";
+  (*o << "num_recycled_pages, " << lean::allocator::get_num_recycled_pages()) << "\n";
+  if (profiler_out_file) {
+    delete profiler_out_file;
+  }
+}
+} // end extern C
+
 
 namespace lean {
 
@@ -53,6 +92,7 @@ uint64_t get_num_segments() { return g_num_segments; }
 uint64_t get_num_pages() { return g_num_pages; }
 uint64_t get_num_exports() { return g_num_exports; }
 uint64_t get_num_recycled_pages() { return g_num_recycled_pages; }
+
 
 struct alloc_stats {
     ~alloc_stats() {

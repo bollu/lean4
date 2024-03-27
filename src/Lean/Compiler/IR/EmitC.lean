@@ -193,6 +193,7 @@ def emitMainFn : M Unit := do
     -- either `UInt32` or `(P)Unit`
     let retTy := retTy.appArg!
     -- finalize at least the task manager to avoid leak sanitizer false positives from tasks outliving the main thread
+    emitLns ["research_dump_allocator_log();"]
     emitLns ["lean_finalize_task_manager();",
              "if (lean_io_result_is_ok(res)) {",
              "  int ret = " ++ if retTy.constName? == some ``UInt32 then "lean_unbox_uint32(lean_io_result_get_value(res));" else "0;",
@@ -234,7 +235,8 @@ def emitFileHeader : M Unit := do
     "#endif",
     "#ifdef __cplusplus",
     "extern \"C\" {",
-    "#endif"
+    "#endif",
+    "void research_dump_allocator_log();",
   ]
 
 def emitFileFooter : M Unit :=
