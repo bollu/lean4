@@ -184,6 +184,7 @@ static void display_features(std::ostream & out) {
 #if defined(LEAN_LLVM)
     out << "LLVM";
 #endif
+    out << ", " << "borrowing-only-delete-prefix-check-ctest";
     out << "]\n";
 }
 
