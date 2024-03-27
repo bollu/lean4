@@ -61,6 +61,11 @@ void lean_notify_assert(const char * fileName, int line, const char * condition)
 #define LEAN_EXPORT
 #endif
 
+#ifndef LEAN_SMALL_ALLOCATOR
+#error "RESEARCH ERROR: Expected to use lean small allocator since this is defult config"
+#endif
+
+
 #define LEAN_BYTE(Var, Index) *(((uint8_t*)&Var)+Index)
 
 #define LeanMaxCtorTag  244

@@ -41,7 +41,7 @@ private def collectParams (ps : Array Param) : Collector := collectArray ps coll
 private def collectExpr : Expr → Collector
   | Expr.ctor _ ys      => collectArgs ys
   | Expr.reset _ x      => collectVar x
-  | Expr.reuse x _ _ ys => collectVar x >> collectArgs ys
+  | Expr.reuse x _old _new _ ys => collectVar x >> collectArgs ys
   | Expr.proj _ x       => collectVar x
   | Expr.uproj _ x      => collectVar x
   | Expr.sproj _ _ x    => collectVar x
@@ -136,7 +136,7 @@ private def collectArgs (as : Array Arg) : Collector :=
 private def collectExpr : Expr → Collector
   | Expr.ctor _ ys      => collectArgs ys
   | Expr.reset _ x      => collectVar x
-  | Expr.reuse x _ _ ys => collectVar x >> collectArgs ys
+  | Expr.reuse x _old _new _ ys => collectVar x >> collectArgs ys
   | Expr.proj _ x       => collectVar x
   | Expr.uproj _ x      => collectVar x
   | Expr.sproj _ _ x    => collectVar x
@@ -196,7 +196,7 @@ def visitParams (w : Index) (ps : Array Param) : Bool :=
 def visitExpr (w : Index) : Expr → Bool
   | Expr.ctor _ ys      => visitArgs w ys
   | Expr.reset _ x      => visitVar w x
-  | Expr.reuse x _ _ ys => visitVar w x || visitArgs w ys
+  | Expr.reuse x _old _new _ ys => visitVar w x || visitArgs w ys
   | Expr.proj _ x       => visitVar w x
   | Expr.uproj _ x      => visitVar w x
   | Expr.sproj _ _ x    => visitVar w x
