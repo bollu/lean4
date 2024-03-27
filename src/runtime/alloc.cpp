@@ -47,11 +47,11 @@ void research_dump_allocator_log() {
     profiler_out_file = new std::ofstream(out_path, std::ios::app);
     o = profiler_out_file;
   }
-  const bool isReuseEnabled = research_isReuseAcrossConstructorsEnabled(lean_box(-1));
+  // const bool isReuseEnabled = research_isReuseAcrossConstructorsEnabled(lean_box(-1));
 
   std::cerr << "writing profiling information "
-            << "[reuseEnabled=" << (isReuseEnabled ? "true" : "false") << "]"
-            << " to file '" << out_path_str << "'"
+            // << "[reuseEnabled=" << (isReuseEnabled ? "true" : "false") << "]"
+            // << " to file '" << out_path_str << "'"
             << "\n";
   (*o << "rss, " << lean::get_peak_rss()) << "\n";
   (*o << "num_alloc, " << lean::allocator::get_num_alloc()) << "\n";
