@@ -15,6 +15,7 @@ Author: Leonardo de Moura
 #include <vector>
 #include <set>
 #include "runtime/alloc.h"
+#include "runtime/research.h"
 #include "runtime/stackinfo.h"
 #include "runtime/interrupt.h"
 #include "runtime/memory.h"
@@ -436,26 +437,42 @@ void check_optarg(char const * option_name) {
 extern "C" object * lean_enable_initializer_execution(object * w);
 
 struct Profiler {
-    void write_profiling_times(std::string file_path, std::ostream &o) {
-        o << file_path << ", " << "rss" << ", " << lean::get_peak_rss() << "\n";
-        o << file_path << ", " << "num_alloc" << ", " << lean::allocator::get_num_alloc() << "\n";
-        o << file_path << ", " << "num_small_alloc" << ", " << lean::allocator::get_num_small_alloc() << "\n";
-        o << file_path << ", " << "num_dealloc" << ", " << lean::allocator::get_num_dealloc() << "\n";
-        o << file_path << ", " << "num_small_dealloc" << ", " << lean::allocator::get_num_small_dealloc() << "\n";
-        o << file_path << ", " << "num_segments" << ", " << lean::allocator::get_num_segments() << "\n";
-        o << file_path << ", " << "num_pages" << ", " << lean::allocator::get_num_pages() << "\n";
-        o << file_path << ", " << "num_exports" << ", " << lean::allocator::get_num_exports() << "\n";
-        o << file_path << ", " << "num_recycled_pages" << ", " << lean::allocator::get_num_recycled_pages() << "\n";
+  const bool isReuseEnabled() {
+    return research_isReuseAcrossConstructorsEnabled(lean_box(-1));
+  }
+  template <typename T>
+  void write_file_identifier(std::ostream &o, std::string file_path,
+                             std::string name, T val) {
+    o << file_path << ", "
+      << (isReuseEnabled() ? "reuse_across_ctor_enabled"
+                        : "reuse_across_ctor_disabled")
+      << "," << name << ", " << val << "\n";
+  }
+  void write_profiling_times(std::string src_path, std::string out_path, std::ostream &o) {
 
-    // static atomic<uint64> g_num_alloc(0);
-    // static atomic<uint64> g_num_small_alloc(0);
-    // static atomic<uint64> g_num_dealloc(0);
-    // static atomic<uint64> g_num_small_dealloc(0);
-    // static atomic<uint64> g_num_segments(0);
-    // static atomic<uint64> g_num_pages(0);
-    // static atomic<uint64> g_num_exports(0);
-    // static atomic<uint64> g_num_recycled_pages(0);
-    }
+	  std::cerr << "writing profiling information "
+      << "[reuseEnabled=" << (isReuseEnabled() ? "true" : "false") << "]"
+      << " of '" << src_path << "'"
+      << " to file '" << out_path << "'"
+      << "\n";
+    write_file_identifier<uint64_t>(o, src_path, "rss", lean::get_peak_rss());
+    write_file_identifier<uint64_t>(o, src_path, "num_alloc",
+                                    lean::allocator::get_num_alloc());
+    write_file_identifier<uint64_t>(o, src_path, "num_small_alloc",
+                                    lean::allocator::get_num_small_alloc());
+    write_file_identifier<uint64_t>(o, src_path, "num_dealloc",
+                                    lean::allocator::get_num_dealloc());
+    write_file_identifier<uint64_t>(o, src_path, "num_small_dealloc",
+                                    lean::allocator::get_num_small_dealloc());
+    write_file_identifier<uint64_t>(o, src_path, "num_segments",
+                                    lean::allocator::get_num_segments());
+    write_file_identifier<uint64_t>(o, src_path, "num_pages",
+                                    lean::allocator::get_num_pages());
+    write_file_identifier<uint64_t>(o, src_path, "num_exports",
+                                    lean::allocator::get_num_exports());
+    write_file_identifier<uint64_t>(o, src_path, "num_recycled_pages",
+                                    lean::allocator::get_num_recycled_pages());
+  }
 };
 
 extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
@@ -784,12 +801,11 @@ extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
 
         display_cumulative_profiling_times(std::cerr);
 
-	if (const char* out_path = std::getenv("LEAN_PROFILER_CSV_PATH")) {
-	    std::cerr << "writing profiling information to '" << out_path << "'\n";
+	if (const char* out_path = std::getenv("RESEARCH_LEAN_PROFILER_CSV_PATH")) {
 	    std::ofstream profiler_out_file(out_path, std::ios::app);
-	    profiler.write_profiling_times(mod_fn, profiler_out_file);
+	    profiler.write_profiling_times(mod_fn, out_path, profiler_out_file);
 	} else {
-	    profiler.write_profiling_times(mod_fn, std::cerr);
+	    profiler.write_profiling_times(mod_fn, "cerr", std::cerr);
 	}
 
 #ifdef LEAN_SMALL_ALLOCATOR
