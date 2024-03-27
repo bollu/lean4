@@ -10,6 +10,7 @@ Author: Leonardo de Moura
 #include <deque>
 #include <cmath>
 #include <lean/lean.h>
+#include "runtime/research.h"
 #include "runtime/object.h"
 #include "runtime/thread.h"
 #include "runtime/utf8.h"
@@ -885,6 +886,7 @@ extern "C" LEAN_EXPORT void lean_finalize_task_manager() {
         delete g_task_manager;
         g_task_manager = nullptr;
     }
+    research_dump_allocator_log();
 }
 
 scoped_task_manager::scoped_task_manager(unsigned num_workers) {

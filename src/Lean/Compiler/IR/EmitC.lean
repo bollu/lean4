@@ -192,8 +192,11 @@ def emitMainFn : M Unit := do
     let retTy := env.find? `main |>.get! |>.type |>.getForallBody
     -- either `UInt32` or `(P)Unit`
     let retTy := retTy.appArg!
+    -- | comment out the research_dump_allocator_log which dumps out allocator info at the end of program execution.
+    --    This means that when we build executables, we won't have a log, but we can bench Lean the compiler without this
+    --    since Lean (the compiler) is built as a library.
+    -- emitLns ["research_dump_allocator_log();"]
     -- finalize at least the task manager to avoid leak sanitizer false positives from tasks outliving the main thread
-    emitLns ["research_dump_allocator_log();"]
     emitLns ["lean_finalize_task_manager();",
              "if (lean_io_result_is_ok(res)) {",
              "  int ret = " ++ if retTy.constName? == some ``UInt32 then "lean_unbox_uint32(lean_io_result_get_value(res));" else "0;",
