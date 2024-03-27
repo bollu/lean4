@@ -7,39 +7,10 @@ add_library(leanrt_initial-exec STATIC ${RUNTIME_OBJS})
 set_target_properties(leanrt_initial-exec PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-# Tracy
-# -----
-if (TRACY)
-  IF(APPLE)
-      set(CMAKE_THREAD_LIBS_INIT "-lpthread")
-      set(CMAKE_HAVE_THREADS_LIBRARY 1)
-      set(CMAKE_USE_WIN32_THREADS_INIT 0)
-      set(CMAKE_USE_PTHREADS_INIT 1)
-      set(THREADS_PREFER_PTHREAD_FLAG ON)
-  ENDIF()
-
-  option(TRACY_NO_EXIT "" 1)
-  option(TRACY_ENABLE "" ON)
-  option(TRACY_ON_DEMAND "" ON)
-
-  find_package(tracy REQUIRED)
-endif()
-# ----
-
 # The above library, like all other C++ code, is built using `-ftls-model=initial-exec`, which is necessary for linking it into `leanshared`,
 # but introduces a measurable overhead while accessing the thread-local variable `g_heap` when allocating and deallocating. Therefore we compile
 # the runtime again with the more restrictive `local-exec` and use it when linking Lean code statically, i.e. not against `leanshared`.
 add_library(leanrt STATIC ${RUNTIME_OBJS})
-
-if (TRACY)
-  get_target_property(TRACY_INCLUDE_DIRS Tracy::TracyClient INTERFACE_INCLUDE_DIRECTORIES)
-  target_include_directories(leanrt PUBLIC ${TRACY_INCLUDE_DIRS})
-  target_include_directories(leanrt PUBLIC Tracy::TracyClient)
-  target_compile_options(leanrt PUBLIC "-I ${TRACY_INCLUDE_DIRS} ")
-  target_link_libraries(leanrt PUBLIC Tracy::TracyClient)
-endif()
-
-
 set_target_properties(leanrt PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
 if (NOT MSVC)

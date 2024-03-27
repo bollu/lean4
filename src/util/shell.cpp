@@ -455,12 +455,14 @@ struct Profiler {
       << "," << name << ", " << val << "\n";
   }
   void write_profiling_times(std::string src_path, std::string out_path, std::ostream &o) {
-
-	  std::cerr << "writing profiling information "
-      << "[reuseEnabled=" << (isReuseEnabled() ? "true" : "false") << "]"
-      << " of '" << src_path << "'"
-      << " to file '" << out_path << "'"
-      << "\n";
+    if (false) {
+      std::cerr << "writing profiling information "
+                << "[reuseEnabled=" << (isReuseEnabled() ? "true" : "false")
+                << "]"
+                << " of '" << src_path << "'"
+                << " to file '" << out_path << "'"
+                << "\n";
+    }
     write_file_identifier<uint64_t>(o, src_path, "rss", lean::get_peak_rss());
     write_file_identifier<uint64_t>(o, src_path, "num_alloc",
                                     lean::allocator::get_num_alloc());
