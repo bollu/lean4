@@ -16,30 +16,30 @@ esac
 # redirect all output to log file, plus data.
 exec > >(tee -a "$0.log") 2>&1
 
-git clean -xf ../
-
-git checkout 834d0b2c328bf765debcc1f7feac11bee294b083 # checkout a particular commit.
+# git clean -xf ../
+# git checkout 834d0b2c328bf765debcc1f7feac11bee294b083 # checkout a particular commit.
 
 cd ../
 rm -rf build
 mkdir build
 cd build
-cmake ../ -DCCACHE=OFF -DRUNTIME_STATS=ON
 
-make -j stage2
+rm -rf *
+cmake ../../ -DCCACHE=OFF -DRUNTIME_STATS=ON
+export RESEARCH_LOG_VERBOSE=false
+unset RESEARCH_LEAN_COMPILER_PROFILE_CSV_PATH
+export RESEARCH_IS_REUSE_ACROSS_CONSTRUCTORS_ENABLED=true
+make -j20 stage2
+touch ../../src/Init/Prelude.lean
+export RESEARCH_LEAN_COMPILER_PROFILE_CSV_PATH = stage1.reuse.enabled.csv
+/usr/bin/time -V make -j20 stage2 | tee -a "stage2.log"
 
-export RESEARCH_IS_REUSE_ACROSS_CONSTRUCTORS_ENABLED=TRUE
-export RESEARCH_LOG_VERBOSE=FALSE
-touch ../src/Init/Prelude.lean
-time -v make -j stage2
-
-export RESEARCH_IS_REUSE_ACROSS_CONSTRUCTORS_ENABLED=FALSE
-export RESEARCH_LOG_VERBOSE=FALSE
-touch ../src/Init/Prelude.lean
-time -v make -j stage2
-
-# make -j stage3
-# touch ../src/Init/Prelude.lean
-# make -j stage3
-#
-# touch ../src/Init/Prelude.lean
+rm -rf *
+cmake ../../ -DCCACHE=OFF -DRUNTIME_STATS=ON
+export RESEARCH_LOG_VERBOSE=false
+unset RESEARCH_LEAN_COMPILER_PROFILE_CSV_PATH
+export RESEARCH_IS_REUSE_ACROSS_CONSTRUCTORS_ENABLED=false
+make -j20 stage2
+touch ../../src/Init/Prelude.lean
+export RESEARCH_LEAN_COMPILER_PROFILE_CSV_PATH = stage1.reuse.disabled.csv
+/usr/bin/time -V make -j20 stage2 | tee -a "stage2.log"
