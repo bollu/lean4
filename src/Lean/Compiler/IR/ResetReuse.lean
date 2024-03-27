@@ -41,7 +41,7 @@ private partial def S (w : VarId) (c : CtorInfo) : FnBody → FnBody
   | FnBody.vdecl x t v@(Expr.ctor c' ys) b   =>
     if mayReuse c c' then
       let updtCidx := c.cidx != c'.cidx
-      FnBody.vdecl x t (Expr.reuse w c' updtCidx ys) b
+      FnBody.vdecl x t (Expr.reuse w c c' updtCidx ys) b
     else
       FnBody.vdecl x t v (S w c b)
   | FnBody.jdecl j ys v b   =>

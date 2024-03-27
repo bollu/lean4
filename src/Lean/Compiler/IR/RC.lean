@@ -182,7 +182,8 @@ private def addDecIfNeeded (ctx : Context) (x : VarId) (b : FnBody) (bLiveVars :
 private def processVDecl (ctx : Context) (z : VarId) (t : IRType) (v : Expr) (b : FnBody) (bLiveVars : LiveVarSet) : FnBody × LiveVarSet :=
   let b := match v with
     | (Expr.ctor _ ys)       => addIncBeforeConsumeAll ctx ys (FnBody.vdecl z t v b) bLiveVars
-    | (Expr.reuse _ _ _ ys)  => addIncBeforeConsumeAll ctx ys (FnBody.vdecl z t v b) bLiveVars
+    | (Expr.reuse _ _old _new _ ys)  =>
+        addIncBeforeConsumeAll ctx ys (FnBody.vdecl z t v b) bLiveVars
     | (Expr.proj _ x)        =>
       let b := addDecIfNeeded ctx x b bLiveVars
       let b := if (getVarInfo ctx x).consume then addInc ctx z b else b

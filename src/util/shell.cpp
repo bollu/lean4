@@ -43,6 +43,12 @@ Author: Leonardo de Moura
 #include "library/compiler/ir_interpreter.h"
 #include "util/path.h"
 #include "stdlib_flags.h"
+
+#ifdef LEAN_TRACY
+#define TRACY_ENABLE
+#include "tracy/Tracy.hpp"
+#endif
+
 #ifdef _MSC_VER
 #include <io.h>
 #define STDOUT_FILENO 1
@@ -801,11 +807,12 @@ extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
 
         display_cumulative_profiling_times(std::cerr);
 
+
 	if (const char* out_path = std::getenv("RESEARCH_LEAN_PROFILER_CSV_PATH")) {
 	    std::ofstream profiler_out_file(out_path, std::ios::app);
 	    profiler.write_profiling_times(mod_fn, out_path, profiler_out_file);
 	} else {
-	    profiler.write_profiling_times(mod_fn, "cerr", std::cerr);
+	    // profiler.write_profiling_times(mod_fn, "cerr", std::cerr);
 	}
 
 #ifdef LEAN_SMALL_ALLOCATOR

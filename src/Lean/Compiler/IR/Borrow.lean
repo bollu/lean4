@@ -242,7 +242,7 @@ def ownArgsIfParam (xs : Array Arg) : M Unit := do
 
 def collectExpr (z : VarId) : Expr → M Unit
   | Expr.reset _ x      => ownVar z *> ownVar x
-  | Expr.reuse x _ _ ys => ownVar z *> ownVar x *> ownArgsIfParam ys
+  | Expr.reuse x _old _new _ ys => ownVar z *> ownVar x *> ownArgsIfParam ys
   | Expr.ctor _ xs      => ownVar z *> ownArgsIfParam xs
   | Expr.proj _ x       => do
     if (← isOwned x) then ownVar z

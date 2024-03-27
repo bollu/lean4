@@ -59,7 +59,7 @@ def normArgs (as : Array Arg) : M (Array Arg) := fun m =>
 def normExpr : Expr → M Expr
   | Expr.ctor c ys,      m => Expr.ctor c (normArgs ys m)
   | Expr.reset n x,      m => Expr.reset n (normVar x m)
-  | Expr.reuse x c u ys, m => Expr.reuse (normVar x m) c u (normArgs ys m)
+  | Expr.reuse x cold cnew u ys, m => Expr.reuse (normVar x m) cold cnew u (normArgs ys m)
   | Expr.proj i x,       m => Expr.proj i (normVar x m)
   | Expr.uproj i x,      m => Expr.uproj i (normVar x m)
   | Expr.sproj n o x,    m => Expr.sproj n o (normVar x m)
@@ -137,7 +137,7 @@ def mapArgs (f : VarId → VarId) (as : Array Arg) : Array Arg :=
 def mapExpr (f : VarId → VarId) : Expr → Expr
   | Expr.ctor c ys      => Expr.ctor c (mapArgs f ys)
   | Expr.reset n x      => Expr.reset n (f x)
-  | Expr.reuse x c u ys => Expr.reuse (f x) c u (mapArgs f ys)
+  | Expr.reuse x cold cnew u ys => Expr.reuse (f x) cold cnew u (mapArgs f ys)
   | Expr.proj i x       => Expr.proj i (f x)
   | Expr.uproj i x      => Expr.uproj i (f x)
   | Expr.sproj n o x    => Expr.sproj n o (f x)
