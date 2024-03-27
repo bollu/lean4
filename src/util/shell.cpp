@@ -14,9 +14,11 @@ Author: Leonardo de Moura
 #include <utility>
 #include <vector>
 #include <set>
+#include <chrono>
 #include "runtime/alloc.h"
 #include "runtime/research.h"
 #include "runtime/stackinfo.h"
+#include "runtime/optional.h"
 #include "runtime/interrupt.h"
 #include "runtime/memory.h"
 #include "runtime/thread.h"
@@ -443,7 +445,12 @@ void check_optarg(char const * option_name) {
 extern "C" object * lean_enable_initializer_execution(object * w);
 
 struct Profiler {
-  const bool isReuseEnabled() {
+  std::chrono::time_point<std::chrono::high_resolution_clock> time_start;
+  Profiler() {
+      time_start = std::chrono::high_resolution_clock::now();
+  };
+
+  bool isReuseEnabled() {
     return research_isReuseAcrossConstructorsEnabled(lean_box(-1));
   }
   template <typename T>
@@ -455,7 +462,7 @@ struct Profiler {
       << "," << name << ", " << val << "\n";
   }
   void write_profiling_times(std::string src_path, std::string out_path, std::ostream &o) {
-    if (false) {
+    if (research_isResearchLogVerbose()) {
       std::cerr << "writing profiling information "
                 << "[reuseEnabled=" << (isReuseEnabled() ? "true" : "false")
                 << "]"
@@ -463,6 +470,9 @@ struct Profiler {
                 << " to file '" << out_path << "'"
                 << "\n";
     }
+    const auto time_end = std::chrono::high_resolution_clock::now();
+    const auto time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count();
+
     write_file_identifier<uint64_t>(o, src_path, "rss", lean::get_peak_rss());
     write_file_identifier<uint64_t>(o, src_path, "num_alloc",
                                     lean::allocator::get_num_alloc());
@@ -480,6 +490,7 @@ struct Profiler {
                                     lean::allocator::get_num_exports());
     write_file_identifier<uint64_t>(o, src_path, "num_recycled_pages",
                                     lean::allocator::get_num_recycled_pages());
+    write_file_identifier<uint64_t>(o, src_path, "time_elapsed_ms", time_elapsed_ms);
   }
 };
 
@@ -810,13 +821,16 @@ extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
         display_cumulative_profiling_times(std::cerr);
 
 
-	if (const char* out_path = std::getenv("RESEARCH_LEAN_PROFILER_CSV_PATH")) {
-	    std::ofstream profiler_out_file(out_path, std::ios::app);
-	    profiler.write_profiling_times(mod_fn, out_path, profiler_out_file);
-	} else {
-	    // profiler.write_profiling_times(mod_fn, "cerr", std::cerr);
-	}
-
+        lean::optional <std::string> profiling_path =
+          getEnvVarMayExistNonemptyString("RESEARCH_LEAN_COMPILER_PROFILE_CSV_PATH");
+        if (profiling_path) {
+          if (*profiling_path == "-") {
+	          profiler.write_profiling_times(mod_fn, *profiling_path, std::cerr);
+          } else {
+            std::ofstream profiler_out_file(*profiling_path);
+	          profiler.write_profiling_times(mod_fn, *profiling_path, profiler_out_file);
+          }
+	      }
 #ifdef LEAN_SMALL_ALLOCATOR
         // If the small allocator is not enabled, then we assume we are not using the sanitizer.
         // Thus, we interrupt execution without garbage collecting.

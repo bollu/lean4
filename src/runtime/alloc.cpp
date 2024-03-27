@@ -35,39 +35,6 @@ Author: Leonardo de Moura
 LEAN_CASSERT(LEAN_PAGE_SIZE > LEAN_MAX_SMALL_OBJECT_SIZE);
 LEAN_CASSERT(LEAN_SEGMENT_SIZE > LEAN_PAGE_SIZE);
 
-extern "C"{
-// dump allocator info into logfile.
-void research_dump_allocator_log() {
-  std::ostream *o = &std::cerr;
-  std::ofstream *profiler_out_file = NULL;
-
-  std::string out_path_str = "---";
-  if (const char *out_path = std::getenv("RESEARCH_LEAN_PROFILER_CSV_PATH")) {
-    out_path_str = out_path;
-    profiler_out_file = new std::ofstream(out_path, std::ios::app);
-    o = profiler_out_file;
-  }
-  // const bool isReuseEnabled = research_isReuseAcrossConstructorsEnabled(lean_box(-1));
-
-  std::cerr << "writing profiling information "
-            // << "[reuseEnabled=" << (isReuseEnabled ? "true" : "false") << "]"
-            // << " to file '" << out_path_str << "'"
-            << "\n";
-  (*o << "rss, " << lean::get_peak_rss()) << "\n";
-  (*o << "num_alloc, " << lean::allocator::get_num_alloc()) << "\n";
-  (*o << "num_small_alloc, " << lean::allocator::get_num_small_alloc()) << "\n";
-  (*o << "num_dealloc, " << lean::allocator::get_num_dealloc()) << "\n";
-  (*o << "num_small_dealloc, " << lean::allocator::get_num_small_dealloc()) << "\n";
-  (*o << "num_segments, " << lean::allocator::get_num_segments()) << "\n";
-  (*o << "num_pages, " << lean::allocator::get_num_pages()) << "\n";
-  (*o << "num_exports, " << lean::allocator::get_num_exports()) << "\n";
-  (*o << "num_recycled_pages, " << lean::allocator::get_num_recycled_pages()) << "\n";
-  if (profiler_out_file) {
-    delete profiler_out_file;
-  }
-}
-} // end extern C
-
 
 namespace lean {
 
@@ -432,6 +399,7 @@ void * lean_alloc_small_cold(unsigned sz, unsigned slot_idx, page * p) {
 }
 
 extern "C" LEAN_EXPORT void * lean_alloc_small(unsigned sz, unsigned slot_idx) {
+    LEAN_RUNTIME_STAT_CODE(g_num_small_alloc++);
     page * p = g_heap->m_curr_page[slot_idx];
     g_heap->m_heartbeat++;
     void * r = p->m_header.m_free_list;
@@ -453,7 +421,6 @@ void * alloc(size_t sz) {
         return r;
     }
     lean_assert(g_heap);
-    LEAN_RUNTIME_STAT_CODE(g_num_small_alloc++);
     unsigned slot_idx = lean_get_slot_idx(sz);
     return lean_alloc_small(sz, slot_idx);
 }
