@@ -43,8 +43,8 @@ cmake ../../ \
   # -DLEAN_RESEARCH_COMPILER_PROFILE_CSV_PATH=$OUTFOLDER/$CSVNAME
 
 make -j stage1
-make -j stage2
-touch ../../src/Init/Prelude.lean
+# make -j stage2
+# touch ../../src/Init/Prelude.lean
 # touch $OUTFOLDER/$CSVNAME && echo "" > $OUTFOLDER/$CSVNAME
 $TIME -v make -j stage2 2>&1 | tee "time-noreuse-stage2.txt"
 # mv $OUTFOLDER/$CSVNAME $OUTFOLDER/$CSVNAME.noreuse.stage2.csv
@@ -67,8 +67,8 @@ cmake ../../ \
   # -DLEAN_RESEARCH_IS_REUSE_ACROSS_CONSTRUCTORS_ENABLED=1 \
   # -DLEAN_RESEARCH_COMPILER_PROFILE_CSV_PATH=$OUTFOLDER/$CSVNAME
 make -j stage1
-make -j stage2
-touch ../../src/Init/Prelude.lean
+# make -j stage2
+# touch ../../src/Init/Prelude.lean
 # touch $OUTFOLDER/$CSVNAME && echo "" > $OUTFOLDER/$CSVNAME
 $TIME -v make -j stage2 2>&1 | tee "time-reuse-stage2.txt"
 # mv $OUTFOLDER/$CSVNAME $OUTFOLDER/$CSVNAME.reuse.stage2.csv
