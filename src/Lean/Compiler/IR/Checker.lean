@@ -127,7 +127,7 @@ def checkExpr (ty : IRType) : Expr → M Unit
     if !ty.isStruct && !ty.isUnion && c.isRef then
       (checkObjType ty) *> checkArgs ys
   | Expr.reset _ x          => checkObjVar x *> checkObjType ty
-  | Expr.reuse x _ _ ys     => checkObjVar x *> checkArgs ys *> checkObjType ty
+  | Expr.reuse x _old _new _ ys     => checkObjVar x *> checkArgs ys *> checkObjType ty
   | Expr.box xty x          => checkObjType ty *> checkScalarVar x *> checkVarType x (fun t => t == xty)
   | Expr.unbox x            => checkScalarType ty *> checkObjVar x
   | Expr.proj i x           => do

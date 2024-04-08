@@ -39,6 +39,8 @@ Author: Leonardo de Moura
 #include "library/compiler/ir_interpreter.h"
 #include "util/path.h"
 #include "stdlib_flags.h"
+#define TRACY_ENABLE
+#include "tracy/Tracy.hpp"
 #ifdef _MSC_VER
 #include <io.h>
 #define STDOUT_FILENO 1
@@ -734,6 +736,7 @@ extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
             write_module(env, *olean_fn);
         }
 
+	FrameMarkStart("cpp");
         if (c_output && ok) {
             std::ofstream out(*c_output, std::ios_base::binary);
             if (out.fail()) {
@@ -744,6 +747,7 @@ extern "C" LEAN_EXPORT int lean_main(int argc, char ** argv) {
             out << lean::ir::emit_c(env, *main_module_name).data();
             out.close();
         }
+	FrameMarkEnd("cpp");
 
         if (llvm_output && ok) {
             initialize_Lean_Compiler_IR_EmitLLVM(/*builtin*/ false,

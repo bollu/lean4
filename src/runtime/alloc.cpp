@@ -9,6 +9,7 @@ Author: Leonardo de Moura
 #include "runtime/thread.h"
 #include "runtime/debug.h"
 #include "runtime/alloc.h"
+// #include "tracy/TracyC.h"
 
 #ifdef LEAN_RUNTIME_STATS
 #define LEAN_RUNTIME_STAT_CODE(c) c
