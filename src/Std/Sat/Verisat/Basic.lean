@@ -14,6 +14,15 @@ public import Std.Sat.CNF.Literal
 
 @[expose] public section
 
+protected def Array.traverse {α : Type} (xs : Array (Option α)) :
+    Option (Array α) := do
+  let mut out := #[]
+  for x? in xs do
+    let x ← x?
+    out := out.push x
+  return out
+
+
 namespace Verisat
 open Std Sat Tactic BVDecide
 
@@ -187,7 +196,7 @@ is created.
 def newClauseWithExplanation (s : State)
     (clause : Clause) (explanation? : Option ResolutionTree) :
     ClauseId × State :=
-  let clauseId := ClauseId.ofUInt32 s.clauses.size
+  let clauseId := ClauseId.ofUInt32 <| UInt32.ofNat <| s.clauses.size
   let explanation := explanation?.getD (.given clauseId)
   let s := { s with clauses := s.clauses.push ⟨clause, explanation⟩ }
   (clauseId, s)
@@ -211,7 +220,7 @@ def newVar (s : State) : State × Var :=
   let s := { s with var2assign := s.var2assign.push none }
   (s, v)
 
-def nVars (s : State) : UInt32 := s.var2assign.size
+def nVars (s : State) : UInt32 := UInt32.ofNat <| s.var2assign.size
 
 /-- Evaluate a variable. -/
 def evalVar (s : State) (v : Var) : xbool :=
@@ -241,13 +250,6 @@ def unwrapOption [Inhabited α] (s : State) (a? : Option α) : α × State :=
    | some a => (a, s)
 
 
-private def traverse {α : Type} (xs : Array (Option α)) :
-    Option (Array α) := do
-  let mut out := #[]
-  for x? in xs do
-    let some  x← x?
-      out := out.push x
-  return out
 
 /--
 Produce a model from the state.
@@ -255,7 +257,7 @@ Produce a model from the state.
 def model? (s : State) : Option (Array Bool) :=
     let var2obool : Array (Option Bool) := s.var2assign.map
       (fun oval => oval.map Prod.fst)
-    traverse var2obool
+    var2obool.traverse
 
 end State
 
@@ -288,8 +290,9 @@ def State.mkConflictClause (s : State) (cid : ClauseId)
     clause := clause.push lit.negate
     let litProof := .assumption lit
     clauseProof := .branch lit (fals:= clauseProof) (tru := litProof)
-  s.newClauseWithExplanation (Clause.ofArray clause) clauseProof
-
+  s.newClauseWithExplanation
+    (Clause.ofArray clause)
+    (some clauseProof)
 
 /-- undo the assignment of the given literal. -/
 def State.undoAssignment (s : State) (lit : Lit) : State := Id.run do
@@ -429,7 +432,7 @@ partial def State.solve (s : State) : SatSolveResult × State :=
       let s := s.enqueuePropQ vlit vproof
       let s := s.propagate
       s.solve
-    else -- TODO: I need to get some variable from the HashSet.
+    else
       (.sat, s)
 
 

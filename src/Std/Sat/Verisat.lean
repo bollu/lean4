@@ -9,4 +9,3 @@ prelude
 public import Std.Sat.Verisat.Basic
 
 @[expose] public section
-
