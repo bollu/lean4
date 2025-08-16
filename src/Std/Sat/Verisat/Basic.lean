@@ -7,6 +7,7 @@ public import Std.Sat.CNF
 public import Std.Tactic.BVDecide.LRAT
 public import Std.Data.HashMap
 public import Std.Data.HashSet
+public import Init.Data.Queue
 public import Init.Data.List.Lemmas
 public import Init.Data.List.Impl
 public import Std.Sat.CNF.Literal
@@ -241,13 +242,11 @@ def unwrapOption [Inhabited α] (s : State) (a? : Option α) : α × State :=
 
 
 private def traverse {α : Type} (xs : Array (Option α)) :
-    Option (Array α) := Id.run do
+    Option (Array α) := do
   let mut out := #[]
   for x? in xs do
-    if let some x := x? then
+    let some  x← x?
       out := out.push x
-    else
-      return none
   return out
 
 /--
