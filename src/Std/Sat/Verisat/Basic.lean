@@ -60,6 +60,10 @@ def Lit.ofIndex (ix : Nat) : Lit :=
     let val := Int32.ofNat (ix / 2)
     Lit.ofRawInt (if ix % 2 == 1 then - val else val)
 
+def Lit.toInt (l : Lit) : Int :=
+  l.toRawInt.toInt
+
+
 /-
 theorem Lit.ofIndex_toIndex (l : Lit) :
     Lit.ofIndex l.toIndex = l := by
@@ -81,6 +85,7 @@ def ClauseId.toIndex (cid : ClauseId) : Nat :=
 structure Clause where ofArray ::
   toArray : Array Lit
 deriving Inhabited
+
 
 /-- An axiom for showing that computations are inbounds. -/
 axiom Inbounds {P : Prop} : P
@@ -107,6 +112,8 @@ def Clause.findLitIx (c : Clause) (lit : Lit) (startIx : Nat := 0) :
     then return some i
   return none
 
+def Clause.toIntArray (c : Clause) : Array Int :=
+  c.toArray.map Lit.toInt
 
 /-- Resolution tree with assumptions for RAT. -/
 inductive ResolutionTree
@@ -115,8 +122,6 @@ inductive ResolutionTree
 | assumption (lit : Lit) -- TODO: cache these?
 deriving Hashable, Inhabited, DecidableEq
 
-namespace ResolutionTree
-end ResolutionTree
 
 /-- a boolean which is potentially unassigned. -/
 inductive xbool
@@ -435,5 +440,77 @@ partial def State.solve (s : State) : SatSolveResult × State :=
     else
       (.sat, s)
 
+namespace ResolutionTree
+
+variable (r : ResolutionTree) (s : State)
+
+/--
+Insert the clauses that were used to prove 'r'
+into the set of clauses 'HashSet clauseId'.
+-/
+def clausesUsed (r : ResolutionTree)
+  (cs : HashSet ClauseId) :
+    HashSet ClauseId :=
+  match r with
+  | .given clauseId =>
+    cs.insert clauseId
+  | .branch _ fals tru =>
+    let cs := fals.clausesUsed cs
+    let cs := tru.clausesUsed cs
+    cs
+  | .assumption _ => cs
+
+
+/--
+Appends the conflicts that were used to produce
+the resolution tree 'r' to the array 'conflicts'.
+The order of conflicts is from earliest to latest,
+in terms of their creation time.
+-/
+def appendConflictIdsInOrder
+  (alreadyAddedConflicts : HashSet ClauseId)
+  (conflicts : Array ClauseId)
+  (r : ResolutionTree) :
+  Array ClauseId :=
+  match r with
+  | .given clauseId =>
+    if clauseId.toIndex >= s.learntClausesStartIx
+    then -- is a learnt clause
+      conflicts.push clauseId
+    else conflicts
+  | .branch _lit fals tru =>
+    let conflicts :=
+      appendConflictIdsInOrder
+        alreadyAddedConflicts conflicts fals
+    let conflicts :=
+      appendConflictIdsInOrder
+        alreadyAddedConflicts conflicts tru
+    conflicts
+  | .assumption _lit => conflicts
+
+/--
+Convert a resolution tree into an LRAT proof.
+-/
+def toLrat : Array LRAT.IntAction := Id.run do
+  let cids := appendConflictIdsInOrder
+    (s := s)
+    (alreadyAddedConflicts := ∅)
+    (conflicts := #[])
+    (r := r)
+  let mut actions := #[]
+  for cid in cids do
+    let (clause, proof) := s.clauses[cid.toIndex]!
+    let usedClauses :=
+      proof.clausesUsed ∅
+      |>.toArray
+      |>.map ClauseId.toIndex
+    actions := actions.push
+      (LRAT.Action.addRup
+        (id := cid.toIndex)
+        (c := clause.toIntArray)
+        (rupHints :=  usedClauses))
+  actions
+
+end ResolutionTree
 
 end Verisat
