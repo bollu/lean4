@@ -6,6 +6,7 @@ Authors: Henrik Böving
 module
 
 prelude
+public import Std.Sat.Verisat
 public import Std.Sat.AIG.CNF
 public import Std.Sat.AIG.RelabelNat
 public import Std.Tactic.BVDecide.Bitblast
@@ -120,7 +121,7 @@ structure CounterExample where
 
 structure UnsatProver.Result where
   proof : Expr
-  lratCert : LratCert
+  lratCert : Option LratCert
 
 abbrev UnsatProver := MVarId → ReflectionResult → Std.HashMap Nat (Nat × Expr × Bool) →
     MetaM (Except CounterExample UnsatProver.Result)
@@ -322,6 +323,58 @@ where
       safety := .safe
     }
 
+/--
+Turn an `LratCert` into a proof that some `reflectedExpr` is UNSAT.
+-/
+def mkLratActionsToReflectionProof (actions : Array LRAT.IntAction)
+    (cfg : TacticContext)
+    (reflectionResult : ReflectionResult) : MetaM Expr := do
+  withTraceNode `Meta.Tactic.sat (fun _ => return "Compiling expr term") do
+    mkAuxDecl cfg.exprDef reflectionResult.expr (mkConst ``BVLogicalExpr)
+
+  withTraceNode `Meta.Tactic.sat (fun _ => return "Compiling proof certificate term") do
+    mkAuxDecl cfg.certDef (toExpr actions) (mkApp (mkConst ``Array [1]) (mkConst ``LRAT.IntAction))
+
+  let reflectedExpr := mkConst cfg.exprDef
+  let certExpr := mkConst cfg.certDef
+
+  withTraceNode `Meta.Tactic.sat (fun _ => return "Compiling reflection proof term") do
+    let auxValue := mkApp2 (mkConst ``verifyBVExprActions) reflectedExpr certExpr
+    mkAuxDecl cfg.reflectionDef auxValue (mkConst ``Bool)
+
+  let auxType ← mkEq (mkConst cfg.reflectionDef) (toExpr true)
+  let auxProof :=
+    mkApp3
+      (mkConst ``Lean.ofReduceBool)
+      (mkConst cfg.reflectionDef)
+      (toExpr true)
+      (← mkEqRefl (toExpr true))
+  try
+    let auxLemma ←
+      -- disable async TC so we can catch its exceptions
+      withOptions (Elab.async.set · false) do
+        withTraceNode `Meta.Tactic.sat (fun _ => return "Verifying LRAT certificate") do
+          mkAuxLemma [] auxType auxProof
+    return mkApp3 (mkConst ``unsat_of_verifyBVExprActions_eq_true) reflectedExpr certExpr (mkConst auxLemma)
+  catch e =>
+    throwError m!"Failed to check the LRAT certificate in the kernel:\n{e.toMessageData}"
+where
+  /--
+  Add an auxiliary declaration. Only used to create constants that appear in our reflection proof.
+  -/
+  mkAuxDecl (name : Name) (value type : Expr) : CoreM Unit :=
+    addAndCompile <| .defnDecl {
+      name := name,
+      levelParams := [],
+      type := type,
+      value := value,
+      hints := .abbrev,
+      safety := .safe
+    }
+
+-- LRAT.check lratProof cnf
+
+
 def lratBitblaster (goal : MVarId) (ctx : TacticContext) (reflectionResult : ReflectionResult)
     (atomsAssignment : Std.HashMap Nat (Nat × Expr × Bool)) :
     MetaM (Except CounterExample UnsatProver.Result) := do
@@ -345,19 +398,30 @@ def lratBitblaster (goal : MVarId) (ctx : TacticContext) (reflectionResult : Ref
         (cnf, map)
       )
 
-  let res ←
-    withTraceNode `Meta.Tactic.sat (fun _ => return "Obtaining external proof certificate") do
-      runExternal cnf ctx.solver ctx.lratPath ctx.config.trimProofs ctx.config.timeout ctx.config.binaryProofs
-
-  match res with
-  | .ok cert =>
-    trace[Meta.Tactic.sat] "SAT solver found a proof."
-    let proof ← cert.toReflectionProof ctx reflectionResult
-    return .ok ⟨proof, cert⟩
-  | .error assignment =>
-    trace[Meta.Tactic.sat] "SAT solver found a counter example."
-    let equations := reconstructCounterExample map assignment aigSize atomsAssignment
-    return .error { goal, unusedHypotheses := reflectionResult.unusedHypotheses, equations }
+  match ctx.config.satBackend with
+  | .cadical =>
+      let res ← withTraceNode `Meta.Tactic.sat (fun _ => return "Obtaining external proof certificate") do
+        runExternal cnf ctx.solver ctx.lratPath ctx.config.trimProofs ctx.config.timeout ctx.config.binaryProofs
+      match res with
+      | .ok cert =>
+        trace[Meta.Tactic.sat] "SAT solver found a proof."
+        let proof ← cert.toReflectionProof ctx reflectionResult
+        return .ok ⟨proof, some cert⟩
+      | .error assignment =>
+        trace[Meta.Tactic.sat] "SAT solver found a counter example."
+        let equations := reconstructCounterExample map assignment aigSize atomsAssignment
+        return .error { goal, unusedHypotheses := reflectionResult.unusedHypotheses, equations }
+    | .verisat =>
+      let res ← Verisat.runOneShot cnf
+      match res with
+      | .ok actions =>
+        trace[Meta.Tactic.sat] "SAT solver found a proof."
+        let proof ← mkLratActionsToReflectionProof actions ctx reflectionResult
+        return .ok ⟨proof, none⟩
+      | .error assignment =>
+        trace[Meta.Tactic.sat] "SAT solver found a counter example."
+        let equations := reconstructCounterExample map assignment aigSize atomsAssignment
+        return .error { goal, unusedHypotheses := reflectionResult.unusedHypotheses, equations }
 
 def reflectBV (g : MVarId) : M ReflectionResult := g.withContext do
   let hyps ← getPropHyps
@@ -386,7 +450,7 @@ def reflectBV (g : MVarId) : M ReflectionResult := g.withContext do
     }
 
 def closeWithBVReflection (g : MVarId) (unsatProver : UnsatProver) :
-    MetaM (Except CounterExample LratCert) := M.run do
+    MetaM (Except CounterExample (Option LratCert)) := M.run do
   g.withContext do
     let reflectionResult ←
       withTraceNode `Meta.Tactic.bv (fun _ => return "Reflecting goal into BVLogicalExpr") do
@@ -403,7 +467,7 @@ def closeWithBVReflection (g : MVarId) (unsatProver : UnsatProver) :
       return .ok cert
     | .error counterExample => return .error counterExample
 
-def bvUnsat (g : MVarId) (ctx : TacticContext) : MetaM (Except CounterExample LratCert) := M.run do
+def bvUnsat (g : MVarId) (ctx : TacticContext) : MetaM (Except CounterExample (Option LratCert)) := M.run do
   let unsatProver : UnsatProver := fun g reflectionResult atomsAssignment => do
     withTraceNode `Meta.Tactic.bv (fun _ => return "Preparing LRAT reflection term") do
       lratBitblaster g ctx reflectionResult atomsAssignment
@@ -427,7 +491,7 @@ def bvDecide' (g : MVarId) (ctx : TacticContext) : MetaM (Except CounterExample 
   let g? ← Normalize.bvNormalize g ctx.config
   let some g := g? | return .ok ⟨none⟩
   match ← bvUnsat g ctx with
-  | .ok lratCert => return .ok ⟨some lratCert⟩
+  | .ok lratCert? => return .ok ⟨lratCert?⟩
   | .error counterExample => return .error counterExample
 
 /--

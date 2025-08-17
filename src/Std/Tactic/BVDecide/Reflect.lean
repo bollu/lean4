@@ -196,6 +196,27 @@ theorem unsat_of_verifyBVExpr_eq_true (bv : BVLogicalExpr) (c : String)
   rw [verifyBVExpr] at h
   assumption
 
+/--
+Verify that `cert` is an LRAT certificate
+for the SAT problem obtained by bitblasting `bv`.
+-/
+def verifyBVExprActions (bv : BVLogicalExpr) (actions : Array LRAT.IntAction) : Bool :=
+  LRAT.check actions (AIG.toCNF bv.bitblast.relabelNat)
+
+/--
+'bv' is unsatisfiable if the
+LRAT certificate checker is satisfied by our check.
+-/
+theorem unsat_of_verifyBVExprActions_eq_true (bv : BVLogicalExpr) (actions : Array LRAT.IntAction)
+    (h : verifyBVExprActions bv actions = true) :
+    bv.Unsat := by
+  apply BVLogicalExpr.unsat_of_bitblast
+  rw [← AIG.Entrypoint.relabelNat_unsat_iff]
+  rw [← AIG.toCNF_equisat]
+  apply LRAT.check_sound
+  simp only [verifyBVExprActions] at h
+  apply h
+
 end Reflect
 
 end Std.Tactic.BVDecide

@@ -11,6 +11,7 @@ public import Init.Data.Queue
 public import Init.Data.List.Lemmas
 public import Init.Data.List.Impl
 public import Std.Sat.CNF.Literal
+public import Lean.CoreM
 
 @[expose] public section
 
@@ -76,7 +77,7 @@ theorem Lit.ofIndex_toIndex (l : Lit) :
 /-- Id of a clause. -/
 structure ClauseId where ofUInt32 ::
   toUInt32 : UInt32
-deriving DecidableEq, Hashable
+deriving DecidableEq, Hashable, Inhabited
 
 def ClauseId.toIndex (cid : ClauseId) : Nat :=
   cid.toUInt32.toNat
@@ -255,7 +256,16 @@ def unwrapOption [Inhabited α] (s : State) (a? : Option α) : α × State :=
    | some a => (a, s)
 
 
-
+/--
+Produce a partial assignment from the solver state.
+-/
+def partialAssignment (s : State) : Array (Nat × Bool) :=
+    let var2obool : Array (Option Bool) := s.var2assign.map
+      (fun oval => oval.map Prod.fst)
+    var2obool.zipIdx
+      |>.filterMap fun
+        | (none, _) => none
+        | (some b, ix) => some (ix, b)
 /--
 Produce a model from the state.
 -/
@@ -512,5 +522,23 @@ def toLrat : Array LRAT.IntAction := Id.run do
   actions
 
 end ResolutionTree
+
+
+/-! Helpers for bvDecide interaction. -/
+open Lean Meta in
+def runOneShot (cnf : CNF Nat) :
+    CoreM (Except (Array (Bool × Nat)) (Array LRAT.IntAction)) := do
+  let solver := State.newFromProblem cnf
+  let (result, solver) := solver.solve
+  match result with
+  | .unsat =>
+    let resolutionProof :=
+      solver.clauses[solver.unsatClause?.get!.toIndex]!.snd
+    return (Except.ok <| resolutionProof.toLrat solver)
+  | .sat =>
+    let partialAssign := solver.partialAssignment
+    return (Except.error <| partialAssign.map Prod.swap)
+  | .nofuel =>
+    throwError "ran out of fuel when trying to solve the problem."
 
 end Verisat

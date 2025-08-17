@@ -16,6 +16,23 @@ set_option linter.missingDocs true -- keep it documented
 namespace Lean.Elab.Tactic.BVDecide.Frontend
 
 /--
+The backend SAT solver to be used.
+-/
+inductive BVDecideSatBackend
+/--
+Spin of a CaDiCaL instance.
+-/
+| cadical
+/--
+Pure-lean incremental SAT solver.
+Is faster than invoking cadical for small to medium SAT problems,
+and supports incremental SAT solving for
+abstraction-refinement & model-checking algorithms.
+-/
+| verisat
+deriving Inhabited, DecidableEq, Repr
+
+/--
 The configuration options for `bv_decide`.
 -/
 structure BVDecideConfig where
@@ -69,6 +86,10 @@ structure BVDecideConfig where
   if matching multiplications are not needed to proof a goal.
   -/
   shortCircuit : Bool := false
+  /--
+  Backend SAT solver to be used.
+  -/
+  satBackend : BVDecideSatBackend := .cadical
 
 end Lean.Elab.Tactic.BVDecide.Frontend
 
