@@ -12,6 +12,7 @@ public import Init.Data.List.Lemmas
 public import Init.Data.List.Impl
 public import Std.Sat.CNF.Literal
 public import Lean.CoreM
+public import Lean.Message
 
 @[expose] public section
 
@@ -183,6 +184,9 @@ structure State where
   occurs on level 1.
   -/
   level2Undo : Array (Array Lit) := #[#[]]
+  /-- Message log. -/
+  messages        : Lean.MessageLog     := {}
+
 
 instance : EmptyCollection State where
   emptyCollection := {}
@@ -193,6 +197,35 @@ instance : Inhabited State where
 
 namespace State
 def empty : State := ∅
+
+def resetMessageLog (s : State) : State :=
+  { s with messages := {} }
+
+/--
+Returns the current log and then resets its messages.
+-/
+def getAndEmptyMessageLog (s : State): Lean.MessageLog × State :=
+  let messages := s.messages
+  (messages, s.resetMessageLog)
+
+/-- log a message. -/
+def log (s : State) (msgData : Lean.MessageData) (severity : Lean.MessageSeverity) : State :=
+  let msg : Lean.Message := {
+    fileName := "<veritinysat>",
+    data := msgData,
+    pos := Lean.Position.mk 0 0,
+    severity := severity
+  }
+  { s with messages := s.messages.add msg }
+
+def logInfo (s : State) (msgData : Lean.MessageData) : State :=
+  s.log msgData Lean.MessageSeverity.information
+
+def logWarning (s : State) (msgData : Lean.MessageData) : State :=
+  s.log msgData Lean.MessageSeverity.warning
+
+def logError (s : State) (msgData : Lean.MessageData) : State :=
+  s.log msgData Lean.MessageSeverity.error
 
 /--
 Create a new clause, with optionally an explanation.
@@ -245,16 +278,16 @@ def dequePropQ (s : State) : Option ((Lit × ResolutionTree) × State) :=
   else
     none
 
-def assert [Repr α] (s : State) (_b : Bool) (_msg : Unit → α) : State :=
-  s
+def assert [Lean.ToMessageData α] (s : State) (b : Bool) (msgFn : Unit → α) : State :=
+  if b then s
+  else s.logError (Lean.toMessageData <| msgFn ())
 
 def unwrapOption [Inhabited α] (s : State) (a? : Option α) : α × State :=
-   match a? with
-   | none =>
-     dbg_trace "unable to unwrap option."
-     (default, s)
-   | some a => (a, s)
-
+  match a? with
+  | none =>
+    let s := s.logError "unable to unwrap option."
+    (default, s)
+  | some a => (a, s)
 
 /--
 Produce a partial assignment from the solver state.
@@ -275,8 +308,6 @@ def model? (s : State) : Option (Array Bool) :=
     var2obool.traverse
 
 end State
-
-
 
 inductive FindNonFalseLitResult
 | tru
