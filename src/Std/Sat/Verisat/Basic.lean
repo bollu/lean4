@@ -237,6 +237,11 @@ def State.var2assignMessageData (s : State) : Lean.MessageData :=
   let msgs := s.var2assign.zipIdx.map fun (oval, i) =>
     m!"{Var.ofIndex i}={xbool.ofOption <| oval.map Prod.fst}"
   m!"{msgs}"
+
+
+def State.decisionTrailMessageData (s : State) : Lean.MessageData :=
+  m!"{s.decisionTrail.map Lean.toMessageData}"
+
 instance : EmptyCollection State where
   emptyCollection := {}
 
@@ -298,7 +303,7 @@ def newClauseWithExplanation (s : State)
   let clauseId := ClauseId.ofUInt32 <| UInt32.ofNat <| s.clauses.size
   let explanation := explanation?.getD (.given clauseId)
   let s := { s with clauses := s.clauses.push ⟨clause, explanation⟩ }
-  let s  := s.logInfo m!"adding new clause {clauseId.toMessageDataRaw} @ {clause.toArray}"
+  let s  := s.logInfo m!"NEW-CLAUSE-WITH-EXPLAIN '{clauseId.toMessageDataRaw}' @ '{clause.toArray}'"
 
   if clause.size = 0 then
     let s := { s with unsatClause? := some clauseId }
@@ -440,22 +445,10 @@ def State.findNonFalseLit
   return .allFalse
 
 
-/-- Makes a new conflict clause from a given clause. -/
-def State.mkConflictClause (s : State) (cid : ClauseId)
-    : ClauseId × State := Id.run do
-  let mut clause : Array Lit := #[]
-  let mut clauseProof : ResolutionTree := .given cid
-  for lit  in s.decisionTrail do
-    clause := clause.push lit.negate
-    let litProof := .assumption lit
-    clauseProof := .branch lit (fals:= clauseProof) (tru := litProof)
-  s.newClauseWithExplanation
-    (Clause.ofArray clause)
-    (some clauseProof)
-
 /-- undo the assignment of the given literal. -/
 def State.undoAssignment (s : State) (lit : Lit) : State := Id.run do
   let mut s := s
+  s := s.logInfo m!"UNDO-ASSIGN '{lit}'"
   -- delete assignment.
   s := { s with var2assign :=
     s.var2assign.set! (lit.toVar.toIndex) none }
@@ -466,6 +459,12 @@ def State.undoAssignment (s : State) (lit : Lit) : State := Id.run do
   s := { s with unassignedVars :=
       s.unassignedVars.insert lit.toVar
     }
+  -- need to rewatch.
+  let undos := s.lit2clausesOnUndo[lit.toIndex]!
+  s := { s with
+    lit2clauses := s.lit2clauses.set! lit.toIndex undos
+    lit2clausesOnUndo := s.lit2clausesOnUndo.set! lit.toIndex #[]
+  }
   s
 
 /--
@@ -477,6 +476,7 @@ def State.lastDecision? (s : State) : Option Lit := s.decisionTrail.back?
 /-- undo a single decision. -/
 def State.undoOneDecision (s : State) : State := Id.run do
   let lit := s.decisionTrail.back!
+  let s := s.logInfo m!"UNDO-DECISION '{lit}'"
   let s := s.undoAssignment lit
   let s := { s with decisionTrail := s.decisionTrail.pop }
   let assigns := s.level2Undo.back!
@@ -485,6 +485,33 @@ def State.undoOneDecision (s : State) : State := Id.run do
   for assign in assigns do
     s := s.undoAssignment assign
   s
+
+
+/--
+Makes a new conflict clause from a given proof of 'false' @ 'cid'.
+- clears propagation queue.
+- adds the conflict clause.
+- sets this as a toplevel proof if it is an unsat proof.
+- otherwise, it undoes the toplevel decision.
+-/
+def State.mkConflictClause (s : State) (unsatProof : ResolutionTree)
+    : State := Id.run do
+  let mut clause : Array Lit := #[]
+  let mut clauseProof : ResolutionTree := unsatProof
+  for lit  in s.decisionTrail do
+    clause := clause.push lit.negate
+    let litProof := .assumption lit
+    clauseProof := .branch lit (fals:= clauseProof) (tru := litProof)
+  let s := { s with propQ := ∅ }
+  let (conflictId, s) := s.newClauseWithExplanation
+    (Clause.ofArray clause)
+    (some clauseProof)
+  if clause.isEmpty then
+    let s := { s with unsatClause? := some conflictId }
+    s
+  else
+    let s := s.undoOneDecision
+    s
 
 
 /-- Get all watched clauses for a literal, and clear the watched clauses list. -/
@@ -507,19 +534,12 @@ def State.propagateLitInClause (s : State)
     We've found a conflict clause. Flush the queue,
     add the clause.
     -/
-    let s := s.emptyPropQ
-    let (conflictId, s) := s.mkConflictClause cid
-    if let some _lit := s.lastDecision? then
-      -- We have not found UNSAT, but we have found a conflict.
-      -- return the conflict clause.
-      let s := s.logInfo m!"undoing decision..."
-      let s := s.undoOneDecision
-      s
-    else
-      -- We have found UNSAT.
-      let s := s.logInfo m!"found toplevel conflict clause: {conflictId.toMessageData s}"
-      let s := { s with unsatClause? := some conflictId }
-      return s
+    let mut unsatProof := s.clauses[cid.toIndex]!.snd
+    for lit in s.decisionTrail do
+      let litProof := .assumption lit
+      unsatProof := ResolutionTree.branch lit (fals := unsatProof) (tru := litProof)
+    let s := s.mkConflictClause unsatProof
+    return s
     | .tru =>
       let s := s.logInfo m!"found 'tru' in clause. Skipping..."
       s -- nothing to propagate, clause has 'true' in it.
@@ -564,18 +584,8 @@ partial def State.propagate (s : State) : State := propagateAux s where
         else
           -- we have a conflicting assignment.
           let conflictReason : ResolutionTree := .branch lit litProof vProof
-          let (cid, s) := s.newClauseWithExplanation (Clause.ofArray #[]) (explanation? := some conflictReason)
-          let (conflictId, s) := s.mkConflictClause cid
-          if let some _lit := s.lastDecision? then
-            let s := s.logInfo m!"undoing decision..."
-            -- is it on us to undo the decision? maybe!
-            let s := s.undoOneDecision
-            s
-          else
-            -- We have found UNSAT.
-            let s := s.logInfo m!"found toplevel conflict clause: {conflictId.toMessageData s}"
-            let s := { s with unsatClause? := some conflictId }
-            return s
+          let s := s.mkConflictClause conflictReason
+          s
       else
         -- we don't have an assignment, continue.
         let s := { s with var2assign := s.var2assign.set! v.toIndex (some (lit.positive?, litProof)) }
@@ -618,7 +628,7 @@ partial def State.solve (s : State) : SatSolveResult × State :=
         -- add the decision to the trail.
         let s := { s with decisionTrail := s.decisionTrail.push vlit }
         let s := { s with level2Undo := s.level2Undo.push #[] }
-        let s := s.logInfo m!"-- level '{s.level2Undo.size}' decided @ '{vlit}' --"
+        let s := s.logInfo m!"-- SOLVE-AUX '{s.level2Undo.size}' decided @ '{vlit}' trail: '{s.decisionTrailMessageData}'--"
         let vproof := .assumption vlit
         -- | TODO: decide who assigns: Do we assume that the assignment is done before propagation?
         let s := s.enqueuePropQ vlit vproof
