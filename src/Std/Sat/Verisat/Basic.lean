@@ -122,7 +122,9 @@ def Clause.size (c : Clause)  : Nat := c.toArray.size
 def Clause.ofCNF (c : CNF.Clause Nat) : Clause where
   toArray :=
     c.toArray.map fun (varId, positive) =>
-      (Var.ofRawNat varId).toLit positive
+      -- these come from a CNF, which is `([0..n), polarity:true/false)`.
+      -- we need to convert it to our representation.
+      (Var.ofIndex varId).toLit positive
 
 def Clause.get (c : Clause) (ix : Nat) : Lit := c.toArray[ix]!
 
@@ -290,7 +292,7 @@ def newClauseWithExplanation (s : State)
   let clauseId := ClauseId.ofUInt32 <| UInt32.ofNat <| s.clauses.size
   let explanation := explanation?.getD (.given clauseId)
   let s := { s with clauses := s.clauses.push ⟨clause, explanation⟩ }
-  let s  := s.logInfo m!"new {clauseId.toMessageDataRaw} {clause.toArray}"
+  let s  := s.logInfo m!"adding new clause {clauseId.toMessageDataRaw} @ {clause.toArray}"
 
   if clause.size = 0 then
     let s := { s with unsatClause? := some clauseId }
@@ -353,14 +355,14 @@ Setup the solver state from the given problem.
 def newFromProblem (problem : CNF Nat) : State := Id.run do
   let mut s := State.empty
   /- get the largest variable ID. Since all variable IDs are nonzero,
-  we know that this will be right. -/
+  we know that this will be right. This is zero-indexed. -/
   let maxVarId : Nat := problem.foldl (init := 0) fun n clause =>
-    clause.foldl (init := n) fun n (varId, _) =>
+    clause.foldl (init := n) fun n (varId, _polarity) =>
       max n varId
-
-  while s.nVars.toNat < maxVarId do
-    let (s', _v) := s.newVar
-    s := s'
+  let maxVars := maxVarId + 1
+  while s.nVars.toNat < maxVars do
+    let (snew, _v) := s.newVar
+    s := snew
 
   problem.foldl (init := s) fun s clause =>
       s.newProblemClause (Clause.ofCNF clause) |>.snd

@@ -397,7 +397,7 @@ def lratBitblaster (goal : MVarId) (ctx : TacticContext) (reflectionResult : Ref
         let cnf := AIG.toCNF entry
         (cnf, map)
       )
-
+  trace[Meta.Tactic.sat] "CNF: '{cnf}'"
   match ctx.config.satBackend with
   | .cadical =>
       let res ← withTraceNode `Meta.Tactic.sat (fun _ => return "Obtaining external proof certificate") do
