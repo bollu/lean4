@@ -224,6 +224,12 @@ instance : EmptyCollection State where
 instance : Inhabited State where
   default := ∅
 
+/-- convert a clause ID a clause, using the state in the solver. -/
+def ClauseId.toClause (s : State) (cid : ClauseId) : Clause :=
+  s.clauses[cid.toIndex]!.fst
+
+def ClauseId.toMessageData (s : State) (cid : ClauseId) : Lean.MessageData :=
+  m!"{cid.toMessageDataRaw}:{cid.toClause s |>.toArray}"
 
 namespace State
 def empty : State := ∅
@@ -245,6 +251,22 @@ def logWarning (s : State) (msgData : Lean.MessageData) : State :=
 def logError (s : State) (msgData : Lean.MessageData) : State :=
   s.log msgData Lean.MessageSeverity.error
 
+/-- Add a literal for propgation. -/
+def enqueuePropQ (s : State) (lit : Lit) (reason : ResolutionTree) : State :=
+  { s with propQ := s.propQ.enqueue (lit, reason) }
+
+/-- empty the propgation queue. -/
+def emptyPropQ (s : State) : State :=
+  { s with propQ := .empty }
+
+
+/-- Add a clause to the watched clauses of this literal. -/
+def watchClauseAtLit (s : State) (cid : ClauseId) (lit : Lit) : State :=
+  { s with lit2clauses :=
+      s.lit2clauses.modify lit.toIndex fun clauses =>
+        clauses.push cid
+  }
+
 /--
 Create a new clause, with optionally an explanation.
 If no explanation is given, then a default 'assumption' explanation
@@ -257,8 +279,17 @@ def newClauseWithExplanation (s : State)
   let explanation := explanation?.getD (.given clauseId)
   let s := { s with clauses := s.clauses.push ⟨clause, explanation⟩ }
   let s  := s.logInfo m!"new {clauseId.toMessageDataRaw} {clause.toArray}"
-  (clauseId, s)
 
+  if clause.size = 0 then
+    let s := { s with unsatClause? := some clauseId }
+    (clauseId, s)
+  else if clause.size = 1 then
+    let s := s.enqueuePropQ (clause.get 0) (.given clauseId)
+    (clauseId, s)
+  else
+    -- | Setup 1-watch literal.
+    let s := s.watchClauseAtLit clauseId (clause.get 0)
+    (clauseId, s)
 /--
 Create a new clause from the problem description.
 -/
@@ -427,20 +458,6 @@ def State.undoOneDecision (s : State) : State := Id.run do
     s := s.undoAssignment assign
   s
 
-/-- Add a literal for propgation. -/
-def State.enqueuePropQ (s : State) (lit : Lit) (reason : ResolutionTree) : State :=
-  { s with propQ := s.propQ.enqueue (lit, reason) }
-
-/-- empty the propgation queue. -/
-def State.emptyPropQ (s : State) : State :=
-  { s with propQ := .empty }
-
-/-- Add a clause to the watched clauses of this literal. -/
-def State.watchClauseAtLit (s : State) (cid : ClauseId) (lit : Lit) : State :=
-  { s with lit2clauses :=
-      s.lit2clauses.modify lit.toIndex fun clauses =>
-        clauses.push cid
-  }
 
 /-- Get all watched clauses for a literal, and clear the watched clauses list. -/
 def State.getAndClearWatchedClausesAtLit (s : State) (lit : Lit) :
@@ -452,11 +469,13 @@ def State.getAndClearWatchedClausesAtLit (s : State) (lit : Lit) :
 
 /-- Propagate a literal assignment of lit 'Lit' in clause 'clauseId'. -/
 def State.propagateLitInClause (s : State)
-  (_lit : Lit) (reason: ResolutionTree)
+  (lit : Lit) (reason: ResolutionTree)
   (cid : ClauseId) :
     State := Id.run do
+  let s := s.logInfo m!"propagating literal {lit} @ clause {cid.toMessageData s}"
   match s.findNonFalseLit cid 0 with
   | .allFalse =>
+    let s := s.logInfo m!"found clause that is all false: {cid.toMessageData s}"
     /-
     We've found a conflict clause. Flush the queue,
     add the clause.
@@ -465,15 +484,20 @@ def State.propagateLitInClause (s : State)
     let (conflictId, s) := s.mkConflictClause cid
     if let some _lit := s.lastDecision? then
       -- We have not found UNSAT, but we have found a conflict.
-      -- return the conf, _)lict clause.
+      -- return the conflict clause.
+      let s := s.logInfo m!"undoing decision..."
       let s := s.undoOneDecision
       s
     else
       -- We have found UNSAT.
+      let s := s.logInfo m!"found toplevel conflict clause: {conflictId.toMessageData s}"
       let s := { s with unsatClause? := some conflictId }
       return s
-    | .tru => s -- nothing to propagate, clause has 'true' in it.
+    | .tru =>
+      let s := s.logInfo m!"found 'tru' in clause. Skipping..."
+      s -- nothing to propagate, clause has 'true' in it.
     | .unassigned lit litIx =>
+        let s := s.logInfo m!"found unassigned literal {lit} in clause."
         -- hurray, we have a watched literal.
         -- check if it's the *only* unassigned literal.
         -- If it is, propagate.
