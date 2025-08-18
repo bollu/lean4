@@ -308,7 +308,6 @@ def LratCert.toReflectionProof (cert : LratCert) (cfg : TacticContext)
       withOptions (Elab.async.set · false) do
         withTraceNode `Meta.Tactic.sat (fun _ => return "Verifying LRAT certificate") do
           mkAuxLemma [] auxType auxProof
-    logInfo m!"added auxLemma: {auxLemma}"
     return mkApp3 (mkConst ``unsat_of_verifyBVExpr_eq_true) reflectedExpr certExpr (mkConst auxLemma)
   catch e =>
     throwError m!"Failed to check the LRAT certificate in the kernel:\n{e.toMessageData}"
@@ -344,7 +343,6 @@ def mkLratActionsToReflectionProof (actions : Array LRAT.IntAction)
 
   let reflectedExpr := mkConst cfg.exprDef
   let actionsExprDef := mkConst cfg.certDef
-  logInfo m!"produced LRAT actions into {actionsExprDef}"
 
   withTraceNode `Meta.Tactic.sat (fun _ => return "Compiling reflection proof term") do
     let auxValue := mkApp2 (mkConst ``verifyBVExprActions) reflectedExpr actionsExprDef
@@ -366,7 +364,6 @@ def mkLratActionsToReflectionProof (actions : Array LRAT.IntAction)
       withOptions (Elab.async.set · false) do
         withTraceNode `Meta.Tactic.sat (fun _ => return "Verifying LRAT certificate") do
           mkAuxLemma [] auxType auxProof
-    logInfo m!"Added auxLemma: {auxLemma}"
     return mkApp3 (mkConst ``unsat_of_verifyBVExprActions_eq_true) reflectedExpr actionsExprDef (mkConst auxLemma)
   catch e =>
     throwError m!"Failed to check the LRAT certificate in the kernel:\n{e.toMessageData}"
@@ -431,18 +428,19 @@ def lratBitblaster (goal : MVarId) (ctx : TacticContext) (reflectionResult : Ref
       let (res, solverState) := Verisat.runOneShot cnf
       withTraceNode `Meta.Tactic.sat (fun _ => return "Veritinysat Log") (collapsed := false) do
         for (msg, severity) in solverState.messages do
-          if severity == MessageSeverity.information
-          -- | TODO: refactor this to allow nested traces and all that.
-          then addTrace `Meta.Tactic.sat msg
+          if severity == MessageSeverity.information then
+            let cls := `Meta.Tactic.sat
+            if (← isTracingEnabledFor cls) then
+              addTrace cls msg
           else log msg severity
       match res with
       | .none =>
         trace[Meta.Tactic.sat] "SAT solver ran out of fuel."
         throwError "The SAT solver ran out of fuel. Consider increasing the fuel limit."
       | .some (.ok actions) =>
-        trace[Meta.Tactic.sat] "SAT solver found a proof."
+        trace[Meta.Tactic.sat] "SAT solver found an unsat proof."
+        trace[Meta.Tactic.sat] "LRAT of Unsat proof: {actions}"
         let proof ← mkLratActionsToReflectionProof actions ctx reflectionResult
-        trace[Meta.Tactic.sat] "toplevel Unsat Proof: {proof}"
         check proof
         return .ok ⟨proof, none⟩
       | .some (.error assignment) =>

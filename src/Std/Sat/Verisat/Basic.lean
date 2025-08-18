@@ -70,7 +70,10 @@ def Lit.negate (l : Lit) : Lit where
 
 /-- convert a literal to an array index. -/
 def Lit.toIndex (l : Lit) : Nat :=
-  l.toRawInt.abs.toNatClampNeg * 2 + (if l.positive? then 0 else 1)
+  -- 1 /-1 => [0 * 2, 0 * 2 + 1] => [0, 1]
+  -- 2/-2  => [1 * 2, 1 * 2 + 1] => [2, 3]
+  -- 3/-3 →  [2 * 2, 2 * 2 + 1] => [4, 5]
+  ((l.toRawInt.abs.toNatClampNeg - 1) * 2) + (if l.positive? then 0 else 1)
 
 def Lit.ofIndex (ix : Nat) : Lit :=
     let val := Int32.ofNat (ix / 2)
@@ -601,23 +604,27 @@ def State.getUnassignedVar (s : State) : Option Var :=
 
 /-- Solve. -/
 partial def State.solve (s : State) : SatSolveResult × State :=
-  let s := s.logInfo m!"== Starting solve @ level {s.level2Undo.size} =="
-  let s := s.propagate
-  if s.unsatClause?.isSome then (.unsat, s)
-  else
-    if let some v := s.getUnassignedVar
-    then
-      let vlit := v.toPositiveLit
-      -- add the decision to the trail.
-      let s := { s with decisionTrail := s.decisionTrail.push vlit }
-      let s := { s with level2Undo := s.level2Undo.push #[] }
-      let s := s.logInfo m!"-- level '{s.level2Undo.size}' decided @ '{vlit}' --"
-      let vproof := .assumption vlit
-      -- | TODO: decide who assigns: Do we assume that the assignment is done before propagation?
-      let s := s.enqueuePropQ vlit vproof
-      s.solve
+  let s := { s with learntClausesStartIx := s.clauses.size }
+  solveAux s
+  where
+  solveAux (s : State) : SatSolveResult × State := Id.run do
+    let s := s.logInfo m!"== Starting solve @ level {s.level2Undo.size} =="
+    let s := s.propagate
+    if s.unsatClause?.isSome then (.unsat, s)
     else
-      (.sat, s)
+      if let some v := s.getUnassignedVar
+      then
+        let vlit := v.toPositiveLit
+        -- add the decision to the trail.
+        let s := { s with decisionTrail := s.decisionTrail.push vlit }
+        let s := { s with level2Undo := s.level2Undo.push #[] }
+        let s := s.logInfo m!"-- level '{s.level2Undo.size}' decided @ '{vlit}' --"
+        let vproof := .assumption vlit
+        -- | TODO: decide who assigns: Do we assume that the assignment is done before propagation?
+        let s := s.enqueuePropQ vlit vproof
+        solveAux s
+      else
+        (.sat, s)
 
 namespace ResolutionTree
 
@@ -667,37 +674,45 @@ def appendConflictIdsInOrder
     conflicts
   | .assumption _lit => conflicts
 
+end ResolutionTree
+
+namespace State
+
 /--
 Convert a resolution tree into an LRAT proof.
 -/
-def toLrat : Array LRAT.IntAction := Id.run do
-  let cids := appendConflictIdsInOrder
-    (s := s)
-    (alreadyAddedConflicts := ∅)
-    (conflicts := #[])
-    (r := r)
+def toLrat (s : State) : Array LRAT.IntAction := Id.run do
+  -- let cids := appendConflictIdsInOrder
+  --   (s := s)
+  --   (alreadyAddedConflicts := ∅)
+  --   (conflicts := #[])
+  --   (r := r)
   let mut actions := #[]
-  for cid in cids do
-    let (clause, proof) := s.clauses[cid.toIndex]!
-    let usedClauses :=
+  let startIx := s.learntClausesStartIx
+  let endIx := s.clauses.size
+  for cid in [startIx:endIx] do
+    let (clause, proof) := s.clauses[cid]!
+    let clausesUsedToProveConflict :=
       proof.clausesUsed ∅
       |>.toArray
       |>.map ClauseId.toIndex
+
     if clause.isEmpty then
       actions := actions.push
         (LRAT.Action.addEmpty
-          (id := cid.toIndex)
-          (rupHints := usedClauses))
+          (id := cid)
+          (rupHints := clausesUsedToProveConflict))
+      return actions
     else
       actions := actions.push
         (LRAT.Action.addRup
-          (id := cid.toIndex)
+          (id := cid)
           (c := clause.toIntArray)
-          (rupHints :=  usedClauses))
+          (rupHints :=  clausesUsedToProveConflict))
   actions
 
-end ResolutionTree
 
+end State
 
 /-! Helpers for bvDecide interaction. -/
 open Lean Meta in
@@ -709,7 +724,7 @@ def runOneShot (cnf : CNF Nat) :
   | .unsat =>
     let resolutionProof :=
       solver.clauses[solver.unsatClause?.get!.toIndex]!.snd
-    (some (Except.ok <| resolutionProof.toLrat solver), solver)
+    (some (Except.ok <| solver.toLrat), solver)
   | .sat =>
     let partialAssign := solver.partialAssignment
     (some (Except.error <| partialAssign.map Prod.swap), solver)
