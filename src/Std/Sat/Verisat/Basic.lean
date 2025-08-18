@@ -48,8 +48,9 @@ structure Lit where ofRawInt ::
   toRawInt : Int32
 deriving DecidableEq, Hashable, Inhabited
 
-instance : Lean.ToMessageData Lit where
-  toMessageData lit := if lit.toRawInt > 0 then m!"v{lit.toRawInt}" else m!"~v{lit.toRawInt.abs}"
+def Lit.toMessageDataRaw (lit : Lit) :=
+  if lit.toRawInt > 0 then m!"v{lit.toRawInt}" else m!"~v{lit.toRawInt.abs}"
+
 
 /-- convert a variable into a literal, given the polarity. -/
 def Var.toLit (v : Var) (positive : Bool) : Lit :=
@@ -109,8 +110,8 @@ structure Clause where ofArray ::
   toArray : Array Lit
 deriving Inhabited
 
-instance : Lean.ToMessageData Clause where
-  toMessageData cls := m!"[{cls.toArray.map Lean.toMessageData}]"
+def Clause.toMessageDataRaw (cls : Clause) : Lean.MessageData :=
+  m!"[{cls.toArray.map Lit.toMessageDataRaw}]"
 
 /-- An axiom for showing that computations are inbounds. -/
 axiom Inbounds {P : Prop} : P
@@ -145,6 +146,10 @@ def Clause.toIntArray (c : Clause) : Array Int :=
 def Clause.isEmpty (c : Clause) : Bool :=
   c.toArray.isEmpty
 
+/-- Return the unique literal in the clause, if it exists. -/
+def Clause.isUnit? (c : Clause) : Option Lit :=
+  if h : c.toArray.size = 1 then some c.toArray[0] else none
+
 /-- Resolution tree with assumptions for RAT. -/
 inductive ResolutionTree
 | given (clause : ClauseId)
@@ -157,9 +162,9 @@ def ResolutionTree.toMessageDataRaw (r : ResolutionTree) : Lean.MessageData :=
   | .given clauseId =>
     m!"(given:{clauseId.toMessageDataRaw})"
   | .branch lit fals tru =>
-    m!"(branch:{lit} {Format.line} {Lean.MessageData.nest 2 <| fals.toMessageDataRaw} {Format.line} {Lean.MessageData.nest 2 <| tru.toMessageDataRaw})"
+    m!"(branch:{lit.toMessageDataRaw} {Format.line} {Lean.MessageData.nest 2 <| fals.toMessageDataRaw} {Format.line} {Lean.MessageData.nest 2 <| tru.toMessageDataRaw})"
   | .assumption lit =>
-    m!"(assumption:{lit})"
+    m!"(assumption:{lit.toMessageDataRaw})"
 
 
 /-- a boolean which is potentially unassigned. -/
@@ -230,17 +235,31 @@ structure State where
   /-- Message log. -/
   messages        : Array (Lean.MessageData × Lean.MessageSeverity) := #[]
 
+
+/-- Evaluate a variable. -/
+def State.evalVar (s : State) (v : Var) : xbool :=
+  s.var2assign[v.toIndex]! |>.map Prod.fst |> xbool.ofOption
+
+def State.evalLit (s : State) (l : Lit) : xbool :=
+    let val := s.evalVar l.toVar
+    if l.positive? then val else val.negate
+
+def Lit.toMessageData (lit : Lit) (s : State) : Lean.MessageData :=
+  m!"'{lit.toMessageDataRaw}'@'{s.evalLit lit}'"
+
+def Clause.toMessageData (clause : Clause) (s : State) : Lean.MessageData :=
+  Lean.toMessageData <| clause.toArray.map (Lit.toMessageData · s)
+
+def State.decisionTrailMessageData (s : State) : Lean.MessageData :=
+  m!"{s.decisionTrail.map (Lit.toMessageData · s)}"
+
 def State.propQMessageData (s : State) : Lean.MessageData :=
-  m!"{s.propQ.toArray.map (fun (lit, _proof) => m!"{lit}")}"
+  m!"{s.propQ.toArray.map (fun (lit, _proof) => m!"{lit.toMessageData s}")}"
 
 def State.var2assignMessageData (s : State) : Lean.MessageData :=
   let msgs := s.var2assign.zipIdx.map fun (oval, i) =>
     m!"{Var.ofIndex i}={xbool.ofOption <| oval.map Prod.fst}"
   m!"{msgs}"
-
-
-def State.decisionTrailMessageData (s : State) : Lean.MessageData :=
-  m!"{s.decisionTrail.map Lean.toMessageData}"
 
 instance : EmptyCollection State where
   emptyCollection := {}
@@ -252,8 +271,9 @@ instance : Inhabited State where
 def ClauseId.toClause (s : State) (cid : ClauseId) : Clause :=
   s.clauses[cid.toIndex]!.fst
 
+
 def ClauseId.toMessageData (s : State) (cid : ClauseId) : Lean.MessageData :=
-  m!"{cid.toMessageDataRaw}:{cid.toClause s |>.toArray}"
+  m!"{cid.toMessageDataRaw}:{cid.toClause s |>.toMessageData s}"
 
 namespace State
 def empty : State := ∅
@@ -286,7 +306,7 @@ def emptyPropQ (s : State) : State :=
 
 /-- Add a clause to the watched clauses of this literal. -/
 def watchClauseAtLit (s : State) (cid : ClauseId) (lit : Lit) : State := Id.run do
-  let s := s.logInfo m!"watching literal '{lit}' @ '{cid.toMessageData s}'"
+  let s := s.logInfo m!"watching literal '{lit.toMessageData s}'"
   { s with lit2clauses :=
       s.lit2clauses.modify lit.toIndex fun clauses =>
         clauses.push cid
@@ -303,7 +323,7 @@ def newClauseWithExplanation (s : State)
   let clauseId := ClauseId.ofUInt32 <| UInt32.ofNat <| s.clauses.size
   let explanation := explanation?.getD (.given clauseId)
   let s := { s with clauses := s.clauses.push ⟨clause, explanation⟩ }
-  let s  := s.logInfo m!"NEW-CLAUSE-WITH-EXPLAIN '{clauseId.toMessageDataRaw}' @ '{clause.toArray}'"
+  let s  := s.logInfo m!"NEW-CLAUSE-WITH-EXPLAIN '{clauseId.toMessageData s}'"
 
   if clause.size = 0 then
     let s := { s with unsatClause? := some clauseId }
@@ -311,7 +331,7 @@ def newClauseWithExplanation (s : State)
   else if clause.size = 1 then
     let s := s.watchClauseAtLit clauseId (clause.get 0)
     let lit := clause.get 0
-    let s := s.logInfo m!"enqueued '{lit}' from '{clauseId.toMessageDataRaw}:{clause}'"
+    let s := s.logInfo m!"enqueued '{lit.toMessageData s}' from '{clauseId.toMessageData s}'"
     -- | TODO: decide who assigns: Do we assume that the assignment is done before propagation?
     let s := s.enqueuePropQ lit (.given clauseId)
     (clauseId, s)
@@ -379,15 +399,6 @@ def newFromProblem (problem : CNF Nat) : State := Id.run do
       s.newProblemClause (Clause.ofCNF clause) |>.snd
 
 
-/-- Evaluate a variable. -/
-def evalVar (s : State) (v : Var) : xbool :=
-  s.var2assign[v.toIndex]! |>.map Prod.fst |> xbool.ofOption
-
-def evalLit (s : State) (l : Lit) : xbool :=
-    let val := s.evalVar l.toVar
-    if l.positive? then val else val.negate
-
-
 def isUnsat (s : State) : Bool := s.unsatClause?.isSome
 
 def dequePropQ (s : State) : Option ((Lit × ResolutionTree) × State) :=
@@ -448,7 +459,7 @@ def State.findNonFalseLit
 /-- undo the assignment of the given literal. -/
 def State.undoAssignment (s : State) (lit : Lit) : State := Id.run do
   let mut s := s
-  s := s.logInfo m!"UNDO-ASSIGN '{lit}'"
+  s := s.logInfo m!"UNDO-ASSIGN '{lit.toMessageData s}'"
   -- delete assignment.
   s := { s with var2assign :=
     s.var2assign.set! (lit.toVar.toIndex) none }
@@ -476,7 +487,7 @@ def State.lastDecision? (s : State) : Option Lit := s.decisionTrail.back?
 /-- undo a single decision. -/
 def State.undoOneDecision (s : State) : State := Id.run do
   let lit := s.decisionTrail.back!
-  let s := s.logInfo m!"UNDO-DECISION '{lit}'"
+  let s := s.logInfo m!"UNDO-DECISION '{lit.toMessageData s}'"
   let s := s.undoAssignment lit
   let s := { s with decisionTrail := s.decisionTrail.pop }
   let assigns := s.level2Undo.back!
@@ -491,11 +502,9 @@ def State.undoOneDecision (s : State) : State := Id.run do
 Makes a new conflict clause from a given proof of 'false' @ 'cid'.
 - clears propagation queue.
 - adds the conflict clause.
-- sets this as a toplevel proof if it is an unsat proof.
-- otherwise, it undoes the toplevel decision.
 -/
 def State.mkConflictClause (s : State) (unsatProof : ResolutionTree)
-    : State := Id.run do
+    : ClauseId × State := Id.run do
   let mut clause : Array Lit := #[]
   let mut clauseProof : ResolutionTree := unsatProof
   for lit  in s.decisionTrail do
@@ -507,11 +516,10 @@ def State.mkConflictClause (s : State) (unsatProof : ResolutionTree)
     (Clause.ofArray clause)
     (some clauseProof)
   if clause.isEmpty then
-    let s := { s with unsatClause? := some conflictId }
-    s
+    (conflictId, s)
   else
     let s := s.undoOneDecision
-    s
+    (conflictId, s)
 
 
 /-- Get all watched clauses for a literal, and clear the watched clauses list. -/
@@ -522,11 +530,18 @@ def State.getAndClearWatchedClausesAtLit (s : State) (lit : Lit) :
   (clauses, s)
 
 
-/-- Propagate a literal assignment of lit 'Lit' in clause 'clauseId'. -/
+/--
+Propagate a literal assignment of lit 'Lit' in clause 'clauseId'.
+Returns a conflict clause if a conflict clause was created.
+
+
+The state will contain the conflicting assignment in case a
+conflict clause is returned.
+-/
 def State.propagateLitInClause (s : State)
-  (lit : Lit) (reason: ResolutionTree)
+  (_lit : Lit) (reason: ResolutionTree)
   (cid : ClauseId) :
-    State := Id.run do
+    Option ClauseId × State := Id.run do
   match s.findNonFalseLit cid 0 with
   | .allFalse =>
     let s := s.logInfo m!"found clause that is all false: {cid.toMessageData s}"
@@ -538,13 +553,13 @@ def State.propagateLitInClause (s : State)
     for lit in s.decisionTrail do
       let litProof := .assumption lit
       unsatProof := ResolutionTree.branch lit (fals := unsatProof) (tru := litProof)
-    let s := s.mkConflictClause unsatProof
-    return s
+    let (conflictId, s):= s.mkConflictClause unsatProof
+    return (some conflictId, s)
   | .tru =>
     let s := s.logInfo m!"found 'tru' in clause. Skipping..."
-    s -- nothing to propagate, clause has 'true' in it.
+    (none, s) -- nothing to propagate, clause has 'true' in it.
   | .unassigned lit litIx =>
-      let s := s.logInfo m!"found unassigned literal '{lit}' in clause {cid.toMessageData s}."
+      let s := s.logInfo m!"found unassigned literal '{lit.toMessageData s}' in clause {cid.toMessageData s}."
       -- hurray, we have a watched literal.
       -- check if it's the *only* unassigned literal.
       -- If it is, propagate.
@@ -552,29 +567,30 @@ def State.propagateLitInClause (s : State)
       match s.findNonFalseLit cid (litIx + 1) with
       | .tru =>
         let s := s.logInfo m!"found true literal in clause {cid.toMessageData s}, skipping. "
-        s -- nothing to do, we have a true literal.
+        (none, s) -- nothing to do, we have a true literal.
       | .unassigned _lit' _litIx' =>
           -- we have another unassigned literal, so we
           -- cannot propagate.
           -- Swap clause[0] with clause[litIx],
           -- watch clause[0], and continue on our way.
-          let s := s.logInfo m!"found another unassigned literal {_lit'} in clause {cid.toMessageData s}. "
+          let s := s.logInfo m!"found another unassigned literal {_lit'.toMessageData s} in clause {cid.toMessageData s}. "
           let s := { s with clauses :=
             s.clauses.modify cid.toIndex fun (c, tree) =>
               (c.swapIx 0 litIx, tree)
           }
           let s := s.watchClauseAtLit cid lit
-          s
+          (none, s)
       | .allFalse =>
           -- we have no other unassigned literals,
           -- so we can propagate!
-          let s := s.logInfo m!"found all other literals to be false, so propagating literal '{lit}'."
+          let s := s.logInfo m!"found all other literals to be false, so propagating literal '{lit.toMessageData s}'."
           let reason : ResolutionTree :=
               .branch lit (.given cid) reason
-          s.enqueuePropQ lit reason
+          let s := s.enqueuePropQ lit reason
+          (none, s)
 
-partial def State.propagate (s : State) : State := propagateAux s where
-  propagateAux (s : State) : State := Id.run do
+partial def State.propagate (s : State) : Option ClauseId × State := propagateAux s where
+  propagateAux (s : State) : Option ClauseId × State := Id.run do
     let s := s.logInfo m!"== propagation queue: '{s.propQMessageData}' =="
     if let some ((lit, litProof), s) := s.dequePropQ then
       let v := lit.toVar
@@ -584,8 +600,8 @@ partial def State.propagate (s : State) : State := propagateAux s where
         else
           -- we have a conflicting assignment.
           let conflictReason : ResolutionTree := .branch lit litProof vProof
-          let s := s.mkConflictClause conflictReason
-          s
+          let (conflictId, s) := s.mkConflictClause conflictReason
+          (some conflictId, s)
       else
         -- we don't have an assignment, continue.
         let s := { s with var2assign := s.var2assign.set! v.toIndex (some (lit.positive?, litProof)) }
@@ -593,15 +609,18 @@ partial def State.propagate (s : State) : State := propagateAux s where
         -- since 'lit' has been assigned, we need to propagate '~lit'.
         let (watchedClauses, s) := s.getAndClearWatchedClausesAtLit lit.negate
         let mut s := s
-        s := s.logInfo m!"#clauses watched at dequeued {lit.negate}: '{watchedClauses.size}'"
+        s := s.logInfo m!"#clauses watched at dequeued {lit.negate.toMessageData s}: '{watchedClauses.size}'"
         for clauseId in watchedClauses do
-          s := s.logInfo m! "propagating clause {s.clauses[clauseId.toIndex]!.fst} @ {lit.negate}"
-          s := s.propagateLitInClause lit litProof clauseId
-          if s.unsatClause?.isSome then return s
+          s := s.logInfo m! "propagating clause {clauseId.toMessageData s} @ {lit.negate.toMessageData s}"
+          let res := s.propagateLitInClause lit litProof clauseId
+          s := res.snd
+          let conflict? := res.fst
+          if let some conflict := conflict? then
+            return (some conflict, s)
         s.propagate
     else
       -- queue is empty, stop recursion.
-      s
+      (none, s)
 
 inductive SatSolveResult
 | sat
@@ -619,8 +638,21 @@ partial def State.solve (s : State) : SatSolveResult × State :=
   where
   solveAux (s : State) : SatSolveResult × State := Id.run do
     let s := s.logInfo m!"== Starting solve @ level {s.level2Undo.size} =="
-    let s := s.propagate
-    if s.unsatClause?.isSome then (.unsat, s)
+    let (conflictId?, s) := s.propagate
+    if let some conflictId := conflictId? then
+      let conflictClause := s.clauses[conflictId.toIndex]!.fst
+      if conflictClause.isEmpty then
+        let s := { s with unsatClause? := some conflictId }
+        return (.unsat, s)
+      else
+        /- undo the last decision. -/
+        let s := s.undoOneDecision
+        if let some lit := conflictClause.isUnit? then
+          -- | add conflict clause to propagation queue.
+          let s := s.enqueuePropQ lit (ResolutionTree.given conflictId)
+          solveAux s
+        else
+          solveAux s
     else
       if let some v := s.getUnassignedVar
       then
@@ -628,7 +660,7 @@ partial def State.solve (s : State) : SatSolveResult × State :=
         -- add the decision to the trail.
         let s := { s with decisionTrail := s.decisionTrail.push vlit }
         let s := { s with level2Undo := s.level2Undo.push #[] }
-        let s := s.logInfo m!"-- SOLVE-AUX '{s.level2Undo.size}' decided @ '{vlit}' trail: '{s.decisionTrailMessageData}'--"
+        let s := s.logInfo m!"-- SOLVE-AUX '{s.level2Undo.size}' decided @ '{vlit.toMessageData s}' trail: '{s.decisionTrailMessageData}'--"
         let vproof := .assumption vlit
         -- | TODO: decide who assigns: Do we assume that the assignment is done before propagation?
         let s := s.enqueuePropQ vlit vproof
@@ -732,8 +764,8 @@ def runOneShot (cnf : CNF Nat) :
   let (result, solver) := solver.solve
   match result with
   | .unsat =>
-    let resolutionProof :=
-      solver.clauses[solver.unsatClause?.get!.toIndex]!.snd
+    -- let _resolutionProof :=
+    --   solver.clauses[solver.unsatClause?.get!.toIndex]!.snd
     (some (Except.ok <| solver.toLrat), solver)
   | .sat =>
     let partialAssign := solver.partialAssignment

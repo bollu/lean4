@@ -12,7 +12,9 @@ theorem eg2 (x y : BitVec 1) : x * y = y * x := by
   bv_decide (config := { satBackend := .verisat })
 
 set_option trace.Meta.Tactic.sat true in
-theorem eg3 (x : BitVec 2) : x  = 0#2 ∨ x = 3#2 ∨ x = 1#2 := by
+theorem eg3 (x y : BitVec 1) :
+    (x ||| y) &&& (x ||| ~~~ y) &&& (~~~ x ||| y) &&& (~~~ x ||| ~~~ y) =
+    0#1 := by
   bv_normalize
   bv_decide (config := { satBackend := .verisat })
 
