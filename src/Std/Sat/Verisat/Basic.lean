@@ -139,6 +139,9 @@ def Clause.findLitIx (c : Clause) (lit : Lit) (startIx : Nat := 0) :
 def Clause.toIntArray (c : Clause) : Array Int :=
   c.toArray.map Lit.toInt
 
+def Clause.isEmpty (c : Clause) : Bool :=
+  c.toArray.isEmpty
+
 /-- Resolution tree with assumptions for RAT. -/
 inductive ResolutionTree
 | given (clause : ClauseId)
@@ -680,11 +683,17 @@ def toLrat : Array LRAT.IntAction := Id.run do
       proof.clausesUsed ∅
       |>.toArray
       |>.map ClauseId.toIndex
-    actions := actions.push
-      (LRAT.Action.addRup
-        (id := cid.toIndex)
-        (c := clause.toIntArray)
-        (rupHints :=  usedClauses))
+    if clause.isEmpty then
+      actions := actions.push
+        (LRAT.Action.addEmpty
+          (id := cid.toIndex)
+          (rupHints := usedClauses))
+    else
+      actions := actions.push
+        (LRAT.Action.addRup
+          (id := cid.toIndex)
+          (c := clause.toIntArray)
+          (rupHints :=  usedClauses))
   actions
 
 end ResolutionTree

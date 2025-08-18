@@ -294,18 +294,21 @@ def LratCert.toReflectionProof (cert : LratCert) (cfg : TacticContext)
     mkAuxDecl cfg.reflectionDef auxValue (mkConst ``Bool)
 
   let auxType ← mkEq (mkConst cfg.reflectionDef) (toExpr true)
+  check auxType
   let auxProof :=
     mkApp3
       (mkConst ``Lean.ofReduceBool)
       (mkConst cfg.reflectionDef)
       (toExpr true)
       (← mkEqRefl (toExpr true))
+  check auxProof
   try
     let auxLemma ←
       -- disable async TC so we can catch its exceptions
       withOptions (Elab.async.set · false) do
         withTraceNode `Meta.Tactic.sat (fun _ => return "Verifying LRAT certificate") do
           mkAuxLemma [] auxType auxProof
+    logInfo m!"added auxLemma: {auxLemma}"
     return mkApp3 (mkConst ``unsat_of_verifyBVExpr_eq_true) reflectedExpr certExpr (mkConst auxLemma)
   catch e =>
     throwError m!"Failed to check the LRAT certificate in the kernel:\n{e.toMessageData}"
@@ -332,30 +335,39 @@ def mkLratActionsToReflectionProof (actions : Array LRAT.IntAction)
   withTraceNode `Meta.Tactic.sat (fun _ => return "Compiling expr term") do
     mkAuxDecl cfg.exprDef reflectionResult.expr (mkConst ``BVLogicalExpr)
 
+  let actionsExpr := toExpr actions
+  check actionsExpr
+
   withTraceNode `Meta.Tactic.sat (fun _ => return "Compiling proof certificate term") do
-    mkAuxDecl cfg.certDef (toExpr actions) (mkApp (mkConst ``Array [1]) (mkConst ``LRAT.IntAction))
+    let ty := (mkApp (mkConst ``Array [.zero]) (mkConst ``LRAT.IntAction))
+    mkAuxDecl cfg.certDef actionsExpr ty
 
   let reflectedExpr := mkConst cfg.exprDef
-  let certExpr := mkConst cfg.certDef
+  let actionsExprDef := mkConst cfg.certDef
+  logInfo m!"produced LRAT actions into {actionsExprDef}"
 
   withTraceNode `Meta.Tactic.sat (fun _ => return "Compiling reflection proof term") do
-    let auxValue := mkApp2 (mkConst ``verifyBVExprActions) reflectedExpr certExpr
+    let auxValue := mkApp2 (mkConst ``verifyBVExprActions) reflectedExpr actionsExprDef
+    check auxValue
     mkAuxDecl cfg.reflectionDef auxValue (mkConst ``Bool)
 
   let auxType ← mkEq (mkConst cfg.reflectionDef) (toExpr true)
+  check auxType
   let auxProof :=
     mkApp3
       (mkConst ``Lean.ofReduceBool)
       (mkConst cfg.reflectionDef)
       (toExpr true)
       (← mkEqRefl (toExpr true))
+  check auxProof
   try
     let auxLemma ←
       -- disable async TC so we can catch its exceptions
       withOptions (Elab.async.set · false) do
         withTraceNode `Meta.Tactic.sat (fun _ => return "Verifying LRAT certificate") do
           mkAuxLemma [] auxType auxProof
-    return mkApp3 (mkConst ``unsat_of_verifyBVExprActions_eq_true) reflectedExpr certExpr (mkConst auxLemma)
+    logInfo m!"Added auxLemma: {auxLemma}"
+    return mkApp3 (mkConst ``unsat_of_verifyBVExprActions_eq_true) reflectedExpr actionsExprDef (mkConst auxLemma)
   catch e =>
     throwError m!"Failed to check the LRAT certificate in the kernel:\n{e.toMessageData}"
 where
@@ -404,7 +416,11 @@ def lratBitblaster (goal : MVarId) (ctx : TacticContext) (reflectionResult : Ref
         runExternal cnf ctx.solver ctx.lratPath ctx.config.trimProofs ctx.config.timeout ctx.config.binaryProofs
       match res with
       | .ok cert =>
-        trace[Meta.Tactic.sat] "SAT solver found a proof."
+        trace[Meta.Tactic.sat] "SAT solver found a UNSAT proof."
+        if let .ok actions := LRAT.parseLRATProof cert.toUTF8 then
+          trace[Meta.Tactic.sat] m!"LRAT: '{actions}'"
+        else
+          trace[Meta.Tactic.sat] m!"unable to parse LRAT actions."
         let proof ← cert.toReflectionProof ctx reflectionResult
         return .ok ⟨proof, some cert⟩
       | .error assignment =>
@@ -426,6 +442,8 @@ def lratBitblaster (goal : MVarId) (ctx : TacticContext) (reflectionResult : Ref
       | .some (.ok actions) =>
         trace[Meta.Tactic.sat] "SAT solver found a proof."
         let proof ← mkLratActionsToReflectionProof actions ctx reflectionResult
+        trace[Meta.Tactic.sat] "toplevel Unsat Proof: {proof}"
+        check proof
         return .ok ⟨proof, none⟩
       | .some (.error assignment) =>
         trace[Meta.Tactic.sat] "SAT solver found a counter example."
