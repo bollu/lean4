@@ -412,13 +412,19 @@ def lratBitblaster (goal : MVarId) (ctx : TacticContext) (reflectionResult : Ref
         let equations := reconstructCounterExample map assignment aigSize atomsAssignment
         return .error { goal, unusedHypotheses := reflectionResult.unusedHypotheses, equations }
     | .verisat =>
-      let res ← Verisat.runOneShot cnf
+      let (res, solverState) := Verisat.runOneShot cnf
+      withTraceNode `Meta.Tactic.sat (fun _ => return "Veritinysat Log") (collapsed := false) do
+        for msg in solverState.messages.toArray do
+          logMessage msg
       match res with
-      | .ok actions =>
+      | .none =>
+        trace[Meta.Tactic.sat] "SAT solver ran out of fuel."
+        throwError "The SAT solver ran out of fuel. Consider increasing the fuel limit."
+      | .some (.ok actions) =>
         trace[Meta.Tactic.sat] "SAT solver found a proof."
         let proof ← mkLratActionsToReflectionProof actions ctx reflectionResult
         return .ok ⟨proof, none⟩
-      | .error assignment =>
+      | .some (.error assignment) =>
         trace[Meta.Tactic.sat] "SAT solver found a counter example."
         let equations := reconstructCounterExample map assignment aigSize atomsAssignment
         return .error { goal, unusedHypotheses := reflectionResult.unusedHypotheses, equations }

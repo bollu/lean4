@@ -32,10 +32,16 @@ structure Var where ofNat ::
   toNat : Nat
 deriving DecidableEq, Hashable, Inhabited
 
+instance : Lean.ToMessageData Var where
+  toMessageData v := m!"v{v.toNat}"
+
 /-- Negated variable is '-varId'. -/
 structure Lit where ofRawInt ::
   toRawInt : Int32
 deriving DecidableEq, Hashable, Inhabited
+
+instance : Lean.ToMessageData Lit where
+  toMessageData lit := if lit.toRawInt > 0 then m!"v{lit.toRawInt}" else "~v{lit.toRawInt.abs}"
 
 /-- convert a variable into a literal, given the polarity. -/
 def Var.toLit (v : Var) (positive : Bool) : Lit :=
@@ -80,6 +86,10 @@ structure ClauseId where ofUInt32 ::
   toUInt32 : UInt32
 deriving DecidableEq, Hashable, Inhabited
 
+/-- print the clause ID as a message. -/
+def ClauseId.toMessageDataRaw (cid : ClauseId) : Lean.MessageData :=
+  m!"clause({cid.toUInt32})"
+
 def ClauseId.toIndex (cid : ClauseId) : Nat :=
   cid.toUInt32.toNat
 
@@ -88,6 +98,8 @@ structure Clause where ofArray ::
   toArray : Array Lit
 deriving Inhabited
 
+instance : Lean.ToMessageData Clause where
+  toMessageData cls := m!"[{cls.toArray.map Lean.toMessageData}]"
 
 /-- An axiom for showing that computations are inbounds. -/
 axiom Inbounds {P : Prop} : P
@@ -124,6 +136,15 @@ inductive ResolutionTree
 | assumption (lit : Lit) -- TODO: cache these?
 deriving Hashable, Inhabited, DecidableEq
 
+def ResolutionTree.toMessageDataRaw (r : ResolutionTree) : Lean.MessageData :=
+  match r with
+  | .given clauseId =>
+    m!"(given:{clauseId.toMessageDataRaw})"
+  | .branch lit fals tru =>
+    m!"(branch:{lit} {Format.line} {Lean.MessageData.nest 2 <| fals.toMessageDataRaw} {Format.line} {Lean.MessageData.nest 2 <| tru.toMessageDataRaw})"
+  | .assumption lit =>
+    m!"(assumption:{lit})"
+
 
 /-- a boolean which is potentially unassigned. -/
 inductive xbool
@@ -131,6 +152,12 @@ inductive xbool
 | fals
 | x
 deriving Inhabited, Repr, DecidableEq, Hashable
+
+instance : Lean.ToMessageData xbool where
+  toMessageData b := match b with
+    | .tru => "bool:true"
+    | .fals => "bool:false"
+    | .x => "bool:x"
 
 namespace xbool
 def ofBool : Bool → xbool
@@ -186,6 +213,9 @@ structure State where
   level2Undo : Array (Array Lit) := #[#[]]
   /-- Message log. -/
   messages        : Lean.MessageLog     := {}
+
+def State.propQMessageData (s : State) : Lean.MessageData :=
+  m!"{s.propQ.toArray.map (fun (lit, _proof) => m!"{lit}")}"
 
 
 instance : EmptyCollection State where
@@ -446,6 +476,7 @@ def State.propagateLitInClause (s : State)
 
 def State.propagate (s : State) : State := propagateAux s where
   propagateAux (s : State) : State := Id.run do
+    let s := s.logInfo s.propQMessageData
     if let some ((lit, litProof), s) := s.dequePropQ then
       let (watchedClauses, s) := s.getAndClearWatchedClausesAtLit lit
       let mut s := s
@@ -471,6 +502,7 @@ partial def State.solve (s : State) : SatSolveResult × State :=
     if let some v := s.getUnassignedVar
     then
       let vlit := v.toPositiveLit
+      let s := s.logInfo m!"decided on {vlit}"
       let vproof := .assumption vlit
       let s := { s with var2assign := s.var2assign.set! v.toNat (some (true, vproof)) }
       let s := { s with decisionTrail := s.decisionTrail.push vlit }
@@ -558,18 +590,19 @@ end ResolutionTree
 /-! Helpers for bvDecide interaction. -/
 open Lean Meta in
 def runOneShot (cnf : CNF Nat) :
-    CoreM (Except (Array (Bool × Nat)) (Array LRAT.IntAction)) := do
+    ((Option (Except (Array (Bool × Nat)) (Array LRAT.IntAction))) × State) :=
   let solver := State.newFromProblem cnf
   let (result, solver) := solver.solve
   match result with
   | .unsat =>
     let resolutionProof :=
       solver.clauses[solver.unsatClause?.get!.toIndex]!.snd
-    return (Except.ok <| resolutionProof.toLrat solver)
+    (some (Except.ok <| resolutionProof.toLrat solver), solver)
   | .sat =>
     let partialAssign := solver.partialAssignment
-    return (Except.error <| partialAssign.map Prod.swap)
+    (some (Except.error <| partialAssign.map Prod.swap), solver)
   | .nofuel =>
-    throwError "ran out of fuel when trying to solve the problem."
+    let solver := solver.logError "Solver ran out of fuel."
+    (none, solver)
 
 end Verisat
