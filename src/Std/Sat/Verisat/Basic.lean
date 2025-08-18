@@ -261,7 +261,8 @@ def emptyPropQ (s : State) : State :=
 
 
 /-- Add a clause to the watched clauses of this literal. -/
-def watchClauseAtLit (s : State) (cid : ClauseId) (lit : Lit) : State :=
+def watchClauseAtLit (s : State) (cid : ClauseId) (lit : Lit) : State := Id.run do
+  let s := s.logInfo m!"watching literal '{lit}' @ '{cid.toMessageData s}'"
   { s with lit2clauses :=
       s.lit2clauses.modify lit.toIndex fun clauses =>
         clauses.push cid
@@ -284,7 +285,10 @@ def newClauseWithExplanation (s : State)
     let s := { s with unsatClause? := some clauseId }
     (clauseId, s)
   else if clause.size = 1 then
-    let s := s.enqueuePropQ (clause.get 0) (.given clauseId)
+    let s := s.watchClauseAtLit clauseId (clause.get 0)
+    let lit := clause.get 0
+    let s := s.logInfo m!"enqueued '{lit}' from '{clauseId.toMessageDataRaw}:{clause}'"
+    let s := s.enqueuePropQ lit (.given clauseId)
     (clauseId, s)
   else
     -- | Setup 1-watch literal.
@@ -301,6 +305,10 @@ def newProblemClause (s : State) (clause : Clause) :
 def newVar (s : State) : State × Var :=
   let v := Var.ofNat s.var2assign.size
   let s := { s with var2assign := s.var2assign.push none }
+  let s := { s with lit2clauses := s.lit2clauses.push #[] }
+  let s := { s with lit2clauses := s.lit2clauses.push #[] }
+  let s := { s with lit2clausesOnUndo := s.lit2clausesOnUndo.push #[] }
+  let s := { s with lit2clausesOnUndo := s.lit2clausesOnUndo.push #[] }
   (s, v)
 
 
@@ -524,10 +532,11 @@ def State.propagateLitInClause (s : State)
 
 def State.propagate (s : State) : State := propagateAux s where
   propagateAux (s : State) : State := Id.run do
-    let s := s.logInfo m!"propagation queue: {s.propQMessageData}"
+    let s := s.logInfo m!"propagation queue: '{s.propQMessageData}'"
     if let some ((lit, litProof), s) := s.dequePropQ then
       let (watchedClauses, s) := s.getAndClearWatchedClausesAtLit lit
       let mut s := s
+      s := s.logInfo m!"propagated literal '{lit}' has watched clauses '{watchedClauses.map (·.toMessageData s)}'"
       for clauseId in watchedClauses do
         s := s.logInfo m! "propagating clause {s.clauses[clauseId.toIndex]!.fst} @ {lit}"
         s := s.propagateLitInClause lit litProof clauseId
@@ -546,18 +555,19 @@ def State.getUnassignedVar (s : State) : Option Var :=
 
 /-- Solve. -/
 partial def State.solve (s : State) : SatSolveResult × State :=
+  let s := s.logInfo m!"Starting solve @ level {s.level2Undo.size}"
+  let s := s.propagate
   if s.unsatClause?.isSome then (.unsat, s)
   else
     if let some v := s.getUnassignedVar
     then
       let vlit := v.toPositiveLit
-      let s := s.logInfo m!"level: {s.level2Undo.size} | decided on {vlit}"
+      let s := s.logInfo m!"level: {s.level2Undo.size} | deciding on {vlit}"
       let vproof := .assumption vlit
       let s := { s with var2assign := s.var2assign.set! v.toNat (some (true, vproof)) }
       let s := { s with decisionTrail := s.decisionTrail.push vlit }
       let s := { s with level2Undo := s.level2Undo.push #[] }
       let s := s.enqueuePropQ vlit vproof
-      let s := s.propagate
       s.solve
     else
       (.sat, s)
