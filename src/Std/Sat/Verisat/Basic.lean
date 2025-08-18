@@ -540,38 +540,38 @@ def State.propagateLitInClause (s : State)
       unsatProof := ResolutionTree.branch lit (fals := unsatProof) (tru := litProof)
     let s := s.mkConflictClause unsatProof
     return s
-    | .tru =>
-      let s := s.logInfo m!"found 'tru' in clause. Skipping..."
-      s -- nothing to propagate, clause has 'true' in it.
-    | .unassigned lit litIx =>
-        let s := s.logInfo m!"found unassigned literal '{lit}' in clause {cid.toMessageData s}."
-        -- hurray, we have a watched literal.
-        -- check if it's the *only* unassigned literal.
-        -- If it is, propagate.
-        -- If not, swap it with lit[0], and make it watched.
-        match s.findNonFalseLit cid (litIx + 1) with
-        | .tru =>
-          let s := s.logInfo m!"found true literal in clause {cid.toMessageData s}, skipping. "
-          s -- nothing to do, we have a true literal.
-        | .unassigned _lit' _litIx' =>
-            -- we have another unassigned literal, so we
-            -- cannot propagate.
-            -- Swap clause[0] with clause[litIx],
-            -- watch clause[0], and continue on our way.
-            let s := s.logInfo m!"found another unassigned literal {_lit'} in clause {cid.toMessageData s}. "
-            let s := { s with clauses :=
-              s.clauses.modify cid.toIndex fun (c, tree) =>
-                (c.swapIx 0 litIx, tree)
-            }
-            let s := s.watchClauseAtLit cid lit
-            s
-        | .allFalse =>
-            -- we have no other unassigned literals,
-            -- so we can propagate!
-            let s := s.logInfo m!"found all other literals to be false, so propagating literal '{lit}'."
-            let reason : ResolutionTree :=
-               .branch lit (.given cid) reason
-            s.enqueuePropQ lit reason
+  | .tru =>
+    let s := s.logInfo m!"found 'tru' in clause. Skipping..."
+    s -- nothing to propagate, clause has 'true' in it.
+  | .unassigned lit litIx =>
+      let s := s.logInfo m!"found unassigned literal '{lit}' in clause {cid.toMessageData s}."
+      -- hurray, we have a watched literal.
+      -- check if it's the *only* unassigned literal.
+      -- If it is, propagate.
+      -- If not, swap it with lit[0], and make it watched.
+      match s.findNonFalseLit cid (litIx + 1) with
+      | .tru =>
+        let s := s.logInfo m!"found true literal in clause {cid.toMessageData s}, skipping. "
+        s -- nothing to do, we have a true literal.
+      | .unassigned _lit' _litIx' =>
+          -- we have another unassigned literal, so we
+          -- cannot propagate.
+          -- Swap clause[0] with clause[litIx],
+          -- watch clause[0], and continue on our way.
+          let s := s.logInfo m!"found another unassigned literal {_lit'} in clause {cid.toMessageData s}. "
+          let s := { s with clauses :=
+            s.clauses.modify cid.toIndex fun (c, tree) =>
+              (c.swapIx 0 litIx, tree)
+          }
+          let s := s.watchClauseAtLit cid lit
+          s
+      | .allFalse =>
+          -- we have no other unassigned literals,
+          -- so we can propagate!
+          let s := s.logInfo m!"found all other literals to be false, so propagating literal '{lit}'."
+          let reason : ResolutionTree :=
+              .branch lit (.given cid) reason
+          s.enqueuePropQ lit reason
 
 partial def State.propagate (s : State) : State := propagateAux s where
   propagateAux (s : State) : State := Id.run do

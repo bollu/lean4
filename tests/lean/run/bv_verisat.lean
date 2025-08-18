@@ -5,6 +5,8 @@ theorem eg1 (x : BitVec 1) : (x = 1#1) ∨ (x = 0#1) := by
   bv_normalize
   bv_decide (config := { satBackend := .verisat })
 
+#print axioms eg1
+
 theorem eg2 (x y : BitVec 1) : x * y = y * x := by
   bv_normalize
   bv_decide (config := { satBackend := .verisat })
