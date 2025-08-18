@@ -28,12 +28,20 @@ protected def Array.traverse {α : Type} (xs : Array (Option α)) :
 namespace Verisat
 open Std Sat Tactic BVDecide
 
-structure Var where ofNat ::
-  toNat : Nat
+structure Var where ofRawNat ::
+  toRawNat : Nat
 deriving DecidableEq, Hashable, Inhabited
 
+/-- convert a 'Var' (which is a positive natural number) to an array index, which is zero-indexed. -/
+def Var.toIndex (v : Var) : Nat :=
+  v.toRawNat - 1
+
+/-- convert an array index into a 'Var', which converts a zero based offset into a 1-based offset. -/
+def Var.ofIndex (ix : Nat) : Var :=
+  Var.ofRawNat (ix + 1)
+
 instance : Lean.ToMessageData Var where
-  toMessageData v := m!"v{v.toNat}"
+  toMessageData v := m!"v{v.toRawNat}"
 
 /-- Negated variable is '-varId'. -/
 structure Lit where ofRawInt ::
@@ -45,12 +53,12 @@ instance : Lean.ToMessageData Lit where
 
 /-- convert a variable into a literal, given the polarity. -/
 def Var.toLit (v : Var) (positive : Bool) : Lit :=
-  Lit.ofRawInt <| Int32.ofNat v.toNat * (if positive then 1 else -1)
+  Lit.ofRawInt <| Int32.ofNat v.toRawNat * (if positive then 1 else -1)
 
 def Var.toPositiveLit (v : Var) : Lit := v.toLit (positive := true)
 
 def Lit.toVar (l : Lit) : Var :=
-    Var.ofNat <| (Int32.abs l.toRawInt).toNatClampNeg
+    Var.ofRawNat <| (Int32.abs l.toRawInt).toNatClampNeg
 
 def Lit.positive? (l : Lit) : Bool := l.toRawInt > 0
 
@@ -114,7 +122,7 @@ def Clause.size (c : Clause)  : Nat := c.toArray.size
 def Clause.ofCNF (c : CNF.Clause Nat) : Clause where
   toArray :=
     c.toArray.map fun (varId, positive) =>
-      (Var.ofNat varId).toLit positive
+      (Var.ofRawNat varId).toLit positive
 
 def Clause.get (c : Clause) (ix : Nat) : Lit := c.toArray[ix]!
 
@@ -219,7 +227,7 @@ def State.propQMessageData (s : State) : Lean.MessageData :=
 
 def State.var2assignMessageData (s : State) : Lean.MessageData :=
   let msgs := s.var2assign.zipIdx.map fun (oval, i) =>
-    m!"{Var.ofNat (i + 1)}={xbool.ofOption <| oval.map Prod.fst}"
+    m!"{Var.ofIndex i}={xbool.ofOption <| oval.map Prod.fst}"
   m!"{msgs}"
 instance : EmptyCollection State where
   emptyCollection := {}
@@ -291,6 +299,7 @@ def newClauseWithExplanation (s : State)
     let s := s.watchClauseAtLit clauseId (clause.get 0)
     let lit := clause.get 0
     let s := s.logInfo m!"enqueued '{lit}' from '{clauseId.toMessageDataRaw}:{clause}'"
+    -- | TODO: decide who assigns: Do we assume that the assignment is done before propagation?
     let s := s.enqueuePropQ lit (.given clauseId)
     (clauseId, s)
   else
@@ -306,7 +315,7 @@ def newProblemClause (s : State) (clause : Clause) :
 
 
 def newVar (s : State) : State × Var :=
-  let v := Var.ofNat s.var2assign.size
+  let v := Var.ofIndex s.var2assign.size
   let s := { s with var2assign := s.var2assign.push none }
   let s := { s with lit2clauses := s.lit2clauses.push #[] }
   let s := { s with lit2clauses := s.lit2clauses.push #[] }
@@ -320,10 +329,10 @@ def nVars (s : State) : UInt32 := UInt32.ofNat <| s.var2assign.size
 /-- Check that the variable is well-formed. -/
 def assertVarWellFormed (s : State) (v : Var) : State := Id.run do
   let mut s := s
-  if v.toNat = 0 then
+  if v.toRawNat = 0 then
     s := s.logError m!"variable {v} is zero."
 
-  if v.toNat >= s.var2assign.size then
+  if v.toIndex >= s.var2assign.size then
     s := s.logError m!"variable {v} is larger than defined variables ({s.var2assign.size})."
   return s
 
@@ -359,7 +368,7 @@ def newFromProblem (problem : CNF Nat) : State := Id.run do
 
 /-- Evaluate a variable. -/
 def evalVar (s : State) (v : Var) : xbool :=
-  s.var2assign[v.toNat]! |>.map Prod.fst |> xbool.ofOption
+  s.var2assign[v.toIndex]! |>.map Prod.fst |> xbool.ofOption
 
 def evalLit (s : State) (l : Lit) : xbool :=
     let val := s.evalVar l.toVar
@@ -441,7 +450,7 @@ def State.undoAssignment (s : State) (lit : Lit) : State := Id.run do
   let mut s := s
   -- delete assignment.
   s := { s with var2assign :=
-    s.var2assign.set! (lit.toVar.toNat) none }
+    s.var2assign.set! (lit.toVar.toIndex) none }
   s := { s with lit2clauses :=
     s.lit2clauses.set! lit.toIndex (s.lit2clausesOnUndo[lit.toIndex]!)
   }
@@ -483,7 +492,6 @@ def State.propagateLitInClause (s : State)
   (lit : Lit) (reason: ResolutionTree)
   (cid : ClauseId) :
     State := Id.run do
-  let s := s.logInfo m!"propagating literal {lit} @ clause {cid.toMessageData s}"
   match s.findNonFalseLit cid 0 with
   | .allFalse =>
     let s := s.logInfo m!"found clause that is all false: {cid.toMessageData s}"
@@ -508,18 +516,21 @@ def State.propagateLitInClause (s : State)
       let s := s.logInfo m!"found 'tru' in clause. Skipping..."
       s -- nothing to propagate, clause has 'true' in it.
     | .unassigned lit litIx =>
-        let s := s.logInfo m!"found unassigned literal {lit} in clause."
+        let s := s.logInfo m!"found unassigned literal '{lit}' in clause {cid.toMessageData s}."
         -- hurray, we have a watched literal.
         -- check if it's the *only* unassigned literal.
         -- If it is, propagate.
         -- If not, swap it with lit[0], and make it watched.
         match s.findNonFalseLit cid (litIx + 1) with
-        | .tru => s -- nothing to do, we have a true literal.
+        | .tru =>
+          let s := s.logInfo m!"found true literal in clause {cid.toMessageData s}, skipping. "
+          s -- nothing to do, we have a true literal.
         | .unassigned _lit' _litIx' =>
             -- we have another unassigned literal, so we
             -- cannot propagate.
             -- Swap clause[0] with clause[litIx],
             -- watch clause[0], and continue on our way.
+            let s := s.logInfo m!"found another unassigned literal {_lit'} in clause {cid.toMessageData s}. "
             let s := { s with clauses :=
               s.clauses.modify cid.toIndex fun (c, tree) =>
                 (c.swapIx 0 litIx, tree)
@@ -529,23 +540,27 @@ def State.propagateLitInClause (s : State)
         | .allFalse =>
             -- we have no other unassigned literals,
             -- so we can propagate!
+            let s := s.logInfo m!"found all other literals to be false, so propagating literal '{lit}'."
             let reason : ResolutionTree :=
                .branch lit (.given cid) reason
             s.enqueuePropQ lit reason
 
-def State.propagate (s : State) : State := propagateAux s where
+partial def State.propagate (s : State) : State := propagateAux s where
   propagateAux (s : State) : State := Id.run do
-    let s := s.logInfo m!"## propagation queue: '{s.propQMessageData}' ##"
+    let s := s.logInfo m!"== propagation queue: '{s.propQMessageData}' =="
     if let some ((lit, litProof), s) := s.dequePropQ then
+      let v := lit.toVar
+      let s := { s with var2assign := s.var2assign.set! v.toIndex (some (lit.positive?, litProof)) }
+      let s := s.logInfo m!"-- Current variable assignments: {s.var2assignMessageData} --"
       -- since 'lit' has been assigned, we need to propagate '~lit'.
       let (watchedClauses, s) := s.getAndClearWatchedClausesAtLit lit.negate
       let mut s := s
-      s := s.logInfo m!"Propagating clauses watched at {lit.negate}: '{watchedClauses.map (·.toMessageData s)}'"
+      s := s.logInfo m!"#clauses watched at dequeued {lit.negate}: '{watchedClauses.size}'"
       for clauseId in watchedClauses do
         s := s.logInfo m! "propagating clause {s.clauses[clauseId.toIndex]!.fst} @ {lit.negate}"
         s := s.propagateLitInClause lit litProof clauseId
         if s.unsatClause?.isSome then return s
-      s
+      s.propagate
     else s
 
 inductive SatSolveResult
@@ -555,23 +570,23 @@ inductive SatSolveResult
 deriving DecidableEq, Inhabited
 
 def State.getUnassignedVar (s : State) : Option Var :=
-  (s.var2assign.findIdx? fun val => val.isNone).map Var.ofNat
+  (s.var2assign.findIdx? fun val => val.isNone).map Var.ofIndex
 
 /-- Solve. -/
 partial def State.solve (s : State) : SatSolveResult × State :=
   let s := s.logInfo m!"== Starting solve @ level {s.level2Undo.size} =="
-  let s := s.logInfo m!"-- Current variable assignments: {s.var2assignMessageData} --"
   let s := s.propagate
   if s.unsatClause?.isSome then (.unsat, s)
   else
     if let some v := s.getUnassignedVar
     then
       let vlit := v.toPositiveLit
-      let s := s.logInfo m!"-- level '{s.level2Undo.size}' decided @ '{vlit}' --"
-      let vproof := .assumption vlit
-      let s := { s with var2assign := s.var2assign.set! v.toNat (some (true, vproof)) }
+      -- add the decision to the trail.
       let s := { s with decisionTrail := s.decisionTrail.push vlit }
       let s := { s with level2Undo := s.level2Undo.push #[] }
+      let s := s.logInfo m!"-- level '{s.level2Undo.size}' decided @ '{vlit}' --"
+      let vproof := .assumption vlit
+      -- | TODO: decide who assigns: Do we assume that the assignment is done before propagation?
       let s := s.enqueuePropQ vlit vproof
       s.solve
     else

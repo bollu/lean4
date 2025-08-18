@@ -1,7 +1,7 @@
 import Std.Tactic.BVDecide
 
 set_option trace.Meta.Tactic.sat true
-theorem eg1 (x y : BitVec 1) : (x ||| y) = 1#1 := by
+theorem eg1 (x : BitVec 1) : (x &&& x) = 1#1 := by
   bv_decide (config := { satBackend := .verisat })
 #print eg1
 
