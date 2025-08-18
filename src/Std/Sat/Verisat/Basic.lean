@@ -552,18 +552,40 @@ partial def State.propagate (s : State) : State := propagateAux s where
     let s := s.logInfo m!"== propagation queue: '{s.propQMessageData}' =="
     if let some ((lit, litProof), s) := s.dequePropQ then
       let v := lit.toVar
-      let s := { s with var2assign := s.var2assign.set! v.toIndex (some (lit.positive?, litProof)) }
-      let s := s.logInfo m!"-- Current variable assignments: {s.var2assignMessageData} --"
-      -- since 'lit' has been assigned, we need to propagate '~lit'.
-      let (watchedClauses, s) := s.getAndClearWatchedClausesAtLit lit.negate
-      let mut s := s
-      s := s.logInfo m!"#clauses watched at dequeued {lit.negate}: '{watchedClauses.size}'"
-      for clauseId in watchedClauses do
-        s := s.logInfo m! "propagating clause {s.clauses[clauseId.toIndex]!.fst} @ {lit.negate}"
-        s := s.propagateLitInClause lit litProof clauseId
-        if s.unsatClause?.isSome then return s
-      s.propagate
-    else s
+      if let .some (positive?, vProof) := s.var2assign[v.toIndex]! then
+        if lit.positive? == positive? then
+          s.propagate
+        else
+          -- we have a conflicting assignment.
+          let conflictReason : ResolutionTree := .branch lit litProof vProof
+          let (cid, s) := s.newClauseWithExplanation (Clause.ofArray #[]) (explanation? := some conflictReason)
+          let (conflictId, s) := s.mkConflictClause cid
+          if let some _lit := s.lastDecision? then
+            let s := s.logInfo m!"undoing decision..."
+            -- is it on us to undo the decision? maybe!
+            let s := s.undoOneDecision
+            s
+          else
+            -- We have found UNSAT.
+            let s := s.logInfo m!"found toplevel conflict clause: {conflictId.toMessageData s}"
+            let s := { s with unsatClause? := some conflictId }
+            return s
+      else
+        -- we don't have an assignment, continue.
+        let s := { s with var2assign := s.var2assign.set! v.toIndex (some (lit.positive?, litProof)) }
+        let s := s.logInfo m!"-- Current variable assignments: {s.var2assignMessageData} --"
+        -- since 'lit' has been assigned, we need to propagate '~lit'.
+        let (watchedClauses, s) := s.getAndClearWatchedClausesAtLit lit.negate
+        let mut s := s
+        s := s.logInfo m!"#clauses watched at dequeued {lit.negate}: '{watchedClauses.size}'"
+        for clauseId in watchedClauses do
+          s := s.logInfo m! "propagating clause {s.clauses[clauseId.toIndex]!.fst} @ {lit.negate}"
+          s := s.propagateLitInClause lit litProof clauseId
+          if s.unsatClause?.isSome then return s
+        s.propagate
+    else
+      -- queue is empty, stop recursion.
+      s
 
 inductive SatSolveResult
 | sat
