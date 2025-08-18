@@ -415,7 +415,10 @@ def lratBitblaster (goal : MVarId) (ctx : TacticContext) (reflectionResult : Ref
       let (res, solverState) := Verisat.runOneShot cnf
       withTraceNode `Meta.Tactic.sat (fun _ => return "Veritinysat Log") (collapsed := false) do
         for (msg, severity) in solverState.messages do
-          log msg severity
+          if severity == MessageSeverity.information
+          -- | TODO: refactor this to allow nested traces and all that.
+          then addTrace `Meta.Tactic.sat msg
+          else log msg severity
       match res with
       | .none =>
         trace[Meta.Tactic.sat] "SAT solver ran out of fuel."

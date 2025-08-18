@@ -217,7 +217,10 @@ structure State where
 def State.propQMessageData (s : State) : Lean.MessageData :=
   m!"{s.propQ.toArray.map (fun (lit, _proof) => m!"{lit}")}"
 
-
+def State.var2assignMessageData (s : State) : Lean.MessageData :=
+  let msgs := s.var2assign.zipIdx.map fun (oval, i) =>
+    m!"{Var.ofNat (i + 1)}={xbool.ofOption <| oval.map Prod.fst}"
+  m!"{msgs}"
 instance : EmptyCollection State where
   emptyCollection := {}
 
@@ -532,13 +535,14 @@ def State.propagateLitInClause (s : State)
 
 def State.propagate (s : State) : State := propagateAux s where
   propagateAux (s : State) : State := Id.run do
-    let s := s.logInfo m!"propagation queue: '{s.propQMessageData}'"
+    let s := s.logInfo m!"## propagation queue: '{s.propQMessageData}' ##"
     if let some ((lit, litProof), s) := s.dequePropQ then
-      let (watchedClauses, s) := s.getAndClearWatchedClausesAtLit lit
+      -- since 'lit' has been assigned, we need to propagate '~lit'.
+      let (watchedClauses, s) := s.getAndClearWatchedClausesAtLit lit.negate
       let mut s := s
-      s := s.logInfo m!"propagated literal '{lit}' has watched clauses '{watchedClauses.map (·.toMessageData s)}'"
+      s := s.logInfo m!"Propagating clauses watched at {lit.negate}: '{watchedClauses.map (·.toMessageData s)}'"
       for clauseId in watchedClauses do
-        s := s.logInfo m! "propagating clause {s.clauses[clauseId.toIndex]!.fst} @ {lit}"
+        s := s.logInfo m! "propagating clause {s.clauses[clauseId.toIndex]!.fst} @ {lit.negate}"
         s := s.propagateLitInClause lit litProof clauseId
         if s.unsatClause?.isSome then return s
       s
@@ -555,14 +559,15 @@ def State.getUnassignedVar (s : State) : Option Var :=
 
 /-- Solve. -/
 partial def State.solve (s : State) : SatSolveResult × State :=
-  let s := s.logInfo m!"Starting solve @ level {s.level2Undo.size}"
+  let s := s.logInfo m!"== Starting solve @ level {s.level2Undo.size} =="
+  let s := s.logInfo m!"-- Current variable assignments: {s.var2assignMessageData} --"
   let s := s.propagate
   if s.unsatClause?.isSome then (.unsat, s)
   else
     if let some v := s.getUnassignedVar
     then
       let vlit := v.toPositiveLit
-      let s := s.logInfo m!"level: {s.level2Undo.size} | deciding on {vlit}"
+      let s := s.logInfo m!"-- level '{s.level2Undo.size}' decided @ '{vlit}' --"
       let vproof := .assumption vlit
       let s := { s with var2assign := s.var2assign.set! v.toNat (some (true, vproof)) }
       let s := { s with decisionTrail := s.decisionTrail.push vlit }
