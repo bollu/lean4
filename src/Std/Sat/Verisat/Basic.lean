@@ -41,7 +41,7 @@ structure Lit where ofRawInt ::
 deriving DecidableEq, Hashable, Inhabited
 
 instance : Lean.ToMessageData Lit where
-  toMessageData lit := if lit.toRawInt > 0 then m!"v{lit.toRawInt}" else "~v{lit.toRawInt.abs}"
+  toMessageData lit := if lit.toRawInt > 0 then m!"v{lit.toRawInt}" else m!"~v{lit.toRawInt.abs}"
 
 /-- convert a variable into a literal, given the polarity. -/
 def Var.toLit (v : Var) (positive : Bool) : Lit :=
@@ -212,7 +212,7 @@ structure State where
   -/
   level2Undo : Array (Array Lit) := #[#[]]
   /-- Message log. -/
-  messages        : Lean.MessageLog     := {}
+  messages        : Array (Lean.MessageData × Lean.MessageSeverity) := #[]
 
 def State.propQMessageData (s : State) : Lean.MessageData :=
   m!"{s.propQ.toArray.map (fun (lit, _proof) => m!"{lit}")}"
@@ -229,24 +229,12 @@ namespace State
 def empty : State := ∅
 
 def resetMessageLog (s : State) : State :=
-  { s with messages := {} }
+  { s with messages := #[] }
 
-/--
-Returns the current log and then resets its messages.
--/
-def getAndEmptyMessageLog (s : State): Lean.MessageLog × State :=
-  let messages := s.messages
-  (messages, s.resetMessageLog)
 
 /-- log a message. -/
 def log (s : State) (msgData : Lean.MessageData) (severity : Lean.MessageSeverity) : State :=
-  let msg : Lean.Message := {
-    fileName := "<veritinysat>",
-    data := msgData,
-    pos := Lean.Position.mk 0 0,
-    severity := severity
-  }
-  { s with messages := s.messages.add msg }
+  { s with messages := s.messages.push (msgData, severity) }
 
 def logInfo (s : State) (msgData : Lean.MessageData) : State :=
   s.log msgData Lean.MessageSeverity.information
@@ -268,6 +256,7 @@ def newClauseWithExplanation (s : State)
   let clauseId := ClauseId.ofUInt32 <| UInt32.ofNat <| s.clauses.size
   let explanation := explanation?.getD (.given clauseId)
   let s := { s with clauses := s.clauses.push ⟨clause, explanation⟩ }
+  let s  := s.logInfo m!"new {clauseId.toMessageDataRaw} {clause.toArray}"
   (clauseId, s)
 
 /--
@@ -277,19 +266,54 @@ def newProblemClause (s : State) (clause : Clause) :
     ClauseId × State :=
   newClauseWithExplanation s clause none
 
-/--
-Setup the solver state from the given problem.
--/
-def newFromProblem (problem : CNF Nat) : State :=
-    problem.foldl (init := .empty) fun s clause =>
-        s.newProblemClause (Clause.ofCNF clause) |>.snd
 
 def newVar (s : State) : State × Var :=
   let v := Var.ofNat s.var2assign.size
   let s := { s with var2assign := s.var2assign.push none }
   (s, v)
 
+
 def nVars (s : State) : UInt32 := UInt32.ofNat <| s.var2assign.size
+
+/-- Check that the variable is well-formed. -/
+def assertVarWellFormed (s : State) (v : Var) : State := Id.run do
+  let mut s := s
+  if v.toNat = 0 then
+    s := s.logError m!"variable {v} is zero."
+
+  if v.toNat >= s.var2assign.size then
+    s := s.logError m!"variable {v} is larger than defined variables ({s.var2assign.size})."
+  return s
+
+/-- Check that the literal is well-formed. -/
+def assertLitWellFormed (s : State) (l : Lit) : State := Id.run do
+  s.assertVarWellFormed l.toVar
+
+/-- Check that the clause is well-formed. -/
+def assertClauseWellFormed (s : State) (clause : Clause) : State := Id.run do
+  let mut s := s
+  for lit in clause.toArray do
+    s := s.assertLitWellFormed lit
+  return s
+
+/--
+Setup the solver state from the given problem.
+-/
+def newFromProblem (problem : CNF Nat) : State := Id.run do
+  let mut s := State.empty
+  /- get the largest variable ID. Since all variable IDs are nonzero,
+  we know that this will be right. -/
+  let maxVarId : Nat := problem.foldl (init := 0) fun n clause =>
+    clause.foldl (init := n) fun n (varId, _) =>
+      max n varId
+
+  while s.nVars.toNat < maxVarId do
+    let (s', _v) := s.newVar
+    s := s'
+
+  problem.foldl (init := s) fun s clause =>
+      s.newProblemClause (Clause.ofCNF clause) |>.snd
+
 
 /-- Evaluate a variable. -/
 def evalVar (s : State) (v : Var) : xbool :=
@@ -476,13 +500,14 @@ def State.propagateLitInClause (s : State)
 
 def State.propagate (s : State) : State := propagateAux s where
   propagateAux (s : State) : State := Id.run do
-    let s := s.logInfo s.propQMessageData
+    let s := s.logInfo m!"propagation queue: {s.propQMessageData}"
     if let some ((lit, litProof), s) := s.dequePropQ then
       let (watchedClauses, s) := s.getAndClearWatchedClausesAtLit lit
       let mut s := s
       for clauseId in watchedClauses do
-         s := s.propagateLitInClause lit litProof clauseId
-         if s.unsatClause?.isSome then return s
+        s := s.logInfo m! "propagating clause {s.clauses[clauseId.toIndex]!.fst} @ {lit}"
+        s := s.propagateLitInClause lit litProof clauseId
+        if s.unsatClause?.isSome then return s
       s
     else s
 
@@ -502,7 +527,7 @@ partial def State.solve (s : State) : SatSolveResult × State :=
     if let some v := s.getUnassignedVar
     then
       let vlit := v.toPositiveLit
-      let s := s.logInfo m!"decided on {vlit}"
+      let s := s.logInfo m!"level: {s.level2Undo.size} | decided on {vlit}"
       let vproof := .assumption vlit
       let s := { s with var2assign := s.var2assign.set! v.toNat (some (true, vproof)) }
       let s := { s with decisionTrail := s.decisionTrail.push vlit }
