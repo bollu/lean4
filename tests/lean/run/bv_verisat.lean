@@ -136,6 +136,7 @@ theorem eg4 (x y : BitVec 1) :
   bv_decide (config := { satBackend := .verisat })
 
 
+set_option trace.Meta.Tactic.sat false
 /--
 error: The prover found a counterexample, consider the following assignment:
 x = 0#1
