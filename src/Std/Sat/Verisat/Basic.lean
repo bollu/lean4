@@ -308,11 +308,16 @@ partial def ResolutionTree.toLitSet (r : ResolutionTree) (s : State) : Std.HashS
     (falsSet.erase lit.negate).union (truSet.erase lit)
   | .assumption lit => Std.HashSet.emptyWithCapacity 1 |>.insert lit
 
+/-- Create a resolution tree that is fully expanded. -/
 partial def ResolutionTree.toMessageData (r : ResolutionTree) (s : State) (alreadyExpanded : Std.HashSet ClauseId := ∅) : Lean.MessageData :=
   match r with
   | .given clauseId =>
     if clauseId.isLearnt s then
-      clauseId.toMessageData s
+      if alreadyExpanded.contains clauseId then
+        clauseId.toMessageData s
+      else
+        let alreadyExpanded := alreadyExpanded.insert clauseId
+        clauseId.toProof s |>.toMessageData s alreadyExpanded
     else
       let alreadyExpanded := alreadyExpanded.insert clauseId
       if clauseId.isLearnt s
@@ -323,6 +328,10 @@ partial def ResolutionTree.toMessageData (r : ResolutionTree) (s : State) (alrea
     m!"(branch:{lit.toMessageData s} {set} {Lean.indentD <| fals.toMessageData s alreadyExpanded}{Lean.indentD <| tru.toMessageData s alreadyExpanded})"
   | .assumption lit =>
     m!"(assump:{lit.toMessageData s})"
+
+/-- Create a resolution tree that has no learnt nodes expanded. -/
+def ResolutionTree.toMessageDataNoExpand (r : ResolutionTree) (s : State) : Lean.MessageData :=
+  r.toMessageData s (HashSet.ofArray <| Array.range (s.clauses.size) |>.map ClauseId.ofIndex)
 
 namespace State
 def empty : State := ∅
@@ -693,11 +702,11 @@ def State.propagateLitInClause (s : State)
           let s := s.logInfo m!"found all other literals to be false, so propagating literal '{lit.toMessageData s}'."
           let mut unitProof := cid.toProof s
           let clause := cid.toClause s
-          for litFals in clause.toArray do
-            if litFals = lit then continue
-            let litProof := s.var2assign[litFals.toVar.toIndex]!.get!.snd
+          for cLitFals in clause.toArray do
+            if cLitFals = lit then continue
+            let litProof := s.var2assign[cLitFals.toVar.toIndex]!.get!.snd
             -- | clause has all the literals, and all the literals are negated.
-            unitProof := .branch lit  (tru := unitProof) (fals := litProof)
+            unitProof := .branch cLitFals  (tru := unitProof) (fals := litProof)
           let s := s.enqueuePropQ lit unitProof
           let s := s.addClauseWatchUndo cid
           (none, s)
@@ -889,8 +898,7 @@ def runOneShot (cnf : CNF Nat) :
       conflictId.toProof solver
     let solver := solver.logInfo m!"======= UNSAT Resolution treee ========"
     let solver := solver.logInfo m!"UNSAT clause: {conflictId.toMessageData solver}"
-    let solver := solver.logInfo m!"{resolutionProof.toMessageData solver}"
-    -- let solver := solver.logInfo m!"{resolutionProof.toMessageDataRaw}"
+    let solver := solver.logInfo m!"{resolutionProof.toMessageDataNoExpand solver}"
     (some (Except.ok <| solver.toLrat), solver)
   | .sat => Id.run do
     let partialAssign := solver.partialAssignment

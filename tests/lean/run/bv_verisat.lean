@@ -1,5 +1,6 @@
 import Std.Tactic.BVDecide
 
+set_option trace.Meta.Tactic.sat true in
 
 theorem eg1 (x : BitVec 1) : (x = 1#1) ∨ (x = 0#1) := by
   bv_normalize
