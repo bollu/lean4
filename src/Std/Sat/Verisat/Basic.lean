@@ -507,7 +507,7 @@ def State.undoAssignment (s : State) (lit : Lit) : State := Id.run do
   -- need to rewatch.
   let undos := s.lit2clausesOnUndo[lit.toIndex]!
   s := { s with
-    lit2clauses := s.lit2clauses.set! lit.toIndex undos
+    lit2clauses := s.lit2clauses.modify lit.toIndex (· ++ undos)
     lit2clausesOnUndo := s.lit2clausesOnUndo.set! lit.toIndex #[]
   }
   s
