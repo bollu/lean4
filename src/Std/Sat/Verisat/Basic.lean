@@ -286,9 +286,16 @@ instance : Inhabited State where
 def ClauseId.toClause (s : State) (cid : ClauseId) : Clause :=
   s.clauses[cid.toIndex]!.fst
 
+/-- convert a clause ID a clause, using the state in the solver. -/
+def ClauseId.toProof (s : State) (cid : ClauseId) : ResolutionTree :=
+  s.clauses[cid.toIndex]!.snd
+
 
 def ClauseId.toMessageData (s : State) (cid : ClauseId) : Lean.MessageData :=
   m!"{cid.toMessageDataRaw}:{cid.toClause s |>.toMessageData s}"
+
+def ClauseId.isLearnt (cid : ClauseId) (s : State) : Bool :=
+  cid.toIndex >= s.learntClausesStartIx
 
 namespace State
 def empty : State := ∅
@@ -354,7 +361,6 @@ def newClauseWithExplanation (s : State)
   let explanation := explanation?.getD (.given clauseId)
   let s := { s with clauses := s.clauses.push ⟨clause, explanation⟩ }
   let s  := s.logInfo m!"NEW-CLAUSE-WITH-EXPLAIN '{clauseId.toMessageData s}'"
-
   if clause.size = 0 then
     let s := { s with unsatClause? := some clauseId }
     (clauseId, s)
@@ -679,15 +685,15 @@ partial def State.propagate (s : State) : Option ClauseId × State := propagateA
         for (clauseId, ix) in watchedClauses.zipIdx do
           let res := s.propagateLitInClause lit.negate litProof clauseId
           s := res.snd
-          let conflict? := res.fst
-          if let some conflict := conflict? then
+          let conflictId? := res.fst
+          if let some conflictId := conflictId? then
             -- we should make sure that we don't wipe the watches for the later clauses,
             -- so we add these clauses back into the watch list.
             -- alternatively, do we just add these into the undos? I'm not sure.
             -- TODO(george): this is super error prone. What is a nicer way of doing this?
             s := watchedClauses[ix+1:].foldl (init := s) fun s laterClauseId =>
               s.addClauseWatchUndo laterClauseId
-            return (some conflict, s)
+            return (some conflictId, s)
         s.propagate
     else
       -- queue is empty, stop recursion.
@@ -766,7 +772,7 @@ def appendConflictIdsInOrder
   Array ClauseId :=
   match r with
   | .given clauseId =>
-    if clauseId.toIndex >= s.learntClausesStartIx
+    if clauseId.isLearnt s
     then -- is a learnt clause
       conflicts.push clauseId
     else conflicts
@@ -781,6 +787,26 @@ def appendConflictIdsInOrder
   | .assumption _lit => conflicts
 
 end ResolutionTree
+
+partial def ResolutionTree.toMessageData (r : ResolutionTree) (s : State) (fuel : Nat := 10): Lean.MessageData :=
+match fuel with
+| 0 => m!"..."
+| fuel + 1 =>
+  match r with
+  | .given clauseId =>
+    let learnt? := if clauseId.isLearnt s then "learnt" else "problem"
+    let out := m!"({learnt?} {clauseId.toMessageData s})"
+    if clauseId.isLearnt s then
+      let learntProof := s.clauses[clauseId.toIndex]!.snd
+      let learntProofMsg := learntProof.toMessageData s fuel
+      m!"{out}{Lean.indentD learntProofMsg}"
+    else
+      out
+  | .branch lit fals tru =>
+    m!"(branch:{lit.toMessageData s} {Format.line}{Lean.indentD <| fals.toMessageData s fuel}{Lean.indentD <| tru.toMessageData s fuel})"
+  | .assumption lit =>
+    m!"(assump:{lit.toMessageData s})"
+
 
 namespace State
 
@@ -831,8 +857,13 @@ def runOneShot (cnf : CNF Nat) :
   let (result, solver) := solver.solve
   match result with
   | .unsat =>
-    -- let _resolutionProof :=
-    --   solver.clauses[solver.unsatClause?.get!.toIndex]!.snd
+    let conflictId := solver.unsatClause?.get!
+    let resolutionProof :=
+      conflictId.toProof solver
+    let solver := solver.logInfo m!"======= UNSAT Resolution treee ========"
+    let solver := solver.logInfo m!"UNSAT clause: {conflictId.toMessageData solver}"
+    -- let solver := solver.logInfo m!"{resolutionProof.toMessageData solver}"
+    let solver := solver.logInfo m!"{resolutionProof.toMessageDataRaw}"
     (some (Except.ok <| solver.toLrat), solver)
   | .sat => Id.run do
     let partialAssign := solver.partialAssignment
