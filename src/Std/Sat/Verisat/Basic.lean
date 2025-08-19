@@ -49,7 +49,7 @@ structure Lit where ofRawInt ::
 deriving DecidableEq, Hashable, Inhabited
 
 def Lit.toMessageDataRaw (lit : Lit) :=
-  if lit.toRawInt > 0 then m!"v{lit.toRawInt}" else m!"~v{lit.toRawInt.abs}"
+  if lit.toRawInt > 0 then m!"+v{lit.toRawInt}" else m!"~v{lit.toRawInt.abs}"
 
 
 /-- convert a variable into a literal, given the polarity. -/
@@ -105,6 +105,9 @@ def ClauseId.toMessageDataRaw (cid : ClauseId) : Lean.MessageData :=
 def ClauseId.toIndex (cid : ClauseId) : Nat :=
   cid.toUInt32.toNat
 
+def ClauseId.ofIndex (ix : Nat) : ClauseId :=
+  ClauseId.ofUInt32 (UInt32.ofNat ix)
+
 /-- A clause is an array of literals. -/
 structure Clause where ofArray ::
   toArray : Array Lit
@@ -115,12 +118,6 @@ def Clause.toMessageDataRaw (cls : Clause) : Lean.MessageData :=
 
 /-- An axiom for showing that computations are inbounds. -/
 axiom Inbounds {P : Prop} : P
-
-/-- Make 'ix' the watched literal, by swaping to zero. -/
-def Clause.watchLiteralAtIx (c : Clause) (ix : Nat) : Clause where
-   toArray :=
-     let arr := c.toArray
-     arr.swap 0 ix Inbounds Inbounds
 
 def Clause.size (c : Clause)  : Nat := c.toArray.size
 
@@ -137,9 +134,15 @@ def Clause.findLitIx (c : Clause) (lit : Lit) (startIx : Nat := 0) :
     Option Nat := Id.run do
   let arr := c.toArray
   for i in [startIx:arr.size] do
-    if arr[i]! == lit
+    if arr[i]! = lit
     then return some i
   return none
+
+/-- set the watched literal in this clause. -/
+def Clause.swapLitTo0 (c : Clause) (litIx : Nat) : Clause :=
+  let arr := c.toArray
+  let arr := arr.swap 0 litIx Inbounds Inbounds
+  Clause.ofArray arr
 
 def Clause.toIntArray (c : Clause) : Array Int :=
   c.toArray.map Lit.toInt
@@ -200,6 +203,14 @@ def negate : xbool → xbool
 | .tru => .fals
 | .fals => .tru
 | .x => .x
+
+def or : xbool → xbool → xbool
+| .tru, _ => .tru
+| _, .tru => .tru
+| .fals, x => x
+| x, .fals => x
+| .fals, .fals => .fals
+| .x, .x => .x
 
 end xbool
 
@@ -307,14 +318,27 @@ def enqueuePropQ (s : State) (lit : Lit) (reason : ResolutionTree) : State :=
 def emptyPropQ (s : State) : State :=
   { s with propQ := .empty }
 
+/-- add the watched literal of clause 'cid' to the undo stack. -/
+def addClauseWatchUndo (s : State) (cid : ClauseId) : State :=
+  let s := s.logInfo m!"ADD-CLAUSE-WATCH-UNDO @ {cid.toMessageData s}"
+  let c := cid.toClause s
+  let s := { s with lit2clausesOnUndo := s.lit2clausesOnUndo.modify (c.get 0).toIndex (fun cs => cs.push cid) }
+  s
+
+/-- set the watched literal for a clause 'cid' to be index 'litIx'. -/
+def setClauseWatchedLiteral (s : State) (cid : ClauseId) (litIx : Nat) : State :=
+  let s := s.logInfo m!"SET-CLAUSE-WATCHED-LITERAL @ {cid.toMessageData s} : {litIx}"
+  { s with clauses := s.clauses.modify cid.toIndex (fun (clause, proof) => (clause.swapLitTo0 litIx, proof)) }
 
 /-- Add a clause to the watched clauses of this literal. -/
-def watchClauseAtLit (s : State) (cid : ClauseId) (lit : Lit) : State := Id.run do
-  let s := s.logInfo m!"watching {lit.toMessageData s} @ {cid.toMessageData s}"
-  { s with lit2clauses :=
-      s.lit2clauses.modify lit.toIndex fun clauses =>
-        clauses.push cid
+def watchClause (s : State) (cid : ClauseId) : State := Id.run do
+  let s := s.logInfo m!"WATCH-CLAUSE @ {cid.toMessageData s}"
+  let c := cid.toClause s
+  let lit := c.get 0
+  let s := { s with lit2clauses :=
+      s.lit2clauses.modify lit.toIndex fun c => c.push cid
   }
+  s
 
 /--
 Create a new clause, with optionally an explanation.
@@ -335,15 +359,12 @@ def newClauseWithExplanation (s : State)
     let s := { s with unsatClause? := some clauseId }
     (clauseId, s)
   else if clause.size = 1 then
-    let s := s.watchClauseAtLit clauseId (clause.get 0)
     let lit := clause.get 0
-    let s := s.logInfo m!"enqueued '{lit.toMessageData s}' from '{clauseId.toMessageData s}'"
-    -- | TODO: decide who assigns: Do we assume that the assignment is done before propagation?
     let s := s.enqueuePropQ lit (.given clauseId)
     (clauseId, s)
   else
-    -- | Setup 1-watch literal.
-    let s := s.watchClauseAtLit clauseId (clause.get 0)
+    -- | Setup 1-watch literal. Always watch at index '0'.
+    let s := s.watchClause clauseId
     (clauseId, s)
 /--
 Create a new clause from the problem description.
@@ -408,8 +429,11 @@ def newFromProblem (problem : CNF Nat) : State := Id.run do
 def isUnsat (s : State) : Bool := s.unsatClause?.isSome
 
 def dequePropQ (s : State) : Option ((Lit × ResolutionTree) × State) :=
-  if let some (val, propQ) := s.propQ.dequeue? then
-    some (val, { s with propQ := propQ })
+  if let some ((lit, proof), propQ) := s.propQ.dequeue? then
+    some ((lit, proof), { s with
+      propQ := propQ
+      level2Undo := s.level2Undo.modify (s.level2Undo.size - 1) (·.push lit)
+    })
   else
     none
 
@@ -530,7 +554,7 @@ def State.mkAndPropagateConflictClause (s : State) (unsatProof : ResolutionTree)
   -- and adding the new conflict clause to the watch queue?
   -- undo assignment.
   -- and when kissat decides to add clause to two watches.
-  let (lit?, s) := s.undoOneDecision?
+  let (litLastDecided?, s) := s.undoOneDecision?
   -- | now make the new clause.
   -- The annoying thing is, the decision that is undone will be at the *end* of the clause,
   -- but we want this to be the *beginning* of the clause so that this is the watched literal.
@@ -541,7 +565,8 @@ def State.mkAndPropagateConflictClause (s : State) (unsatProof : ResolutionTree)
   let (conflictId, s) := s.newClauseWithExplanation
     (Clause.ofArray clause)
     (some clauseProof)
-  if let some lit := lit? then
+  let s := s.logInfo m!"CONFLICT-CLAUSE {conflictId.toMessageData s}"
+  if let some lit := litLastDecided? then
     let s := s.enqueuePropQ lit.negate (ResolutionTree.given conflictId)
     (conflictId, s)
   else
@@ -557,14 +582,6 @@ def State.getAndClearWatchedClausesAtLit (s : State) (lit : Lit) :
   (clauses, s)
 
 
-/-- add clause 'cid' on the undo list of literal 'lit'.-/
-def State.addUndoWatch (s : State) (lit : Lit) (cid : ClauseId) : State := Id.run do
-  let mut s := s
-  s := s.logInfo m!"ADD-UNDO-WATCH '{lit.toMessageData s}' @ {cid.toMessageData s}"
-  let undos := s.lit2clausesOnUndo[lit.toIndex]!
-  let undos := undos.push cid
-  { s with lit2clausesOnUndo := s.lit2clausesOnUndo.set! lit.toIndex undos }
-
 
 /--
 Propagate a literal assignment of lit 'Lit' in clause 'clauseId'.
@@ -578,7 +595,11 @@ def State.propagateLitInClause (s : State)
   (litNewlyFalse : Lit) (reason: ResolutionTree)
   (cid : ClauseId) :
     Option ClauseId × State := Id.run do
-  let s := s.logInfo m! "propagating assignment lit that becamse false {litNewlyFalse.toMessageData s} @ {cid.toMessageData s}"
+  let c := cid.toClause s
+  if c.get 0 ≠ litNewlyFalse then
+    let s := s.logInfo "ERROR: Clause {cid.toMessageData s} does not start with {litNewlyFalse.toMessageData s}"
+    return ⟨none, s⟩
+  let s := s.logInfo m! "propagating assignment lit that became false {litNewlyFalse.toMessageData s} @ {cid.toMessageData s}"
   match s.findNonFalseLit cid 0 with
   | .allFalse =>
     let s := s.logInfo m!"found clause that is all false: {cid.toMessageData s}"
@@ -591,9 +612,11 @@ def State.propagateLitInClause (s : State)
       let litProof := .assumption lit
       unsatProof := ResolutionTree.branch lit (fals := unsatProof) (tru := litProof)
     let (conflictId, s):= s.mkAndPropagateConflictClause unsatProof
+    let s := s.addClauseWatchUndo cid
     return (some conflictId, s)
   | .tru =>
     let s := s.logInfo m!"found 'tru' in clause. Skipping..."
+    let s := s.addClauseWatchUndo cid
     (none, s) -- nothing to propagate, clause has 'true' in it.
   | .unassigned lit litIx =>
       let s := s.logInfo m!"found unassigned literal '{lit.toMessageData s}' in clause {cid.toMessageData s}."
@@ -604,6 +627,7 @@ def State.propagateLitInClause (s : State)
       match s.findNonFalseLit cid (litIx + 1) with
       | .tru =>
         let s := s.logInfo m!"found true literal in clause {cid.toMessageData s}, skipping. "
+        let s := s.addClauseWatchUndo cid
         (none, s) -- nothing to do, we have a true literal.
       | .unassigned litUnassigned litUnassignedIx =>
           -- we have another unassigned literal, so we
@@ -611,13 +635,9 @@ def State.propagateLitInClause (s : State)
           -- Swap clause[0] with clause[litIx],
           -- watch clause[0], and continue on our way.
           let s := s.logInfo m!"found another unassigned literal {litUnassigned.toMessageData s} in clause {cid.toMessageData s}. "
-          -- we will be swapping c[0], so we will add the prior watch into the undo watch list.
-          let s := s.addUndoWatch (cid.toClause s).toArray[0]! cid
-          let s := { s with clauses :=
-            s.clauses.modify cid.toIndex fun (c, tree) =>
-              (c.watchLiteralAtIx litUnassignedIx, tree)
-          }
-          let s := s.watchClauseAtLit cid litUnassigned
+          let s := s.addClauseWatchUndo cid
+          let s := s.setClauseWatchedLiteral cid litUnassignedIx
+          let s := s.watchClause cid
           (none, s)
       | .allFalse =>
           -- we have no other unassigned literals,
@@ -626,6 +646,7 @@ def State.propagateLitInClause (s : State)
           let reason : ResolutionTree :=
               .branch lit (.given cid) reason
           let s := s.enqueuePropQ lit reason
+          let s := s.addClauseWatchUndo cid
           (none, s)
 
 partial def State.propagate (s : State) : Option ClauseId × State := propagateAux s where
@@ -694,7 +715,7 @@ partial def State.solve (s : State) : SatSolveResult × State :=
         -- add the decision to the trail.
         let s := { s with decisionTrail := s.decisionTrail.push vlit }
         let s := { s with level2Undo := s.level2Undo.push #[] }
-        let s := s.logInfo m!"-- SOLVE-AUX '{s.level2Undo.size}' decided @ '{vlit.toMessageData s}' trail: '{s.decisionTrailMessageData}'--"
+        let s := s.logInfo m!"DECISION {s.level2Undo.size}, {vlit.toMessageData s} | trail: {s.decisionTrailMessageData}."
         let vproof := .assumption vlit
         -- | TODO: decide who assigns: Do we assume that the assignment is done before propagation?
         let s := s.enqueuePropQ vlit vproof
@@ -790,6 +811,9 @@ def toLrat (s : State) : Array LRAT.IntAction := Id.run do
 
 end State
 
+def State.evalClause (c : Clause) (s : State) : xbool :=
+  c.toArray.foldl (init := xbool.fals) (fun acc lit => acc.or (s.evalLit lit))
+
 /-! Helpers for bvDecide interaction. -/
 open Lean Meta in
 def runOneShot (cnf : CNF Nat) :
@@ -801,8 +825,16 @@ def runOneShot (cnf : CNF Nat) :
     -- let _resolutionProof :=
     --   solver.clauses[solver.unsatClause?.get!.toIndex]!.snd
     (some (Except.ok <| solver.toLrat), solver)
-  | .sat =>
+  | .sat => Id.run do
     let partialAssign := solver.partialAssignment
+    let mut solver := solver
+    solver := solver.logInfo m!"===== SAT model {solver.var2assignMessageData} ======"
+    for cid in [0:solver.learntClausesStartIx] do
+      let cid := ClauseId.ofIndex cid
+      let val := solver.evalClause (cid.toClause solver)
+      let errStr := if  val = xbool.fals then m!"[☠️]" else m!""
+      solver := solver.logInfo m!"⟦{cid.toMessageData solver}⟧ {val} {errStr}"
+
     (some (Except.error <| partialAssign.map Prod.swap), solver)
   | .nofuel =>
     let solver := solver.logError "Solver ran out of fuel."

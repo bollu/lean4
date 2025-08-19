@@ -15,6 +15,7 @@ set_option trace.Meta.Tactic.sat true in
 theorem eg3 (x y : Bool) :
     ((x || y) && (x || !y) && (!x || y) && (!x || !y)) = false := by
   bv_normalize
+  -- bv_decide
   bv_decide (config := { satBackend := .verisat })
 
 
