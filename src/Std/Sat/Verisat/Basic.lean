@@ -28,69 +28,57 @@ protected def Array.traverse {α : Type} (xs : Array (Option α)) :
 namespace Verisat
 open Std Sat Tactic BVDecide
 
-structure Var where ofRawNat ::
-  toRawNat : Nat
+structure Var where ofRawNatPos ::
+  toRawNatPos : Nat
 deriving DecidableEq, Hashable, Inhabited
 
 /-- convert a 'Var' (which is a positive natural number) to an array index, which is zero-indexed. -/
 def Var.toIndex (v : Var) : Nat :=
-  v.toRawNat - 1
+  v.toRawNatPos - 1
 
 /-- convert an array index into a 'Var', which converts a zero based offset into a 1-based offset. -/
 def Var.ofIndex (ix : Nat) : Var :=
-  Var.ofRawNat (ix + 1)
+  ofRawNatPos (ix + 1)
 
 instance : Lean.ToMessageData Var where
-  toMessageData v := m!"v{v.toRawNat}"
+  toMessageData v := m!"v{v.toRawNatPos}"
 
 /-- Negated variable is '-varId'. -/
-structure Lit where ofRawInt ::
-  toRawInt : Int32
+structure Lit where ofRawInt32Nonzero ::
+  toRawInt32Nonzero : Int32
 deriving DecidableEq, Hashable, Inhabited
 
 def Lit.toMessageDataRaw (lit : Lit) :=
-  if lit.toRawInt > 0 then m!"+v{lit.toRawInt}" else m!"~v{lit.toRawInt.abs}"
+  if lit.toRawInt32Nonzero > 0 then m!"+v{lit.toRawInt32Nonzero}" else m!"~v{lit.toRawInt32Nonzero.abs}"
 
 
 /-- convert a variable into a literal, given the polarity. -/
 def Var.toLit (v : Var) (positive : Bool) : Lit :=
-  Lit.ofRawInt <| Int32.ofNat v.toRawNat * (if positive then 1 else -1)
+  .ofRawInt32Nonzero <| Int32.ofNat v.toRawNatPos * (if positive then 1 else -1)
 
 def Var.toPositiveLit (v : Var) : Lit := v.toLit (positive := true)
 
 def Lit.toVar (l : Lit) : Var :=
-    Var.ofRawNat <| (Int32.abs l.toRawInt).toNatClampNeg
+    Var.ofRawNatPos <| (Int32.abs l.toRawInt32Nonzero).toNatClampNeg
 
-def Lit.positive? (l : Lit) : Bool := l.toRawInt > 0
+def Lit.positive? (l : Lit) : Bool := l.toRawInt32Nonzero > 0
 
-def Lit.negative? (l : Lit) : Bool := l.toRawInt < 0
+def Lit.negative? (l : Lit) : Bool := l.toRawInt32Nonzero < 0
 
 /-- negate a literal. -/
 def Lit.negate (l : Lit) : Lit where
-  toRawInt := - l.toRawInt
+  toRawInt32Nonzero := - l.toRawInt32Nonzero
 
 /-- convert a literal to an array index. -/
 def Lit.toIndex (l : Lit) : Nat :=
   -- 1 /-1 => [0 * 2, 0 * 2 + 1] => [0, 1]
   -- 2/-2  => [1 * 2, 1 * 2 + 1] => [2, 3]
   -- 3/-3 →  [2 * 2, 2 * 2 + 1] => [4, 5]
-  ((l.toRawInt.abs.toNatClampNeg - 1) * 2) + (if l.positive? then 0 else 1)
+  ((l.toRawInt32Nonzero.abs.toNatClampNeg - 1) * 2) + (if l.positive? then 0 else 1)
 
-def Lit.ofIndex (ix : Nat) : Lit :=
-    let val := Int32.ofNat (ix / 2)
-    Lit.ofRawInt (if ix % 2 == 1 then - val else val)
+def Lit.toIntNonzero (l : Lit) : Int :=
+  l.toRawInt32Nonzero.toInt
 
-def Lit.toInt (l : Lit) : Int :=
-  l.toRawInt.toInt
-
-
-/-
-theorem Lit.ofIndex_toIndex (l : Lit) :
-    Lit.ofIndex l.toIndex = l := by
-  rcases l with ⟨l⟩
-  simp [ofIndex, toIndex, Lit.positive?, Lit.toRawInt]
-  sorry
--/
 
 
 /-- Id of a clause. -/
@@ -106,7 +94,7 @@ def ClauseId.toIndex (cid : ClauseId) : Nat :=
   cid.toUInt32.toNat
 
 /-- The LRAT proof format uses 1-indexing. -/
-def ClauseId.toLratOneIndex (cid : ClauseId) : Nat :=
+def ClauseId.toLratPos (cid : ClauseId) : Nat :=
   cid.toUInt32.toNat + 1
 
 
@@ -150,7 +138,10 @@ def Clause.swapLitTo0 (c : Clause) (litIx : Nat) : Clause :=
   Clause.ofArray arr
 
 def Clause.toIntArray (c : Clause) : Array Int :=
-  c.toArray.map Lit.toInt
+  c.toArray.map Lit.toIntNonzero
+
+def Clause.toLitSet (c : Clause) : Std.HashSet Lit :=
+  Std.HashSet.ofArray c.toArray
 
 def Clause.isEmpty (c : Clause) : Bool :=
   c.toArray.isEmpty
@@ -174,7 +165,6 @@ def ResolutionTree.toMessageDataRaw (r : ResolutionTree) : Lean.MessageData :=
     m!"(branch:{lit.toMessageDataRaw} {Format.line} {Lean.MessageData.nest 2 <| fals.toMessageDataRaw} {Format.line} {Lean.MessageData.nest 2 <| tru.toMessageDataRaw})"
   | .assumption lit =>
     m!"(assumption:{lit.toMessageDataRaw})"
-
 
 /-- a boolean which is potentially unassigned. -/
 inductive xbool
@@ -334,9 +324,7 @@ def ResolutionTree.clausesUsed (r : ResolutionTree)
   | .given clauseId =>
     cs.insert clauseId
   | .branch _ fals tru =>
-    let cs := fals.clausesUsed cs
-    let cs := tru.clausesUsed cs
-    cs
+    (fals.clausesUsed cs).union (tru.clausesUsed cs)
   | .assumption _ => cs
 
 
@@ -470,7 +458,7 @@ def nVars (s : State) : UInt32 := UInt32.ofNat <| s.var2assign.size
 /-- Check that the variable is well-formed. -/
 def assertVarWellFormed (s : State) (v : Var) : State := Id.run do
   let mut s := s
-  if v.toRawNat = 0 then
+  if v.toRawNatPos = 0 then
     s := s.logError m!"variable {v} is zero."
 
   if v.toIndex >= s.var2assign.size then
@@ -760,7 +748,7 @@ partial def State.propagate (s : State) : Option ClauseId × State := propagateA
           let s := s.logInfo m!"{lit.toMessageData s} has conflicting assignment. Creating conflict clause..."
           -- we have a conflicting assignment.
           let vProof := s.var2assign[lit.toVar.toIndex]!.get!.snd
-          let conflictReason : ResolutionTree := .branch lit litProof vProof
+          let conflictReason : ResolutionTree := .branch lit vProof litProof
           let (conflictId, s) := s.mkAndPropagateConflictClause conflictReason
           (some conflictId, s)
       | .x =>
@@ -865,42 +853,76 @@ def appendConflictIdsInOrder
     conflicts
   | .assumption _lit => conflicts
 
+
+
 end ResolutionTree
+
+def ResolutionTree.isValidForConflictClause (s : State) (r : ResolutionTree) (clauseLits : Std.HashSet Lit) : Bool × State :=
+  match r with
+  | .assumption lit =>
+    if lit.negate ∈ clauseLits then
+      (true, s)
+    else
+      (false, s.logError m!"clause {clauseLits.toArray.map (Lit.toMessageData · s)} does not contain literal {lit.negate.toMessageData s}")
+  | .given _ =>
+      (true, s)
+  | .branch lit fals tru => Id.run do
+    let falsLits := fals.toLitSet s
+    let truLits := tru.toLitSet s
+    let mut good := true
+    let mut s := s
+    if !falsLits.contains lit.negate then
+      s := s.logError m!"branch fals does not contain {lit.negate.toMessageData s} in '{r.toMessageData s}', branch '{fals.toMessageData s}'"
+      good := false
+    if !truLits.contains lit then
+      s := s.logError m!"branch tru does not contain {lit.toMessageData s} in '{r.toMessageData s}', branch '{tru.toMessageData s}'"
+      good := false
+    let res := fals.isValidForConflictClause s clauseLits
+    let goodLeft := res.fst
+    s := res.snd
+    let res := tru.isValidForConflictClause s clauseLits
+    let goodRight := res.fst
+    s := res.snd
+    (good && goodLeft && goodRight, s)
 
 namespace State
 
 /--
 Convert a resolution tree into an LRAT proof.
 -/
-def toLrat (s : State) : Array LRAT.IntAction := Id.run do
-  -- let cids := appendConflictIdsInOrder
-  --   (s := s)
-  --   (alreadyAddedConflicts := ∅)
-  --   (conflicts := #[])
-  --   (r := r)
+def toLrat (s : State) : Array LRAT.IntAction × State := Id.run do
   let mut actions := #[]
+  let mut s := s
   let startIx := s.learntClausesStartIx
   let endIx := s.clauses.size
+  s := s.logInfo "=== LRAT Proof ==="
   for cid in [startIx:endIx] do
     let (clause, proof) := s.clauses[cid]!
+    s := s.logInfo <| m!"{cid + 1}) {clause.toMessageData s} {proof.toMessageDataNoExpand s}"
+    let res := proof.isValidForConflictClause s (clause.toLitSet)
+    let good := res.fst
+    s := res.snd
+    if good then
+      s := s.logInfo m!"GOOD PROOF ({cid + 1})"
+    else
+      s := s.logInfo m!"BAD PROOF ({cid + 1})"
     let clausesUsedToProveConflict :=
       proof.clausesUsed ∅
       |>.toArray
-      |>.map ClauseId.toLratOneIndex
+      |>.map ClauseId.toLratPos
 
     if clause.isEmpty then
       actions := actions.push
         (LRAT.Action.addEmpty
           (id := cid + 1) -- one-indexed.
           (rupHints := clausesUsedToProveConflict))
-      return actions
     else
       actions := actions.push
         (LRAT.Action.addRup
           (id := cid + 1) -- one-indexed.
           (c := clause.toIntArray)
-          (rupHints :=  clausesUsedToProveConflict))
-  actions
+          (rupHints := clausesUsedToProveConflict))
+  (actions, s)
 
 end State
 
@@ -921,7 +943,8 @@ def runOneShot (cnf : CNF Nat) :
     let solver := solver.logInfo m!"======= UNSAT Resolution treee ========"
     let solver := solver.logInfo m!"UNSAT clause: {conflictId.toMessageData solver}"
     let solver := solver.logInfo m!"{resolutionProof.toMessageDataNoExpand solver}"
-    (some (Except.ok <| solver.toLrat), solver)
+    let (lrat, solver) := solver.toLrat
+    (some (Except.ok <| lrat), solver)
   | .sat => Id.run do
     let partialAssign := solver.partialAssignment
     let mut solver := solver
