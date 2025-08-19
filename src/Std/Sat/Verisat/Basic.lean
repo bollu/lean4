@@ -314,14 +314,16 @@ partial def ResolutionTree.toMessageData (r : ResolutionTree) (s : State) (alrea
   | .given clauseId =>
     if clauseId.isLearnt s then
       if alreadyExpanded.contains clauseId then
-        clauseId.toMessageData s
+        m!"(learnt:{clauseId.toMessageData s})"
       else
+        let out := m!"(learnt:{clauseId.toMessageData s})"
         let alreadyExpanded := alreadyExpanded.insert clauseId
-        clauseId.toProof s |>.toMessageData s alreadyExpanded
+        let out := out ++ (Format.line ++ (clauseId.toProof s |>.toMessageData s alreadyExpanded))
+        out
     else
       let alreadyExpanded := alreadyExpanded.insert clauseId
       if clauseId.isLearnt s
-      then m!"(learnt:{clauseId.toProof s |>.toMessageData s alreadyExpanded})"
+      then m!"(learnt:{clauseId.toMessageData s}{Format.line ++ (clauseId.toProof s |>.toMessageData s alreadyExpanded)})"
       else m!"(given:{clauseId.toMessageData s})"
   | .branch lit fals tru =>
     let set := r.toLitSet s |>.toArray |>.map (·.toMessageData s)
@@ -909,7 +911,6 @@ def runOneShot (cnf : CNF Nat) :
       let val := solver.evalClause (cid.toClause solver)
       let errStr := if  val = xbool.fals then m!"[☠️]" else m!""
       solver := solver.logInfo m!"⟦{cid.toMessageData solver}⟧ {val} {errStr}"
-
     (some (Except.error <| partialAssign.map Prod.swap), solver)
   | .nofuel =>
     let solver := solver.logError "Solver ran out of fuel."
