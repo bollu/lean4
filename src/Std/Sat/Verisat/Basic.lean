@@ -674,10 +674,19 @@ partial def State.propagate (s : State) : Option ClauseId × State := propagateA
         let mut s := s
         s := s.logInfo m!"#clauses watched at negated {lit.negate.toMessageData s}: '{watchedClauses.size}'"
         for clauseId in watchedClauses do
+          s := s.logInfo m!"  👀 {clauseId.toMessageData s}"
+
+        for (clauseId, ix) in watchedClauses.zipIdx do
           let res := s.propagateLitInClause lit.negate litProof clauseId
           s := res.snd
           let conflict? := res.fst
           if let some conflict := conflict? then
+            -- we should make sure that we don't wipe the watches for the later clauses,
+            -- so we add these clauses back into the watch list.
+            -- alternatively, do we just add these into the undos? I'm not sure.
+            -- TODO(george): this is super error prone. What is a nicer way of doing this?
+            s := watchedClauses[ix+1:].foldl (init := s) fun s laterClauseId =>
+              s.addClauseWatchUndo laterClauseId
             return (some conflict, s)
         s.propagate
     else
