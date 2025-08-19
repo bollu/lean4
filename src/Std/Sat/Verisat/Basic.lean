@@ -105,6 +105,11 @@ def ClauseId.toMessageDataRaw (cid : ClauseId) : Lean.MessageData :=
 def ClauseId.toIndex (cid : ClauseId) : Nat :=
   cid.toUInt32.toNat
 
+/-- The LRAT proof format uses 1-indexing. -/
+def ClauseId.toLratOneIndex (cid : ClauseId) : Nat :=
+  cid.toUInt32.toNat + 1
+
+
 def ClauseId.ofIndex (ix : Nat) : ClauseId :=
   ClauseId.ofUInt32 (UInt32.ofNat ix)
 
@@ -307,6 +312,33 @@ partial def ResolutionTree.toLitSet (r : ResolutionTree) (s : State) : Std.HashS
     let truSet := tru.toLitSet s
     (falsSet.erase lit.negate).union (truSet.erase lit)
   | .assumption lit => Std.HashSet.emptyWithCapacity 1 |>.insert lit
+
+partial def ResolutionTree.assumptions (r : ResolutionTree) (s : State) : Std.HashSet Lit :=
+  match r with
+  | .given _ => Std.HashSet.emptyWithCapacity 1
+  | .branch lit fals tru =>
+    let falsSet := fals.assumptions s
+    let truSet := tru.assumptions s
+    falsSet.union truSet
+  | .assumption lit => Std.HashSet.emptyWithCapacity 1 |>.insert lit
+
+
+/--
+Insert the clauses that were used to prove 'r'
+into the set of clauses 'HashSet clauseId'.
+-/
+def ResolutionTree.clausesUsed (r : ResolutionTree)
+  (cs : HashSet ClauseId) :
+    HashSet ClauseId :=
+  match r with
+  | .given clauseId =>
+    cs.insert clauseId
+  | .branch _ fals tru =>
+    let cs := fals.clausesUsed cs
+    let cs := tru.clausesUsed cs
+    cs
+  | .assumption _ => cs
+
 
 /-- Create a resolution tree that is fully expanded. -/
 partial def ResolutionTree.toMessageData (r : ResolutionTree) (s : State) (alreadyExpanded : Std.HashSet ClauseId := ∅) : Lean.MessageData :=
@@ -595,12 +627,14 @@ Makes a new conflict clause from a given proof of 'false' @ 'cid'.
 -/
 def State.mkAndPropagateConflictClause (s : State) (unsatProof : ResolutionTree)
     : ClauseId × State := Id.run do
-  let mut clause : Array Lit := #[]
   let mut clauseProof : ResolutionTree := unsatProof
-  for lit in s.decisionTrail do
-    clause := clause.push lit.negate
-    let litProof := .assumption lit
-    clauseProof := .branch lit (fals:= clauseProof) (tru := litProof)
+  let litsToBeResolved := clauseProof.assumptions s
+  let mut clause : Array Lit := litsToBeResolved.toArray |>.map Lit.negate
+  -- for lit in s.decisionTrail do
+  --   if lit.negate ∈ litsToBeResolved then
+  --     clause := clause.push lit.negate
+  --     let litProof := .assumption lit
+  --     clauseProof := .branch lit (fals:= clauseProof) (tru := litProof)
 
   -- for (lit, proof) in s.level2Propagations.back! do
   --   -- TODO: check if we need to do it this way? Do I need to add *all* literals?
@@ -623,6 +657,7 @@ def State.mkAndPropagateConflictClause (s : State) (unsatProof : ResolutionTree)
     (Clause.ofArray clause)
     (some clauseProof)
   let s := s.logInfo m!"CONFLICT-CLAUSE {conflictId.toMessageData s}"
+  let s := s.logInfo m!"{clauseProof.toMessageData s}"
   if let some lit := litLastDecided? then
     let s := s.enqueuePropQ lit.negate (ResolutionTree.given conflictId)
     (conflictId, s)
@@ -801,21 +836,6 @@ namespace ResolutionTree
 
 variable (r : ResolutionTree) (s : State)
 
-/--
-Insert the clauses that were used to prove 'r'
-into the set of clauses 'HashSet clauseId'.
--/
-def clausesUsed (r : ResolutionTree)
-  (cs : HashSet ClauseId) :
-    HashSet ClauseId :=
-  match r with
-  | .given clauseId =>
-    cs.insert clauseId
-  | .branch _ fals tru =>
-    let cs := fals.clausesUsed cs
-    let cs := tru.clausesUsed cs
-    cs
-  | .assumption _ => cs
 
 
 /--
@@ -866,18 +886,18 @@ def toLrat (s : State) : Array LRAT.IntAction := Id.run do
     let clausesUsedToProveConflict :=
       proof.clausesUsed ∅
       |>.toArray
-      |>.map ClauseId.toIndex
+      |>.map ClauseId.toLratOneIndex
 
     if clause.isEmpty then
       actions := actions.push
         (LRAT.Action.addEmpty
-          (id := cid)
+          (id := cid + 1) -- one-indexed.
           (rupHints := clausesUsedToProveConflict))
       return actions
     else
       actions := actions.push
         (LRAT.Action.addRup
-          (id := cid)
+          (id := cid + 1) -- one-indexed.
           (c := clause.toIntArray)
           (rupHints :=  clausesUsedToProveConflict))
   actions
