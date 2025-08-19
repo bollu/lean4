@@ -119,13 +119,14 @@ def cnf1 : CNF Nat := [
 
 def lrat1 : Array IntAction :=
 #[
+  Action.addRup 7 #[] #[1, 2,3, 4], -- [(0, true)]
   Action.addRup 5 #[-1] #[1, 2], -- [(0, false)]
   Action.addRup 6 #[1] #[3, 4], -- [(0, true)]
-  Action.addEmpty 7 #[5, 6]
+  Action.addEmpty 8 #[5, 6]
   ]
 
-/-- info: success -/
-#guard_msgs in #eval verifyCNFVerbose cnf1 lrat1 3
+/-- info: rup failure -/
+#guard_msgs in #eval verifyCNFVerbose cnf1 lrat1 4
 
 set_option trace.Meta.Tactic.sat true in
 theorem eg4 (x y : BitVec 1) :

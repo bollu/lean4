@@ -80,6 +80,14 @@ def Lit.toIntNonzero (l : Lit) : Int :=
   l.toRawInt32Nonzero.toInt
 
 
+/-- Id of a Clause when encoded as an Lrat clause. Uses 1-indexing. -/
+structure LratIx where ofUInt32 ::
+  toUInt32 : UInt32
+deriving DecidableEq, Hashable, Inhabited
+
+def LratIx.toNat (ix : LratIx) : Nat :=
+  ix.toUInt32.toNat
+
 
 /-- Id of a clause. -/
 structure ClauseId where ofUInt32 ::
@@ -94,8 +102,8 @@ def ClauseId.toIndex (cid : ClauseId) : Nat :=
   cid.toUInt32.toNat
 
 /-- The LRAT proof format uses 1-indexing. -/
-def ClauseId.toLratPos (cid : ClauseId) : Nat :=
-  cid.toUInt32.toNat + 1
+def ClauseId.toLratIx (cid : ClauseId) : LratIx :=
+  LratIx.ofUInt32 <| cid.toUInt32 + 1
 
 
 def ClauseId.ofIndex (ix : Nat) : ClauseId :=
@@ -885,44 +893,97 @@ def ResolutionTree.isValidForConflictClause (s : State) (r : ResolutionTree) (cl
     s := res.snd
     (good && goodLeft && goodRight, s)
 
+/-- Inline all learnt clauses into the resolution tree.
+This will give a resolution tree that has no 'assumption' nodes, and only 'given'
+nodes if possible. -/
+partial def ResolutionTree.inlineLearntClauses (r : ResolutionTree) (s : State) :
+    (Option ResolutionTree × State) :=
+  match r with
+  | .assumption _lit => (none, s)
+  | .given clauseId =>
+      if clauseId.isLearnt s then
+        let proof := clauseId.toProof s
+        proof.inlineLearntClauses s
+      else (some (.given clauseId), s)
+  | .branch lit fals tru => Id.run do
+      let (outFals, s) := fals.inlineLearntClauses s
+      let (outTru, s) := tru.inlineLearntClauses s
+      let some l := outFals
+        | (none, s)
+      let some r := outTru
+        | (none, s)
+      (some (.branch lit l r), s)
+
+/-- Convert a resolution tree into a sequence of LRAT steps. -/
+partial def ResolutionTree.toLrat
+    (r : ResolutionTree)
+    (s : State)
+    (learnt2LratIx : HashMap ClauseId LratIx := ∅)
+    (acts : Array LRAT.IntAction := #[]) :
+      Option LratIx × Array LRAT.IntAction × HashMap ClauseId LratIx × State := Id.run do
+  let s := s.logInfo m!"toLrat: {r.toMessageDataNoExpand s}"
+  -- | TODO: implement this as resolution tree pruning instead.
+  match r with
+  | .assumption _lit => (none, acts, learnt2LratIx, s)
+  | .given clauseId =>
+    if clauseId.isLearnt s then
+      if let some learntIx := learnt2LratIx.get? clauseId then
+        (some learntIx, acts, learnt2LratIx, s)
+      else
+        let (out, acts, learnt2LratIx, s) := clauseId.toProof s |>.toLrat s learnt2LratIx acts
+        let some learntIx := out
+          | return (none, acts, learnt2LratIx, s)
+        let learnt2LratIx := learnt2LratIx.insert clauseId learntIx
+        (some learntIx, acts, learnt2LratIx, s)
+    else (some clauseId.toLratIx, acts, learnt2LratIx, s)
+  | .branch _lit fals tru =>
+    let (falseId?, acts, learnt2LratIx, s) := fals.toLrat s learnt2LratIx acts
+    let (trueId?, acts, learnt2LratIx, s) := tru.toLrat s learnt2LratIx acts
+    match falseId?, trueId? with
+    | some falseId, some trueId =>
+      let fresh := (ClauseId.ofIndex <| s.clauses.size + acts.size).toLratIx
+      let c := r.toLitSet s
+      if c.isEmpty then
+        let acts := acts.push (LRAT.Action.addEmpty (id := fresh.toNat)
+          (rupHints := #[falseId.toNat, trueId.toNat]))
+        (some fresh, acts, learnt2LratIx, s)
+      else
+        let acts := acts.push (LRAT.Action.addRup (id := fresh.toNat)
+          (c := c.toArray.map Lit.toIntNonzero)
+          (rupHints := #[falseId.toNat, trueId.toNat]))
+        (some fresh, acts, learnt2LratIx, s)
+    | some falseId, none =>
+        (some falseId, acts, learnt2LratIx, s)
+    | none, some trueId =>
+      (some trueId, acts, learnt2LratIx, s)
+    | none, none => (none, acts, learnt2LratIx, s)
 namespace State
+
+/--
+Return the unsat proof if it exists.
+-/
+def unsatProof? (s : State) : Option ResolutionTree := do
+  let clause ← s.unsatClause?
+  return clause.toProof s
 
 /--
 Convert a resolution tree into an LRAT proof.
 -/
 def toLrat (s : State) : Array LRAT.IntAction × State := Id.run do
-  let mut actions := #[]
-  let mut s := s
-  let startIx := s.learntClausesStartIx
-  let endIx := s.clauses.size
-  s := s.logInfo "=== LRAT Proof ==="
-  for cid in [startIx:endIx] do
-    let (clause, proof) := s.clauses[cid]!
-    s := s.logInfo <| m!"{cid + 1}) {clause.toMessageData s} {proof.toMessageDataNoExpand s}"
-    let res := proof.isValidForConflictClause s (clause.toLitSet)
-    let good := res.fst
-    s := res.snd
-    if good then
-      s := s.logInfo m!"GOOD PROOF ({cid + 1})"
-    else
-      s := s.logInfo m!"BAD PROOF ({cid + 1})"
-    let clausesUsedToProveConflict :=
-      proof.clausesUsed ∅
-      |>.toArray
-      |>.map ClauseId.toLratPos
+  if let some unsat := s.unsatProof? then
+    let (out, acts, _learnt2LratIx, s) := unsat.toLrat s
 
-    if clause.isEmpty then
-      actions := actions.push
-        (LRAT.Action.addEmpty
-          (id := cid + 1) -- one-indexed.
-          (rupHints := clausesUsedToProveConflict))
-    else
-      actions := actions.push
-        (LRAT.Action.addRup
-          (id := cid + 1) -- one-indexed.
-          (c := clause.toIntArray)
-          (rupHints := clausesUsedToProveConflict))
-  (actions, s)
+    let s :=
+      if out.isSome then
+        let s := s.logInfo "Successfully created LRAT cert."
+        s
+      else
+        let s := s.logError "Failed to create LRAT cert."
+        s
+    (acts, s)
+  else
+    let s := s.logError "do not have unsat proof"
+    (#[], s)
 
 end State
 
