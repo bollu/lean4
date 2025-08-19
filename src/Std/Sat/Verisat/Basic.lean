@@ -248,6 +248,9 @@ def State.evalLit (s : State) (l : Lit) : xbool :=
 def Lit.toMessageData (lit : Lit) (s : State) : Lean.MessageData :=
   m!"{lit.toMessageDataRaw}:{s.evalLit lit}"
 
+def Var.toMessageData (var : Var) (s : State) : Lean.MessageData :=
+  var.toPositiveLit.toMessageData s
+
 def Clause.toMessageData (clause : Clause) (s : State) : Lean.MessageData :=
   Lean.toMessageData <| clause.toArray.map (Lit.toMessageData · s)
 
@@ -439,6 +442,16 @@ def model? (s : State) : Option (Array Bool) :=
       (fun oval => oval.map Prod.fst)
     var2obool.traverse
 
+def setLiteral (s : State) (lit : Lit) (proof : ResolutionTree) : State :=
+  let s := s.logInfo m!"SET-LIT '{lit.toMessageData s}'"
+  let s := { s with var2assign := s.var2assign.set! (lit.toVar.toIndex) (some (lit.positive?, proof)) }
+  s
+
+def unsetLiteral (s : State) (lit : Lit) : State :=
+  let s := s.logInfo m!"UNSET-LIT '{lit.toMessageData s}'"
+  let s := { s with var2assign := s.var2assign.set! (lit.toVar.toIndex) none }
+  s
+
 end State
 
 inductive FindNonFalseLitResult
@@ -464,7 +477,7 @@ def State.undoAssignment (s : State) (lit : Lit) : State := Id.run do
   let mut s := s
   s := s.logInfo m!"UNDO-ASSIGN '{lit.toMessageData s}'"
   -- delete assignment.
-  s := { s with var2assign := s.var2assign.set! (lit.toVar.toIndex) none }
+  s := s.unsetLiteral lit
   -- note that the variable is unassigned.
   s := { s with unassignedVars := s.unassignedVars.insert lit.toVar }
   -- need to rewatch.
@@ -552,6 +565,7 @@ def State.addUndoWatch (s : State) (lit : Lit) (cid : ClauseId) : State := Id.ru
   let undos := undos.push cid
   { s with lit2clausesOnUndo := s.lit2clausesOnUndo.set! lit.toIndex undos }
 
+
 /--
 Propagate a literal assignment of lit 'Lit' in clause 'clauseId'.
 Returns a conflict clause if a conflict clause was created.
@@ -561,10 +575,10 @@ The state will contain the conflicting assignment in case a
 conflict clause is returned.
 -/
 def State.propagateLitInClause (s : State)
-  (lit : Lit) (reason: ResolutionTree)
+  (litNewlyFalse : Lit) (reason: ResolutionTree)
   (cid : ClauseId) :
     Option ClauseId × State := Id.run do
-  let s := s.addUndoWatch lit cid
+  let s := s.logInfo m! "propagating assignment lit that becamse false {litNewlyFalse.toMessageData s} @ {cid.toMessageData s}"
   match s.findNonFalseLit cid 0 with
   | .allFalse =>
     let s := s.logInfo m!"found clause that is all false: {cid.toMessageData s}"
@@ -597,6 +611,8 @@ def State.propagateLitInClause (s : State)
           -- Swap clause[0] with clause[litIx],
           -- watch clause[0], and continue on our way.
           let s := s.logInfo m!"found another unassigned literal {litUnassigned.toMessageData s} in clause {cid.toMessageData s}. "
+          -- we will be swapping c[0], so we will add the prior watch into the undo watch list.
+          let s := s.addUndoWatch (cid.toClause s).toArray[0]! cid
           let s := { s with clauses :=
             s.clauses.modify cid.toIndex fun (c, tree) =>
               (c.watchLiteralAtIx litUnassignedIx, tree)
@@ -628,16 +644,16 @@ partial def State.propagate (s : State) : Option ClauseId × State := propagateA
           let (conflictId, s) := s.mkAndPropagateConflictClause conflictReason
           (some conflictId, s)
       | .x =>
+        let s := s.logInfo m!"{lit.toMessageData s} has no assignments. Propagating..."
         -- we don't have an assignment, continue.
-        let s := { s with var2assign := s.var2assign.set! lit.toVar.toIndex (some (lit.positive?, litProof)) }
+        let s := s.setLiteral lit litProof
         let s := s.logInfo m!"-- Current variable assignments: {s.var2assignMessageData} --"
         -- since 'lit' has been assigned, we need to propagate '~lit'.
         let (watchedClauses, s) := s.getAndClearWatchedClausesAtLit lit.negate
         let mut s := s
-        s := s.logInfo m!"#clauses watched at dequeued {lit.negate.toMessageData s}: '{watchedClauses.size}'"
+        s := s.logInfo m!"#clauses watched at negated {lit.negate.toMessageData s}: '{watchedClauses.size}'"
         for clauseId in watchedClauses do
-          s := s.logInfo m! "propagating clause {clauseId.toMessageData s} @ {lit.negate.toMessageData s}"
-          let res := s.propagateLitInClause lit litProof clauseId
+          let res := s.propagateLitInClause lit.negate litProof clauseId
           s := res.snd
           let conflict? := res.fst
           if let some conflict := conflict? then
